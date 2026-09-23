@@ -1,1 +1,5 @@
 .idea
+.agents
+docs
+.pytest_cache
+.venv
