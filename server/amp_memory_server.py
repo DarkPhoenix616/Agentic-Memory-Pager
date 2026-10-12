@@ -21,16 +21,17 @@ mcp = FastMCP("amp-memory", host="localhost", port=8001)
 
 chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
 collection = chroma_client.get_or_create_collection("amp_memory")
-print(collection._embedding_function)
+
 
 @mcp.tool()
-def store_memory(content: str, tags: List[str] = []) -> str:
+def store_memory(content: str, tags: List[str] = [], session_id: str = "default") -> str:
     """
     Store a piece of content into long-term memory with optional tags.
 
     Args:
         content: The text content to remember
         tags: Optional list of tags/labels for categorization
+        session_id: Which session/workspace this memory belongs to
 
     Returns:
         The generated memory ID, or a rejection message if input is invalid
@@ -56,21 +57,23 @@ def store_memory(content: str, tags: List[str] = []) -> str:
     collection.add(
         documents=[content],
         ids=[memory_id],
-        metadatas=[{"tags": ",".join(tags) if tags else ""}]
+        metadatas=[{"tags": ",".join(tags) if tags else ""
+                , "session_id": session_id
+            }]
     )
 
     return f"Stored as {memory_id}"
 
 
 @mcp.tool()
-def search_vault(query: str, top_k: int = 5) -> List[dict]:
+def search_vault(query: str, top_k: int = 5, session_id: str = "") -> List[dict]:
     """
     Search long-term memory for content semantically related to the query.
 
     Args:
         query: The search query
         top_k: Maximum number of results to return (default: 5)
-
+        session_id: Filter results to a specific session/workspace
     Returns:
         List of matching memory records, each with id, content, distance, tags
     """
@@ -85,9 +88,11 @@ def search_vault(query: str, top_k: int = 5) -> List[dict]:
         return []
     effective_k = min(top_k, count)
 
+    where = {"session_id": session_id} if session_id else None
     results = collection.query(
         query_texts=[query],
-        n_results=effective_k
+        n_results=effective_k,
+        where=where
     )
 
     matches = []
@@ -101,7 +106,8 @@ def search_vault(query: str, top_k: int = 5) -> List[dict]:
             "id": ids[i],
             "content": documents[i],
             "distance": distances[i],
-            "tags": metadatas[i].get("tags", "") if metadatas[i] else ""
+            "tags": metadatas[i].get("tags", "") if metadatas[i] else "",
+            "session_id": metadatas[i].get("session_id", "") if metadatas[i] else ""
         })
 
     return matches
