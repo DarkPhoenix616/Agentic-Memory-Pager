@@ -178,6 +178,52 @@ def list_all_memories() -> List[dict]:
 
     return memories
 
+@mcp.tool()
+def page_context(query: str, total_budget: int = 1000, session_id: str = "", candidate_pool: int = 20) -> dict:
+    """
+    Retrieve context from long-term memory for a query, limited by a token budget.
+
+    Args:
+        query: What the agent needs to recall
+        total_budget: Maximum total tokens the returned memories may use (default: 1000)
+        session_id: Optional. If given, only use this session's memories
+        candidate_pool: How many top matches to consider before applying the budget (default: 20)
+
+    Returns:
+        A dict with:
+          memories: the selected records (id, content, distance, tags, session_id,
+                    source_type, token_count, timestamp), best match first
+          tokens_used: total tokens of the selected memories
+          total_budget: the budget that was requested
+          skipped: how many matches were left out because they did not fit
+    """
+    result = {"memories": [], "tokens_used": 0, "total_budget": total_budget, "skipped": 0}
+
+    query = query.strip()
+    if not query or total_budget <= 0:
+        return result
+
+    # Reuse search_vault. Chroma returns candidates closest-first already.
+    candidates = search_vault(query, top_k=candidate_pool, session_id=session_id)
+    if not candidates:
+        return result
+
+    used_budget = 0
+    for memory in candidates:
+        # Old memories were stored without a token_count, so count on the fly
+        tokens = memory["token_count"] or len(encoder.encode(memory["content"]))
+        memory["token_count"] = tokens
+
+        if used_budget + tokens > total_budget:
+            result["skipped"] += 1
+            continue  # skipping current one, but a smaller match further down may still fit
+
+        result["memories"].append(memory)
+        used_budget += tokens
+
+    result["tokens_used"] = used_budget
+    return result
+    
 
 if __name__ == "__main__":
     print(f"ChromaDB persisting to: {CHROMA_DB_PATH}")
