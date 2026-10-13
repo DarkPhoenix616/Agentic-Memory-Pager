@@ -1,9 +1,12 @@
 import os
 import uuid
+import tiktoken
+from datetime import datetime, timezone
 from typing import List
 from mcp.server.fastmcp import FastMCP
 import chromadb
 
+encoder=tiktoken.get_encoding("cl100k_base") # gpt-4 one to count the number of tokens in code or dialogue. Isko hum token limit ke liye use karenge.
 # ---------------------------------------------------------------------------
 # Path setup — anchor storage to <project_root>/storage/chroma_db regardless
 # of which directory this script is run from.
@@ -24,7 +27,7 @@ collection = chroma_client.get_or_create_collection("amp_memory")
 
 
 @mcp.tool()
-def store_memory(content: str, tags: List[str] = [], session_id: str = "default") -> str:
+def store_memory(content: str, tags: List[str] = [], session_id: str = "default", source_type: str = "dialogue") -> str:
     """
     Store a piece of content into long-term memory with optional tags.
 
@@ -32,6 +35,7 @@ def store_memory(content: str, tags: List[str] = [], session_id: str = "default"
         content: The text content to remember
         tags: Optional list of tags/labels for categorization
         session_id: Which session/workspace this memory belongs to
+        source_type: The type of the source content (default: "dialogue")
 
     Returns:
         The generated memory ID, or a rejection message if input is invalid
@@ -48,20 +52,30 @@ def store_memory(content: str, tags: List[str] = [], session_id: str = "default"
     # Minimal manual check below until that's ready, so the tool
     # never silently accepts broken input in the meantime.
     # ---------------------------------------------------------------
+    source_type: str="dialogue"  # default source type
+
     content = content.strip()
     if not content:
         return "Rejected: content cannot be empty."
 
+    if source_type not in ["dialogue", "code"]:
+        return "Rejected: Source type must be 'dialogue' or 'code'."
+
     memory_id = f"mem_{uuid.uuid4().hex[:8]}"
+    token_count=len(encoder.encode(content))
+    timestamp = datetime.now(timezone.utc).isoformat()
 
     collection.add(
         documents=[content],
         ids=[memory_id],
         metadatas=[{"tags": ",".join(tags) if tags else ""
                 , "session_id": session_id
+                , "source_type": source_type,
+                "token_count": token_count,
+                "timestamp": timestamp  
             }]
     )
-
+    
     return f"Stored as {memory_id}"
 
 
@@ -74,8 +88,10 @@ def search_vault(query: str, top_k: int = 5, session_id: str = "") -> List[dict]
         query: The search query
         top_k: Maximum number of results to return (default: 5)
         session_id: Filter results to a specific session/workspace
+        source_type: Filter results by source type (default: "dialogue")
     Returns:
         List of matching memory records, each with id, content, distance, tags
+        time stamp, and source_type. Empty list if no matches found.
     """
     query = query.strip()
     if not query:
@@ -107,7 +123,10 @@ def search_vault(query: str, top_k: int = 5, session_id: str = "") -> List[dict]
             "content": documents[i],
             "distance": distances[i],
             "tags": metadatas[i].get("tags", "") if metadatas[i] else "",
-            "session_id": metadatas[i].get("session_id", "") if metadatas[i] else ""
+            "session_id": metadatas[i].get("session_id", "") if metadatas[i] else "",
+            "source_type": metadatas[i].get("source_type", "") if metadatas[i] else "",
+            "token_count": metadatas[i].get("token_count", 0) if metadatas[i] else 0,
+            "timestamp": metadatas[i].get("timestamp", "") if metadatas[i] else ""
         })
 
     return matches
@@ -120,7 +139,7 @@ def delete_memory(memory_id: str) -> str:
 
     Args:
         memory_id: The ID of the memory to delete
-
+        
     Returns:
         Confirmation message
     """
@@ -138,6 +157,7 @@ def list_all_memories() -> List[dict]:
 
     Returns:
         List of all stored memory records with id, content, tags
+        session_id, source_type, token_count, and timestamp.
     """
     all_data = collection.get()
     memories = []
@@ -149,7 +169,11 @@ def list_all_memories() -> List[dict]:
         memories.append({
             "id": ids[i],
             "content": documents[i],
-            "tags": metadatas[i].get("tags", "") if metadatas[i] else ""
+            "tags": metadatas[i].get("tags", "") if metadatas[i] else "",
+            "session_id": metadatas[i].get("session_id", "") if metadatas[i] else "",
+            "source_type": metadatas[i].get("source_type", "") if metadatas[i] else "",
+            "token_count": metadatas[i].get("token_count", 0) if metadatas[i] else 0,
+            "timestamp": metadatas[i].get("timestamp", "") if metadatas[i] else ""
         })
 
     return memories
