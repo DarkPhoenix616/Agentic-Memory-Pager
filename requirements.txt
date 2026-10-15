@@ -9,3 +9,8 @@ langfuse
 pytest
 black
 mypy
+mcp
+fastmcp
+chromadb
+ollama
+python-dotenv

@@ -1,4 +1,10 @@
-.idea
+venv/
+__pycache__/
+*.pyc
+.env
+storage/chroma_db/
+*.sqlite3
+.DS_Store
 .agents
 docs
 .pytest_cache
