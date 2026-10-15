@@ -2,7 +2,7 @@ import os
 import uuid
 import tiktoken
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 from mcp.server.fastmcp import FastMCP
 import chromadb
 
@@ -24,6 +24,7 @@ mcp = FastMCP("amp-memory", host="localhost", port=8001)
 
 chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
 collection = chroma_client.get_or_create_collection("amp_memory")
+
 
 
 @mcp.tool()
