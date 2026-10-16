@@ -1,3 +1,14 @@
+pydantic>=2.0
+instructor>=1.0
+langchain-core
+langgraph
+litellm
+chromadb
+streamlit
+langfuse
+pytest
+black
+mypy
 mcp
 fastmcp
 chromadb
