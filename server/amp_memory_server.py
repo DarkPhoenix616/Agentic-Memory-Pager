@@ -1,10 +1,12 @@
 import os
+import sys
 import uuid
 import tiktoken
 from datetime import datetime, timezone
 from typing import List, Optional
 from mcp.server.fastmcp import FastMCP
 import chromadb
+
 
 encoder=tiktoken.get_encoding("cl100k_base") # gpt-4 one to count the number of tokens in code or dialogue. Isko hum token limit ke liye use karenge.
 # ---------------------------------------------------------------------------
@@ -20,68 +22,84 @@ CHROMA_DB_PATH = os.path.join(PROJECT_ROOT, "storage", "chroma_db")
 
 os.makedirs(CHROMA_DB_PATH, exist_ok=True)
 
+# Make the project root importable so `from harness.guardrails import ...`
+# works when this file is run directly (python server\amp_memory_server.py).
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from harness.guardrails import UnifiedMemory, RetrievedMemory, PageContextResult
+
 mcp = FastMCP("amp-memory", host="localhost", port=8001)
 
 chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
 collection = chroma_client.get_or_create_collection("amp_memory")
 
 
+# ---------------------------------------------------------------------------
+# UnifiedMemory <-> ChromaDB helpers
+#
+# Chroma stores a plain text "document" (what gets embedded and searched) plus
+# flat metadata. A UnifiedMemory is a nested object, so:
+#   - the searchable text is derived from the payload (_embedding_text)
+#   - the full validated UnifiedMemory is saved as JSON in metadata["envelope"]
+#     so it can be rebuilt exactly on the way out (_to_memory)
+# ---------------------------------------------------------------------------
+def _embedding_text(memory: UnifiedMemory) -> str:
+    """Text that is embedded for semantic search, and counted for token budgets."""
+    if memory.memory_type == "text":
+        return memory.text_payload.factual_summary
+    code = memory.code_payload
+    parts = [code.file_path]
+    if code.summary:
+        parts.append(code.summary)
+    parts.extend(symbol.signature for symbol in code.symbols)
+    return "\n".join(parts)
+
+
+def _to_memory(chroma_id: str, meta: Optional[dict]) -> Optional[UnifiedMemory]:
+    """Rebuild a UnifiedMemory from a stored row. Rows saved before the
+    UnifiedMemory format (no envelope) cannot be rebuilt and are skipped."""
+    if not meta or "envelope" not in meta:
+        return None
+    memory = UnifiedMemory.model_validate_json(meta["envelope"])
+    memory.vector_embedding_id = chroma_id
+    return memory
+
 
 @mcp.tool()
-def store_memory(content: str, tags: List[str] = [], session_id: str = "default", source_type: str = "dialogue") -> str:
+def store_memory(memory: UnifiedMemory) -> UnifiedMemory:
     """
-    Store a piece of content into long-term memory with optional tags.
+    Store a memory envelope into long-term memory.
 
     Args:
-        content: The text content to remember
-        tags: Optional list of tags/labels for categorization
-        session_id: Which session/workspace this memory belongs to
-        source_type: The type of the source content (default: "dialogue")
+        memory: A UnifiedMemory (session_id, memory_type, compaction_source,
+            raw_token_count and the matching code_payload or text_payload).
+            Invalid input is rejected by the model's validation.
 
     Returns:
-        The generated memory ID, or a rejection message if input is invalid
+        The stored UnifiedMemory, with vector_embedding_id set to the ID
+        ChromaDB assigned.
     """
-    # ---------------------------------------------------------------
-    # GUARDRAILS HOOK — Pydantic validation slots in here.
-    # Expected pattern once wired in:
-    #
-    #   try:
-    #       record = MemoryRecord(content=content, tags=tags)
-    #   except ValidationError as e:
-    #       return f"Rejected: {e}"
-    #
-    # Minimal manual check below until that's ready, so the tool
-    # never silently accepts broken input in the meantime.
-    # ---------------------------------------------------------------
-    source_type: str="dialogue"  # default source type
-
-    content = content.strip()
-    if not content:
-        return "Rejected: content cannot be empty."
-
-    if source_type not in ["dialogue", "code"]:
-        return "Rejected: Source type must be 'dialogue' or 'code'."
-
     memory_id = f"mem_{uuid.uuid4().hex[:8]}"
-    token_count=len(encoder.encode(content))
-    timestamp = datetime.now(timezone.utc).isoformat()
+    memory.vector_embedding_id = memory_id
 
     collection.add(
-        documents=[content],
+        documents=[_embedding_text(memory)],
         ids=[memory_id],
-        metadatas=[{"tags": ",".join(tags) if tags else ""
-                , "session_id": session_id
-                , "source_type": source_type,
-                "token_count": token_count,
-                "timestamp": timestamp  
-            }]
+        metadatas=[{
+            "session_id": memory.session_id,
+            "memory_type": memory.memory_type,
+            "compaction_source": memory.compaction_source,
+            "timestamp": memory.timestamp.isoformat(),
+            "envelope": memory.model_dump_json(),
+        }]
     )
-    
-    return f"Stored as {memory_id}"
+
+    return memory
 
 
 @mcp.tool()
-def search_vault(query: str, top_k: int = 5, session_id: str = "") -> List[dict]:
+def search_vault(query: str, top_k: int = 5, session_id: str = "") -> List[RetrievedMemory]:
     """
     Search long-term memory for content semantically related to the query.
 
@@ -89,10 +107,11 @@ def search_vault(query: str, top_k: int = 5, session_id: str = "") -> List[dict]
         query: The search query
         top_k: Maximum number of results to return (default: 5)
         session_id: Filter results to a specific session/workspace
-        source_type: Filter results by source type (default: "dialogue")
     Returns:
-        List of matching memory records, each with id, content, distance, tags
-        time stamp, and source_type. Empty list if no matches found.
+        List of RetrievedMemory records, best match first. Each holds the
+        stored UnifiedMemory (memory), its vector distance to the query
+        (distance, smaller means closer) and its token cost (token_cost).
+        Empty list if no matches found.
     """
     query = query.strip()
     if not query:
@@ -114,21 +133,17 @@ def search_vault(query: str, top_k: int = 5, session_id: str = "") -> List[dict]
 
     matches = []
     ids = results.get("ids", [[]])[0]
-    documents = results.get("documents", [[]])[0]
     distances = results.get("distances", [[]])[0]
     metadatas = results.get("metadatas", [[]])[0]
 
     for i in range(len(ids)):
-        matches.append({
-            "id": ids[i],
-            "content": documents[i],
-            "distance": distances[i],
-            "tags": metadatas[i].get("tags", "") if metadatas[i] else "",
-            "session_id": metadatas[i].get("session_id", "") if metadatas[i] else "",
-            "source_type": metadatas[i].get("source_type", "") if metadatas[i] else "",
-            "token_count": metadatas[i].get("token_count", 0) if metadatas[i] else 0,
-            "timestamp": metadatas[i].get("timestamp", "") if metadatas[i] else ""
-        })
+        memory = _to_memory(ids[i], metadatas[i])
+        if memory is not None:
+            matches.append(RetrievedMemory(
+                memory=memory,
+                distance=distances[i],
+                token_cost=len(encoder.encode(_embedding_text(memory)))
+            ))
 
     return matches
 
@@ -152,35 +167,27 @@ def delete_memory(memory_id: str) -> str:
 
 
 @mcp.tool()
-def list_all_memories() -> List[dict]:
+def list_all_memories() -> List[UnifiedMemory]:
     """
     List every memory currently stored (useful for debugging/inspection).
 
     Returns:
-        List of all stored memory records with id, content, tags
-        session_id, source_type, token_count, and timestamp.
+        List of all stored UnifiedMemory records.
     """
     all_data = collection.get()
     memories = []
     ids = all_data.get("ids", [])
-    documents = all_data.get("documents", [])
     metadatas = all_data.get("metadatas", [])
 
     for i in range(len(ids)):
-        memories.append({
-            "id": ids[i],
-            "content": documents[i],
-            "tags": metadatas[i].get("tags", "") if metadatas[i] else "",
-            "session_id": metadatas[i].get("session_id", "") if metadatas[i] else "",
-            "source_type": metadatas[i].get("source_type", "") if metadatas[i] else "",
-            "token_count": metadatas[i].get("token_count", 0) if metadatas[i] else 0,
-            "timestamp": metadatas[i].get("timestamp", "") if metadatas[i] else ""
-        })
+        memory = _to_memory(ids[i], metadatas[i])
+        if memory is not None:
+            memories.append(memory)
 
     return memories
 
 @mcp.tool()
-def page_context(query: str, total_budget: int = 1000, session_id: str = "", candidate_pool: int = 20) -> dict:
+def page_context(query: str, total_budget: int = 1000, session_id: str = "", candidate_pool: int = 20) -> PageContextResult:
     """
     Retrieve context from long-term memory for a query, limited by a token budget.
 
@@ -191,39 +198,42 @@ def page_context(query: str, total_budget: int = 1000, session_id: str = "", can
         candidate_pool: How many top matches to consider before applying the budget (default: 20)
 
     Returns:
-        A dict with:
-          memories: the selected records (id, content, distance, tags, session_id,
-                    source_type, token_count, timestamp), best match first
-          tokens_used: total tokens of the selected memories
+        A PageContextResult with:
+          memories: the selected RetrievedMemory records, best match first
+          tokens_used: total token cost of the selected memories
           total_budget: the budget that was requested
           skipped: how many matches were left out because they did not fit
+        A memory's token cost is the token count of its searchable text (the
+        text summary, or for code the file path, summary and signatures).
     """
-    result = {"memories": [], "tokens_used": 0, "total_budget": total_budget, "skipped": 0}
-
     query = query.strip()
     if not query or total_budget <= 0:
-        return result
+        return PageContextResult(total_budget=total_budget)
 
     # Reuse search_vault. Chroma returns candidates closest-first already.
     candidates = search_vault(query, top_k=candidate_pool, session_id=session_id)
     if not candidates:
-        return result
+        return PageContextResult(total_budget=total_budget)
 
+    selected = []
     used_budget = 0
-    for memory in candidates:
-        # Old memories were stored without a token_count, so count on the fly
-        tokens = memory["token_count"] or len(encoder.encode(memory["content"]))
-        memory["token_count"] = tokens
+    skipped = 0
+    for candidate in candidates:
+        tokens = candidate.token_cost
 
         if used_budget + tokens > total_budget:
-            result["skipped"] += 1
+            skipped += 1
             continue  # skipping current one, but a smaller match further down may still fit
 
-        result["memories"].append(memory)
+        selected.append(candidate)
         used_budget += tokens
 
-    result["tokens_used"] = used_budget
-    return result
+    return PageContextResult(
+        memories=selected,
+        tokens_used=used_budget,
+        total_budget=total_budget,
+        skipped=skipped
+    )
     
 
 if __name__ == "__main__":

@@ -602,6 +602,77 @@ class UnifiedMemory(BaseModel):
                 raise ValueError("memory_type='text' requires text_payload to be set.")
         return self
 
+# ---------------------------------------------------------------------------
+# Model 4b: RetrievedMemory and PageContextResult
+# ---------------------------------------------------------------------------
+
+class RetrievedMemory(BaseModel):
+    """
+    A UnifiedMemory returned by a search, together with the details that only
+    make sense for one specific query.
+
+    UnifiedMemory stays the pure stored data produced by the compactors.
+    Distance and token cost describe a single search, so they are kept out of
+    UnifiedMemory and carried here instead.
+
+    Attributes:
+        memory     : The stored UnifiedMemory.
+        distance   : Vector distance between the query and this memory.
+                     Smaller means a closer semantic match.
+        token_cost : Tokens this memory costs in context (token count of its
+                     searchable text), used for token-budget packing.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    memory: UnifiedMemory = Field(
+        ...,
+        description="The stored memory envelope.",
+    )
+    distance: float = Field(
+        ...,
+        description="Vector distance to the query. Smaller means closer.",
+    )
+    token_cost: int = Field(
+        ...,
+        ge=0,
+        description="Tokens this memory costs in context.",
+    )
+
+
+class PageContextResult(BaseModel):
+    """
+    Result of the page_context tool: the memories that fit within a token
+    budget, plus how the budget was used.
+
+    Attributes:
+        memories     : Selected memories, best match first.
+        tokens_used  : Sum of token_cost over the selected memories.
+        total_budget : The token budget that was requested.
+        skipped      : How many matches were left out because they did not fit.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    memories: List[RetrievedMemory] = Field(
+        default_factory=list,
+        description="Selected memories, best match first.",
+    )
+    tokens_used: int = Field(
+        default=0,
+        ge=0,
+        description="Total token_cost of the selected memories.",
+    )
+    total_budget: int = Field(
+        ...,
+        description="The token budget that was requested.",
+    )
+    skipped: int = Field(
+        default=0,
+        ge=0,
+        description="Number of matches left out because they did not fit the budget.",
+    )
+
 
 # ---------------------------------------------------------------------------
 # Model 5: TokenState
