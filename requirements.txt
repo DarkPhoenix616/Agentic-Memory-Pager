@@ -9,8 +9,7 @@ langfuse
 pytest
 black
 mypy
-mcp
+mcp<2
 fastmcp
-chromadb
 ollama
 python-dotenv
