@@ -1,5 +1,5 @@
 from sandbox import run_code
-
+# just for testing the subprocess of sandbox.py, not part of the main server code
 memories = [
     {"id": "m1", "content": "We use PostgreSQL", "source_type": "dialogue", "timestamp": "2026-10-01"},
     {"id": "m2", "content": "def add(a,b): return a+b", "source_type": "code", "timestamp": "2026-10-02"},
