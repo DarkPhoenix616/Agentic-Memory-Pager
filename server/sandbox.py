@@ -118,21 +118,25 @@ def run_code(code, memories=None, timeout=DEFAULT_TIMEOUT, scrub=None):
         )
 
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-        try:
-            proc = subprocess.run(
+        proc = subprocess.Popen(
                 # -X utf8 makes the child read and print UTF-8 on any OS, so
                 # non-English text in memories cannot crash it on Windows
                 # (-I would ignore the PYTHONIOENCODING variable).
-                [sys.executable, "-I", "-X", "utf8", RUNNER],
-                input=payload,
-                capture_output=True,
-                encoding="utf-8",
-                errors="replace",
+            [sys.executable, "-I", "-X", "utf8", RUNNER],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=tmp,
+            env=_child_env(),
+        )
+        try:
+            stdout, stderr = proc.communicate(
+                input=payload.encode("utf-8"),
                 timeout=timeout,
-                cwd=tmp,
-                env=_child_env(),
             )
         except subprocess.TimeoutExpired:
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)  # suppress taskkill's own output, needed in windows to kill grandchild processes
             return _result(False, "", f"Timed out after {timeout} seconds", loaded, scrub)
-
-    return _result(proc.returncode == 0, proc.stdout, proc.stderr, loaded, scrub)
+        stdout_text = stdout.decode("utf-8", errors="replace")
+        stderr_text = stderr.decode("utf-8", errors="replace")
+    return _result(proc.returncode == 0, stdout_text, stderr_text, loaded, scrub)
