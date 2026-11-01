@@ -78,6 +78,70 @@ _SECRET_PATTERNS: list[tuple[re.Pattern, str]] = [
 # Control characters to strip (null byte + ASCII C0 control chars except TAB/LF/CR)
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
+# ---------------------------------------------------------------------------
+# LAYER 1: PROMPT INJECTION DEFENSE — Signature-based detection
+# Ordered most-dangerous first. Detects known jailbreak patterns, delimiter
+# escape attempts, and instruction override phrases from OWASP LLM01 research.
+# (T4 Implementation: Teammate 4 — LangGraph Harness)
+# ---------------------------------------------------------------------------
+_INJECTION_PATTERNS: list[tuple[re.Pattern, str]] = [
+    # Instruction override triggers
+    (re.compile(
+        r"(?i)\b(ignore|disregard|forget|bypass|override)\s+"
+        r"(all\s+)?(previous|prior|above|earlier|your)\s+"
+        r"(instructions?|rules?|constraints?|guidelines?|prompts?)\b"
+    ), "[INJECTION_REDACTED]"),
+
+    # Role/persona hijacking
+    (re.compile(
+        r"(?i)\b(you\s+are\s+now|from\s+now\s+on\s+you\s+are|"
+        r"pretend\s+you\s+are|act\s+as\s+if\s+you\s+are|"
+        r"your\s+new\s+(identity|role|persona)\s+is)\b"
+    ), "[INJECTION_REDACTED]"),
+
+    # System prompt spoofing via fake XML/Markdown tags
+    (re.compile(
+        r"(?i)<\s*/?\s*(system|admin|instruction|override|"
+        r"prompt|jailbreak|supervisor|root)\s*>"
+    ), "[INJECTION_REDACTED]"),
+
+    # Developer/admin mode triggers
+    (re.compile(
+        r"(?i)\b(developer\s+mode|jailbreak\s+mode|"
+        r"god\s+mode|admin\s+mode|unrestricted\s+mode|"
+        r"DAN\s+mode|do\s+anything\s+now)\b"
+    ), "[INJECTION_REDACTED]"),
+
+    # Instruction delimiting attacks
+    (re.compile(
+        r"(?i)(###\s*new\s+instructions|"
+        r"\[SYSTEM\]|\[INST\]|\[ADMIN\]|"
+        r"--END\s+OF\s+PROMPT--|"
+        r"====\s*OVERRIDE\s*====)"
+    ), "[INJECTION_REDACTED]"),
+]
+
+
+def _screen_injection(text: str) -> str:
+    """
+    Screen text for known prompt injection patterns and redact them.
+
+    Called on ALL text entering TextMemorySchema or CodeMemorySchema
+    before storage in ChromaDB. Detected injection attempts are replaced
+    with [INJECTION_REDACTED] and logged for audit.
+
+    This is Layer 1 of the 4-layer prompt injection defense architecture.
+
+    Args:
+        text: The text to screen for injection patterns.
+
+    Returns:
+        The text with injection patterns redacted.
+    """
+    for pattern, replacement in _INJECTION_PATTERNS:
+        text = pattern.sub(replacement, text)
+    return text
+
 
 def _scrub_secrets(text: str) -> str:
     """Strip control characters and replace known secret patterns with [REDACTED_SECRET]."""
@@ -307,6 +371,20 @@ class CodeMemorySchema(BaseModel):
             )
         return v
 
+    @field_validator("summary")
+    @classmethod
+    def screen_summary_for_injection(cls, v: Optional[str]) -> Optional[str]:
+        """
+        Screen AI-generated file summaries for embedded injection attempts.
+
+        Layer 1 (Input Screening): Prompt injection defense on code file summaries.
+        AI-generated summaries may inadvertently include malicious patterns from
+        source code comments or docstrings.
+        """
+        if v is not None:
+            v = _screen_injection(v)  # Layer 1: Signature-based injection screening
+        return v
+
     @field_validator("imports")
     @classmethod
     def imports_item_max_length(cls, v: List[str]) -> List[str]:
@@ -434,23 +512,32 @@ class TextMemorySchema(BaseModel):
     @field_validator("factual_summary")
     @classmethod
     def scrub_factual_summary(cls, v: str) -> str:
-        """Scrub secrets and control characters from the primary retrieval field."""
-        return _scrub_secrets(v)
+        """
+        Scrub secrets AND injection patterns from the primary retrieval field.
+
+        Layer 1 (Input Screening): Screen for prompt injection before storage.
+        """
+        v = _scrub_secrets(v)
+        v = _screen_injection(v)  # Layer 1: Signature-based injection screening
+        return v
 
     @field_validator("architectural_decisions", "bugs_resolved", "user_constraints")
     @classmethod
     def scrub_and_bound_text_lists(cls, v: List[str]) -> List[str]:
         """
-        Scrub secrets from every item in the list and enforce per-item max_length.
+        Scrub secrets AND injection patterns from every item in the list and enforce per-item max_length.
         Items exceeding 500 characters are rejected (not silently truncated).
+
+        Layer 1 (Input Screening): Screen each list item for prompt injection.
         """
         scrubbed = _scrub_list(v)
-        for item in scrubbed:
+        screened = [_screen_injection(item) for item in scrubbed]  # Layer 1: Injection screening
+        for item in screened:
             if len(item) > 500:
                 raise ValueError(
                     f"A list item exceeds the 500-character limit: '{item[:60]}...'"
                 )
-        return scrubbed
+        return screened
 
     @field_validator("timeframe")
     @classmethod
