@@ -90,6 +90,16 @@ def store_memory(memory: UnifiedMemory) -> UnifiedMemory:
     #       memory.risk_level = risk_level_for_score(memory.risk_score)
     #   The envelope is saved as JSON below, so the new fields persist as-is.
     #   Also implement _llama_guard_score() in harness/guardrails.py (the model hook).
+    # TODO [T1 / Teammate 1] PHASE 3 — RE-SIGN LAST. T4's graph nodes already sign
+    #   each memory (harness/signing.py, HMAC-SHA256 keyed by AMP_SIGNING_KEY), and the
+    #   signature covers risk_score and provenance. If you change any signed field
+    #   above (e.g. raise risk_score), re-sign as the final step before storing:
+    #       from harness.signing import sign_memory
+    #       memory.signature = sign_memory(memory)
+    #   Otherwise your change invalidates T4's signature and the memory is shown to
+    #   the LLM as verified="false" / READ_ONLY. The server process needs the SAME
+    #   AMP_SIGNING_KEY value as the harness. With no key set, sign_memory() returns None
+    #   (memory stored unsigned, treated as READ_ONLY); nothing raises.
     memory_id = f"mem_{uuid.uuid4().hex[:8]}"
     memory.vector_embedding_id = memory_id
 

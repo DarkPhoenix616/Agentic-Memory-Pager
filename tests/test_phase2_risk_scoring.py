@@ -212,7 +212,7 @@ def test_filter_high_risk_drops_only_high_risk():
 
 def test_format_memory_line_carries_risk_tags():
     line = graph._format_memory_line(_retrieved("hello there friend", 45, "codebase"))
-    assert "risk=suspicious" in line and "provenance=codebase" in line
+    assert 'risk_level="suspicious"' in line and 'provenance="codebase"' in line
 
 
 def _state(**kw):
