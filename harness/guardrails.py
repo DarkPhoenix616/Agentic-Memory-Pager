@@ -102,7 +102,7 @@ _INJECTION_PATTERNS: list[tuple[re.Pattern, str]] = [
     # System prompt spoofing via fake XML/Markdown tags
     (re.compile(
         r"(?i)<\s*/?\s*(system|admin|instruction|override|"
-        r"prompt|jailbreak|supervisor|root)\s*>"
+        r"prompt|jailbreak|supervisor|root|untrusted_memory)\s*>"
     ), "[INJECTION_REDACTED]"),
 
     # Developer/admin mode triggers
@@ -154,6 +154,132 @@ def _scrub_secrets(text: str) -> str:
 def _scrub_list(items: List[str]) -> List[str]:
     """Apply _scrub_secrets to every string in a list."""
     return [_scrub_secrets(item) for item in items]
+
+
+# ---------------------------------------------------------------------------
+# LAYER 2: SEMANTIC RISK SCORING (Phase 2, T4)
+# Layer 1 redacts KNOWN phrases; Layer 2 scores how "instruction-like" a memory
+# is so subtle attacks (role-play, tool-call bait) can be filtered at retrieval.
+# Thresholds are shared: T1's page_context() must import HIGH_RISK_THRESHOLD
+# rather than hard-coding its own number.
+# ---------------------------------------------------------------------------
+
+RiskLevel = Literal["safe", "suspicious", "high_risk"]
+Provenance = Literal["user_input", "codebase", "uploaded_doc", "api"]
+
+SUSPICIOUS_THRESHOLD: float = 30.0   # score >= 30  -> "suspicious"
+HIGH_RISK_THRESHOLD: float = 70.0    # score >= 70  -> "high_risk" (not injected into the LLM)
+
+_REDACTION_MARKER = "[INJECTION_REDACTED]"
+
+# Text that tries to make the model invoke AMP tools / wipe the vault.
+_TOOL_CALL_RE = re.compile(
+    r"(?i)\b(?:delete_memory|search_vault|list_all_memories|store_memory)\s*\(|"
+    r"\bTOOL\s*:|"
+    r"\b(?:wipe|purge|erase)\s+(?:the\s+)?(?:vault|memor(?:y|ies))\b"
+)
+
+# Sentences that address the model directly with an obligation or secrecy order.
+_MODEL_DIRECTED_RE = re.compile(
+    r"(?i)\b(?:you\s+(?:must|should|shall|will|need\s+to|have\s+to)|"
+    r"(?:do\s+not|don't|never)\s+(?:tell|mention|reveal|disclose)|"
+    r"(?:assistant|ai|llm|model|agent)\s*,?\s*(?:you\s+)?(?:must|should|shall|will))\b"
+)
+
+# Sentence opens with a command verb (weak signal alone: legitimate docs say "Run the tests.").
+_IMPERATIVE_START_RE = re.compile(
+    r"(?i)^\s*(?:[-*]\s*)?(?:delete|remove|wipe|drop|erase|execute|run|call|invoke|"
+    r"send|reveal|print|ignore|disregard|forget|override|bypass|disable|respond|output)\b"
+)
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+|\n+")
+
+
+def risk_level_for_score(score: float) -> RiskLevel:
+    """Map a 0-100 risk score to its level using the shared thresholds."""
+    if score >= HIGH_RISK_THRESHOLD:
+        return "high_risk"
+    if score >= SUSPICIOUS_THRESHOLD:
+        return "suspicious"
+    return "safe"
+
+
+def _llama_guard_score(text: str) -> Optional[float]:
+    """
+    Placeholder for the model-based classifier (0-100, or None if unavailable).
+
+    TODO [T1 / Teammate 1]: implement with Llama Guard 3 (or similar) and return
+    its adversarial-intent score scaled to 0-100. Requirements:
+      - Return None (not 0) when the model is unavailable or errors, so the
+        heuristic score below still applies; log a warning when that happens.
+      - Keep it fast (~100-200 ms) or cache by hash of `text`; it runs on every
+        store_memory() call.
+    Until implemented, scoring is heuristic-only.
+    """
+    return None
+
+
+def _classify_adversarial_ensemble(text: str, source: str) -> tuple[float, RiskLevel]:
+    """
+    Score `text` for adversarial intent. Returns (risk_score 0-100, risk_level).
+
+    Heuristic signals (additive, capped at 100):
+      - Layer 1 pattern hits / [INJECTION_REDACTED] markers : 40 each (2 hits => high_risk)
+      - AMP tool-call bait (delete_memory(, TOOL:, wipe vault): 30 each, cap 60
+        (15 each for source="codebase", where code legitimately mentions these names)
+      - Model-directed obligations ("you must", "never reveal"): 20 each, cap 40
+      - Imperative-sentence density: up to 25 (cannot reach "suspicious" alone)
+    The final score is max(heuristic, Llama Guard score) once T1 wires the model in.
+    """
+    if not text or not text.strip():
+        return 0.0, "safe"
+
+    pattern_hits = text.count(_REDACTION_MARKER) + sum(
+        len(pattern.findall(text)) for pattern, _ in _INJECTION_PATTERNS
+    )
+    injection = min(100.0, 40.0 * pattern_hits)
+
+    tool_weight = 15.0 if source == "codebase" else 30.0
+    tool_bait = min(60.0, tool_weight * len(_TOOL_CALL_RE.findall(text)))
+
+    directed = min(40.0, 20.0 * len(_MODEL_DIRECTED_RE.findall(text)))
+
+    sentences = [s for s in _SENTENCE_SPLIT_RE.split(text) if s.strip()]
+    imperative = sum(1 for s in sentences if _IMPERATIVE_START_RE.match(s))
+    density = min(25.0, 50.0 * imperative / len(sentences)) if sentences else 0.0
+
+    score = min(100.0, injection + tool_bait + directed + density)
+
+    guard = _llama_guard_score(text)
+    if guard is not None:
+        score = max(score, min(100.0, max(0.0, guard)))
+
+    score = round(score, 1)
+    return score, risk_level_for_score(score)
+
+
+def score_payload(
+    payload: "CodeMemorySchema | TextMemorySchema", provenance: str
+) -> tuple[float, RiskLevel]:
+    """
+    Public entry point: score a compacted payload for the UnifiedMemory envelope.
+
+    Used by T4's compactor nodes at creation time. T1 should call the same
+    function in store_memory() so the stored score never relies on the caller.
+    All model-readable text is scored, including code docstrings.
+    """
+    if isinstance(payload, TextMemorySchema):
+        parts = [
+            payload.factual_summary,
+            *payload.architectural_decisions,
+            *payload.bugs_resolved,
+            *payload.user_constraints,
+        ]
+    elif isinstance(payload, CodeMemorySchema):
+        parts = [payload.summary or ""]
+        parts.extend(s.docstring for s in payload.symbols if s.docstring)
+    else:
+        raise TypeError(f"Cannot score payload of type {type(payload).__name__}")
+    return _classify_adversarial_ensemble("\n".join(parts), provenance)
 
 
 # ---------------------------------------------------------------------------
@@ -647,6 +773,28 @@ class UnifiedMemory(BaseModel):
             "Remains None until store_memory() is called by Teammate 1."
         ),
     )
+    # Phase 2 (prompt-injection defense). Defaults keep rows stored before
+    # Phase 2 loadable; such legacy rows read as unscored "safe" until backfilled.
+    risk_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=100.0,
+        description="Adversarial-intent score 0-100 (see score_payload). Set by T4 nodes; T1 re-scores on store.",
+    )
+    risk_level: RiskLevel = Field(
+        default="safe",
+        description="Always derived from risk_score (cannot be set independently).",
+    )
+    provenance: Provenance = Field(
+        default="user_input",
+        description="Where the content originated. Defaults to the least-trusted source.",
+    )
+
+    @model_validator(mode="after")
+    def derive_risk_level(self) -> "UnifiedMemory":
+        """Recompute risk_level from risk_score so the two can never disagree."""
+        self.risk_level = risk_level_for_score(self.risk_score)
+        return self
 
     @field_validator("session_id")
     @classmethod

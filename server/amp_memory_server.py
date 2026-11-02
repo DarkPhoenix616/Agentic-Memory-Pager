@@ -80,6 +80,16 @@ def store_memory(memory: UnifiedMemory) -> UnifiedMemory:
         The stored UnifiedMemory, with vector_embedding_id set to the ID
         ChromaDB assigned.
     """
+    # TODO [T1 / Teammate 1] PHASE 2 — re-score server-side; do not trust the caller.
+    #   The envelope now carries risk_score / risk_level / provenance (see
+    #   harness/guardrails.py). T4's graph nodes set them, but any client of this
+    #   MCP tool could send risk_score=0 for a malicious memory. Before storing:
+    #       payload = memory.text_payload or memory.code_payload
+    #       score, _ = score_payload(payload, memory.provenance)   # from harness.guardrails
+    #       memory.risk_score = max(memory.risk_score, score)
+    #       memory.risk_level = risk_level_for_score(memory.risk_score)
+    #   The envelope is saved as JSON below, so the new fields persist as-is.
+    #   Also implement _llama_guard_score() in harness/guardrails.py (the model hook).
     memory_id = f"mem_{uuid.uuid4().hex[:8]}"
     memory.vector_embedding_id = memory_id
 
@@ -212,6 +222,15 @@ def page_context(query: str, total_budget: int = 1000, session_id: str = "", can
 
     # Reuse search_vault. Chroma returns candidates closest-first already.
     candidates = search_vault(query, top_k=candidate_pool, session_id=session_id)
+    # TODO [T1 / Teammate 1] PHASE 2 — filter high-risk candidates here, BEFORE
+    #   the token-budget loop below, so they do not consume budget:
+    #       from harness.guardrails import HIGH_RISK_THRESHOLD
+    #       candidates = [c for c in candidates if c.memory.risk_score < HIGH_RISK_THRESHOLD]
+    #   Import the shared constant; do not hard-code 70. T4's graph already
+    #   filters on its side (defense in depth); this keeps the server safe for
+    #   other callers. Consider the same filter in search_vault().
+    # TODO [T1] Rows stored before Phase 2 load with risk_score=0 ("safe"). Decide
+    #   whether to backfill them with score_payload() via list_all_memories().
     if not candidates:
         return PageContextResult(total_budget=total_budget)
 
