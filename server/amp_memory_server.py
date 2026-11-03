@@ -179,6 +179,12 @@ def delete_memory(memory_id: str) -> str:
     Returns:
         Confirmation message
     """
+    # TODO [T1 / Teammate 1] PHASE 4 — this tool has no caller check. T4's harness
+    #   (harness/tool_guard.py, Layer 4) rejects any delete_memory request that comes
+    #   out of the LLM, but that only protects the harness path. Do NOT expose
+    #   delete_memory / list_all_memories / store_memory to the LLM as callable MCP
+    #   tools; they are for the harness and admins. Consider requiring an admin token
+    #   argument here, and log each deletion (id, caller, time) on the server side.
     try:
         collection.delete(ids=[memory_id])
         return f"Deleted {memory_id}"

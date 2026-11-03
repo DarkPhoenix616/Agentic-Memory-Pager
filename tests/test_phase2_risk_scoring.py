@@ -242,7 +242,10 @@ def test_search_node_filters_and_wraps_results(monkeypatch):
     monkeypatch.setattr(graph, "_mcp_search_vault", lambda **kw: results)
     out = graph.memory_search_node(_state(search_query="q"))
     card = out["messages"][0]
-    assert isinstance(card, SystemMessage)
+    # PHASE 4: a marked HumanMessage, not a SystemMessage — memory text must
+    # never carry system-level authority (harness/graph.py memory_search_node).
+    assert isinstance(card, HumanMessage)
+    assert card.additional_kwargs.get("amp_source") == "memory"
     assert "SAFE-RESULT" in card.content and "POISONED-RESULT" not in card.content
     assert card.content.count("<UNTRUSTED_MEMORY") == 1
     assert "</UNTRUSTED_MEMORY>" in card.content
