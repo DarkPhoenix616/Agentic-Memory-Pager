@@ -206,7 +206,30 @@ The page header shows which mode is active (*Memory: over MCP* or *Memory: in-pr
 Because the vault is a standard MCP server, other MCP clients can use the same memory. For example, Claude Code:
 `claude mcp add --transport http amp-memory http://localhost:8001/mcp`
 
-The switch lives in `harness/mcp_client.py`. The graph's five `_mcp_*` helpers call `memory_server()`, which returns the MCP client when `AMP_MCP_URL` is set, and the server module otherwise.
+The switch lives in `harness/mcp_client.py`. The graph's `_mcp_*` helpers call `memory_server()`, which returns the MCP client when `AMP_MCP_URL` is set, and the server module otherwise.
+
+### Python over the memories (`run_memory_code`, the sixth tool)
+
+Some questions are easier to compute than to read: *the latest decision about the database*, *how many bugs were fixed*, *every constraint the user gave*. For these, the model can write a short program over all of the session's memories:
+
+````text
+TOOL: run_memory_code
+```python
+db = [m for m in memories if "database" in m["text"].lower()]
+print(max(db, key=lambda m: m["time"])["text"])
+```
+````
+
+**What the program sees:** `memories`, a list of simple records, oldest first. Each has `id`, `time`, `kind`, `text`, `decisions`, `bugs`, `constraints` and `file`.
+
+**Where it runs:** in the sandbox (`server/sandbox.py`), behind the memory server, with these protections:
+- **Checked first:** only safe modules can be imported (`json`, `re`, `math`, `collections`…), and `open`, `eval`, `exec` and `__` names are blocked.
+- **Separate process:** an empty environment, run in a temporary folder.
+- **Operating-system limits** (Linux/macOS): CPU time, 512 MB of memory, no new processes.
+- **Timeout:** the whole process tree is killed on timeout.
+- **Clean output:** secrets are scrubbed, and the output is truncated.
+
+**How it's checked:** Layer 4 checks a code request like a search. Code built from words that only an untrusted memory contained is blocked. The output goes back to the model as untrusted data, never as instructions.
 
 Everything runs locally:
 - **Chat and summaries:** through Ollama.
@@ -223,6 +246,6 @@ The context window is small by default (3,072 tokens), so you can see paging aft
 | `AMP_MCP_URL` | not set (in-process) | Reach the memory server over MCP, e.g. `http://localhost:8001/mcp` |
 | `AMP_MCP_PORT` | `8001` | Port of the MCP memory server |
 | `AMP_CHROMA_PATH` | `storage/chroma_db` | Folder of the ChromaDB vault (tests use a temporary one) |
-| `AMP_SIGNING_KEY` | not set (memories unsigned) | HMAC key for memory signing; use the same value for the app and the server |
+| `AMP_SIGNING_KEY` | AMP Chat creates `storage/.amp_signing_key` | HMAC key for memory signing. Without one, memories are unverified (READ_ONLY) and Layer 4 blocks memory-shaped tool calls. |
 
 The core is `harness/chat_session.py` (`ChatSession.ask()`). It has no UI code, so it can also be used from scripts and tests.
