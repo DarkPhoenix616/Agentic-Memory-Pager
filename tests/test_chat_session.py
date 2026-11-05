@@ -168,6 +168,13 @@ def test_a_second_search_request_and_thinking_are_removed_from_the_reply():
     assert chat_model._clean_reply('TOOL: search_vault("cat")', searched=False).startswith("TOOL:")
 
 
+def test_memory_markup_is_removed_from_answers():
+    reply = ('The memory entry is:\n<MEMORY_ENTRY id="chat-1-2" kind="text" verified="true">\n'
+             'We use PostgreSQL.\n</MEMORY_ENTRY>')
+    assert chat_model._clean_reply(reply, searched=False) == "The memory entry is:\n\nWe use PostgreSQL."
+    assert "UNTRUSTED" not in chat_model._clean_reply('<UNTRUSTED_MEMORY source="x">hi</UNTRUSTED_MEMORY>', False)
+
+
 def test_invented_tool_calls_are_removed_from_answers():
     clean = chat_model._clean_reply
     assert clean('Your lucky number is 47. TOOL: recall_fact("<lucky number> = 47")', searched=False) == \
