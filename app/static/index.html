@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AMP Chat</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">🧠</span>
+      <span class="name">AMP Chat</span>
+      <span class="sub">Agentic Memory Pager</span>
+    </div>
+    <div class="topbar-right">
+      <span id="model" class="pill">checking model…</span>
+      <button id="new-chat" class="ghost" type="button">New chat</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="chat" aria-label="Chat">
+      <div id="messages" class="messages" aria-live="polite">
+        <div id="empty" class="empty">
+          <h2>A local chatbot that pages its memory</h2>
+          <p>The context window works like RAM. When it fills past the trigger, the oldest messages
+            are compressed (code by the AST compactor, dialogue by the RLM summarizer) and moved to the
+            vault. Ask about them later and they are paged back in.</p>
+          <p class="hint">Try: tell it a fact, ask a few long questions, then ask about the fact again.</p>
+        </div>
+      </div>
+      <div id="error" class="error" role="alert" hidden></div>
+      <form id="composer" class="composer">
+        <textarea id="input" rows="1" placeholder="Message the local model…   Enter to send · Shift+Enter for a new line"></textarea>
+        <button id="send" type="submit">Send</button>
+      </form>
+    </section>
+
+    <aside class="panel" aria-label="Behind the scenes">
+      <h2>Behind the scenes</h2>
+
+      <div class="card">
+        <div class="meter-label"><span>Context window</span><span id="meter-text"></span></div>
+        <div class="meter">
+          <div id="meter-fill" class="fill"></div>
+          <div id="meter-target" class="mark target" title="Background compaction stops here"></div>
+          <div id="meter-trigger" class="mark trigger" title="Compaction starts here"></div>
+        </div>
+        <div id="meter-note" class="note"></div>
+        <div id="reclaiming" class="reclaiming" hidden>🗜️ Compacting old messages in the background…</div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><span id="stat-compactions">0</span><label>Compactions</label></div>
+        <div class="stat"><span id="stat-out">0</span><label>Tokens paged out</label></div>
+        <div class="stat"><span id="stat-stored">0</span><label>Stored as</label></div>
+      </div>
+
+      <details class="card" open>
+        <summary>Paged in for the last answer</summary>
+        <div id="paged" class="list-box"></div>
+      </details>
+
+      <details class="card" open>
+        <summary>Activity</summary>
+        <div id="activity" class="list-box"></div>
+      </details>
+
+      <details class="card">
+        <summary id="vault-title">Vault</summary>
+        <div id="vault" class="list-box"></div>
+      </details>
+
+      <details class="card">
+        <summary>Settings</summary>
+        <label class="setting">
+          <span>Context window <output id="limit-out"></output></span>
+          <input id="limit" type="range" min="1024" max="6144" step="256">
+        </label>
+        <label class="setting">
+          <span>Compact when this full <output id="threshold-out"></output></span>
+          <input id="threshold" type="range" min="50" max="95" step="5">
+        </label>
+        <label class="setting toggle">
+          <input id="background" type="checkbox"> Compact in the background
+        </label>
+        <p class="note">The window is small on purpose so paging is easy to see. The model itself
+          reads up to 8,192 tokens. Changes apply from the next message.</p>
+      </details>
+    </aside>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

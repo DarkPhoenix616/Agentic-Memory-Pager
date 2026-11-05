@@ -89,7 +89,7 @@ Modern AI coding agents (Claude Code, Cursor, Aider) suffer from **Context Rot**
     1. Build the **LangGraph State Machine** managing the primary agent loop and monitoring context usage.
     2. Implement the **80% Compaction Trigger** that routes data to either the AST Compactor (Teammate 2) or RLM Compactor (Teammate 3).
     3. Integrate **Instructor + Pydantic** schemas to validate that all compacted outputs conform to strict JSON structures before DB ingestion.
-    4. Build a lightweight **Streamlit UI** / CLI displaying live token counts and memory page-ins.
+    4. Build a lightweight **web UI** (`app/`) / CLI displaying live token counts and memory page-ins.
 * **Deliverable:** The core execution harness that integrates all three sub-systems.
 
 ---
@@ -104,7 +104,7 @@ Modern AI coding agents (Claude Code, Cursor, Aider) suffer from **Context Rot**
 | **Inference (Local)** | `Ollama` (`Llama-3`, `Phi-3`) | Free local execution for summarization & reasoning |
 | **Storage** | `ChromaDB` + `SQLite` | Vector embeddings and structured relational metadata |
 | **Guardrails** | `Instructor` + `Pydantic` | Deterministic schema validation and output bounding |
-| **Observability** | `Langfuse` / `Streamlit` | Trace visualization and real-time memory monitoring |
+| **Observability** | `Langfuse` / web UI (`app/`) | Trace visualization and real-time memory monitoring |
 
 ---
 
@@ -127,7 +127,7 @@ agentic-memory-pager/
 │   └── token_monitor.py
 ├── storage/                # ChromaDB & SQLite database handlers
 │   └── memory_vault.py
-├── ui/                     # Streamlit observability dashboard
+├── app/                    # AMP Chat: web UI (static/) + server.py
 │   └── app.py
 ├── requirements.txt
 └── README.md
@@ -158,3 +158,51 @@ agentic-memory-pager/
    python server/mcp_server.py
    ```
 ```
+---
+
+## 💬 AMP Chat: run the whole system as a local chatbot
+
+AMP Chat is a web app on top of the LangGraph harness. You chat with a local model. Behind the scenes, a side panel shows the memory pager at work:
+
+- **Token meter:** how full the context window is, with a line at the 80% trigger.
+- **Compactions:** each one is shown as it happens. Code blocks go to the **AST compactor**, and question-and-answer exchanges go to the **RLM summarizer**. The result is stored in the ChromaDB vault.
+- **Paged-in memories:** which memories were paged back in to answer each question.
+
+Old messages in the chat are marked *📦 paged out*. Ask about them later and the bot still answers, because the memory is paged back in.
+
+Paging works like an operating system reclaiming memory:
+- **Background reclaim:** after each answer, if the window passed 80%, the oldest chunks are compacted in a background thread, down to 70%, while you read.
+- **Direct reclaim:** if a new message still pushes the window past 80%, the graph compacts inside the turn.
+- **Working set:** the latest exchange is never paged out in the background.
+
+```bash
+ollama pull llama3.1:8b              # the chat model and the summarizer share it
+pip install -r requirements.txt
+python -m app.server                 # then open http://127.0.0.1:8000
+```
+
+It is plain HTML, CSS and JavaScript (`app/static/`), with no build step and no external libraries. The browser talks to a small Starlette server (`app/server.py`):
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/chat` | Send a message. The reply is a stream of the behind-the-scenes steps as they happen, then the answer. |
+| `GET /api/state` | The chat, context meter, activity and vault. |
+| `POST /api/settings` | Change the context window, the trigger and background compaction. |
+| `POST /api/new` | Start a new chat. |
+
+The server only listens on `127.0.0.1` and only accepts same-origin JSON, so other websites cannot use it.
+
+Everything runs locally:
+- **Chat and summaries:** through Ollama.
+- **Search:** ChromaDB's built-in embedding model.
+- **Vault:** stored in `storage/chroma_db/`.
+
+The context window is small by default (3,072 tokens), so you can see paging after a few messages. You can change it in the sidebar.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `AMP_CHAT_MODEL` | `llama3.1:8b` | chat model |
+| `AMP_RLM_MODEL` | `llama3.1:8b` | RLM summarizer model |
+| `OLLAMA_HOST` | `http://localhost:11434` | Ollama server |
+
+The core is `harness/chat_session.py` (`ChatSession.ask()`). It has no UI code, so it can also be used from scripts and tests.
