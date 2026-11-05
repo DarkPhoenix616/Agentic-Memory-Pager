@@ -53,6 +53,13 @@ class FakeVault:
                 used += cost
         return PageContextResult(memories=chosen, tokens_used=used, total_budget=total_budget)
 
+    def search(self, query, top_k, session_id):
+        return self.page(query, 10_000, session_id).memories[:top_k]
+
+    def delete(self, memory_id):
+        self.memories = [m for m in self.memories if m.vector_embedding_id != memory_id]
+        return f"Deleted {memory_id}"
+
 
 class FakeClient:
     """Stand-in for ollama.Client: records every chat call."""
@@ -85,6 +92,9 @@ def vault(monkeypatch):
     monkeypatch.setattr(amp, "_mcp_list_all_memories", lambda: list(vault.memories))
     monkeypatch.setattr(amp, "_mcp_page_context",
                         lambda query, total_budget, session_id: vault.page(query, total_budget, session_id))
+    monkeypatch.setattr(amp, "_mcp_search_vault",
+                        lambda query, top_k, session_id: vault.search(query, top_k, session_id))
+    monkeypatch.setattr(amp, "_mcp_delete_memory", vault.delete)
     monkeypatch.setattr(rs, "default_llm", lambda config: fake_rlm)
     return vault
 
