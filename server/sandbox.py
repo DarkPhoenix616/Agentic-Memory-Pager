@@ -1,5 +1,6 @@
 #A sandbox will help you test your tools and memory functions without affecting the main memory database and prevents any python injection attack possibilities.
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -85,17 +86,46 @@ def _result(ok, output, error, loaded, scrub=None):
     }
 
 
+def _new_process_group():
+    """Start the child in its own process group, so a timeout can kill it with
+    every process it started."""
+    if os.name == "nt":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {"start_new_session": True}
+
+
+def _kill_tree(proc):
+    """Kill the child and everything it started, then reap it."""
+    if os.name == "nt":
+        # taskkill /T also kills grandchild processes; capture its own output
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)
+    else:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)    # the child leads its own group (start_new_session)
+        except ProcessLookupError:
+            pass                                    # it already exited
+    try:
+        proc.communicate(timeout=5)                 # reap it and close the pipes
+    except subprocess.TimeoutExpired:
+        proc.kill()
+
+
 def run_code(code, memories=None, timeout=DEFAULT_TIMEOUT, scrub=None):
     """
     Run model-written Python in a separate, restricted child process.
 
-    memories: list of UnifiedMemory records as plain JSON dicts, i.e.
-        [m.model_dump(mode="json") for m in unified_memories]. They reach the
-        code as the variable `memories`. This module does not import pydantic
-        or guardrails; it only needs JSON-serializable data.
+    memories: list of JSON-serializable records (dicts). They reach the code as
+        the variable `memories`. The memory server's run_memory_code tool passes
+        simple records (id, time, kind, text, decisions, bugs, constraints, file).
+        This module does not import pydantic or guardrails.
     scrub: optional function(str) -> str applied to the output and error text.
 
     Returns {"ok", "output", "error", "memories_loaded"}.
+
+    Besides check_code, the child runs with no environment, in an empty temporary
+    folder, under resource limits (CPU, memory, file size, no new processes; set by
+    sandbox_runner.py on Linux/macOS), and the whole process tree is killed when it
+    runs past `timeout`.
     """
     memories = memories or []
     loaded = len(memories)
@@ -105,7 +135,7 @@ def run_code(code, memories=None, timeout=DEFAULT_TIMEOUT, scrub=None):
         return _result(False, "", f"Blocked: {problem}", loaded, scrub)
 
     try:
-        payload = json.dumps({"code": code, "memories": memories})
+        payload = json.dumps({"code": code, "memories": memories, "cpu_seconds": int(timeout) + 1})
     except (TypeError, ValueError) as e:
         return _result(False, "", f"memories must be JSON-serializable: {e}", 0, scrub)
 
@@ -128,6 +158,7 @@ def run_code(code, memories=None, timeout=DEFAULT_TIMEOUT, scrub=None):
             stderr=subprocess.PIPE,
             cwd=tmp,
             env=_child_env(),
+            **_new_process_group(),
         )
         try:
             stdout, stderr = proc.communicate(
@@ -135,7 +166,7 @@ def run_code(code, memories=None, timeout=DEFAULT_TIMEOUT, scrub=None):
                 timeout=timeout,
             )
         except subprocess.TimeoutExpired:
-            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)  # suppress taskkill's own output, needed in windows to kill grandchild processes
+            _kill_tree(proc)
             return _result(False, "", f"Timed out after {timeout} seconds", loaded, scrub)
         stdout_text = stdout.decode("utf-8", errors="replace")
         stderr_text = stderr.decode("utf-8", errors="replace")
