@@ -1,12 +1,13 @@
 """
 harness/mcp_client.py - The memory server, in-process or over MCP
 =================================================================
-    memory_server() -> an object with the memory server's five tools:
+    memory_server() -> an object with the memory server's six tools:
         store_memory(memory)                          -> UnifiedMemory
         search_vault(query, top_k, session_id)        -> List[RetrievedMemory]
         page_context(query, total_budget, session_id) -> PageContextResult
         list_all_memories()                           -> List[UnifiedMemory]
         delete_memory(memory_id)                      -> str
+        run_memory_code(code, session_id, timeout)    -> SandboxResult
 
 Two ways to reach the server:
 
@@ -28,7 +29,7 @@ import os
 import threading
 from typing import Any, Dict, List, Optional
 
-from harness.guardrails import PageContextResult, RetrievedMemory, UnifiedMemory
+from harness.guardrails import PageContextResult, RetrievedMemory, SandboxResult, UnifiedMemory
 
 MCP_URL_ENV = "AMP_MCP_URL"
 CALL_TIMEOUT = 60.0
@@ -59,7 +60,7 @@ class MCPMemoryClient:
         self._ready = threading.Event()
         self._error: Optional[BaseException] = None
 
-    # -- the five tools --------------------------------------------------------
+    # -- the six tools ---------------------------------------------------------
 
     def store_memory(self, memory: UnifiedMemory) -> UnifiedMemory:
         return UnifiedMemory.model_validate(self._call("store_memory", {"memory": memory.model_dump(mode="json")}))
@@ -77,6 +78,10 @@ class MCPMemoryClient:
 
     def delete_memory(self, memory_id: str) -> str:
         return str(self._call("delete_memory", {"memory_id": memory_id}).get("result", ""))
+
+    def run_memory_code(self, code: str, session_id: str = "", timeout: int = 5) -> SandboxResult:
+        return SandboxResult.model_validate(self._call(
+            "run_memory_code", {"code": code, "session_id": session_id, "timeout": timeout}))
 
     def ping(self) -> None:
         """Raise MCPError if the server cannot be reached."""

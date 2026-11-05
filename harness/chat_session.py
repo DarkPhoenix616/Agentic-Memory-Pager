@@ -245,6 +245,7 @@ class ChatSession:
             "messages": [HumanMessage(content=text)],
             "needs_memory_search": False,
             "search_query": "",
+            "code_request": "",
             "audit_requested": False,
         }
 
@@ -363,11 +364,17 @@ class ChatSession:
             self._record_compaction(self.turn, live[0] if live else {}, seconds, emit, background=False)
             return list(update["context_chunks"])
         elif node == "llm_reasoning_node":
-            if update.get("needs_memory_search"):
+            if update.get("code_request"):
+                emit(Event(self.turn, "code", "Model wrote Python to run over the vault",
+                           update["code_request"].strip()[:600], seconds))
+            elif update.get("needs_memory_search"):
                 emit(Event(self.turn, "search", f"Model asked to search the vault: “{update.get('search_query', '')}”",
                            "", seconds))
             elif update.get("messages"):
                 emit(Event(self.turn, "reply", f"Answered by {chat_model_name()}", "", seconds))
+        elif node == "memory_code_node" and update.get("messages"):
+            emit(Event(self.turn, "code", "Sandbox ran it over the vault",
+                       str(update["messages"][-1].content), seconds))
         elif node == "memory_search_node" and update.get("messages"):
             emit(Event(self.turn, "search", "Vault search results", str(update["messages"][-1].content), seconds))
         return live

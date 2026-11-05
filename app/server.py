@@ -52,6 +52,7 @@ from harness.chat_session import (  # noqa: E402
 logger = logging.getLogger(__name__)
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+SIGNING_KEY_FILE = os.path.join(ROOT, "storage", ".amp_signing_key")
 LOCAL_HOSTS = {"127.0.0.1", "localhost"}
 MIN_TOKEN_LIMIT = 1024
 MAX_EVENTS = 300            # most recent activity entries sent to the browser
@@ -251,6 +252,27 @@ def create_app(graph: Any = None) -> Starlette:
     return app
 
 
+def ensure_signing_key(path: str = SIGNING_KEY_FILE) -> str:
+    """Use AMP_SIGNING_KEY if set; otherwise load, or create once, a private local key.
+
+    Memories are HMAC-signed with it (harness/signing.py). Without a key every
+    memory is unverified and therefore READ_ONLY, and Layer 4 then blocks tool
+    calls (search_vault, run_memory_code) shaped by memories."""
+    if os.environ.get("AMP_SIGNING_KEY"):
+        return "from AMP_SIGNING_KEY"
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    created = False
+    if not os.path.exists(path):
+        import secrets
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)   # owner-only
+        with os.fdopen(fd, "w") as handle:
+            handle.write(secrets.token_hex(32))
+        created = True
+    with open(path, encoding="ascii") as handle:
+        os.environ["AMP_SIGNING_KEY"] = handle.read().strip()
+    return f"{'created' if created else 'loaded'} {os.path.relpath(path, ROOT)}"
+
+
 def main(argv=None) -> None:
     parser = argparse.ArgumentParser(prog="python -m app.server", description="AMP Chat web server")
     parser.add_argument("--port", type=int, default=8000)
@@ -265,11 +287,12 @@ def main(argv=None) -> None:
 
     if args.mcp_url:
         os.environ[MCP_URL_ENV] = args.mcp_url
+    key_source = ensure_signing_key()
 
     import uvicorn
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
     print(f"AMP Chat on http://{args.host}:{args.port}  (model: {chat_model_name()}; "
-          f"{vault_status()['message']})")
+          f"{vault_status()['message']}; signing key {key_source})")
     uvicorn.run(create_app(), host=args.host, port=args.port, log_level="warning")
 
 
