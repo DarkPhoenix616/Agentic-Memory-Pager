@@ -90,7 +90,7 @@ def code_memory(session):
 # The five tools over MCP
 # ---------------------------------------------------------------------------
 
-def test_every_tool_works_over_mcp(client):
+def test_the_five_vault_tools_work_over_mcp(client):
     stored = client.store_memory(text_memory("mcp-a", "The user's cat is called Pixel."))
     assert isinstance(stored, UnifiedMemory) and stored.vector_embedding_id.startswith("mem_")
     client.store_memory(text_memory("mcp-a", "The project must never use SQLite."))
@@ -178,3 +178,12 @@ def test_a_chat_pages_out_and_back_in_over_mcp(mcp_url, monkeypatch):
     stored = mcp_client.memory_server().list_all_memories()
     assert any(m.session_id == "mcp-chat" for m in stored)
     assert chat.last_paged                                # page_context over MCP fed the last answer
+
+
+def test_run_memory_code_works_over_mcp(client):
+    client.store_memory(text_memory("mcp-code", "We use PostgreSQL for the database."))
+    client.store_memory(text_memory("mcp-code", "Switched the database to MongoDB."))
+    result = client.run_memory_code("print(len(memories), memories[-1]['text'])", session_id="mcp-code")
+    assert result.ok and result.memories_loaded == 2
+    assert result.output == "2 Switched the database to MongoDB.\n"
+    assert client.run_memory_code("import os", session_id="mcp-code").error.startswith("Blocked:")
