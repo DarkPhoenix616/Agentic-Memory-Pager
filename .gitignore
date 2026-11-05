@@ -12,3 +12,4 @@ docs
 __pycache__/
 *.pyc
 *.pyo
+storage/.amp_signing_key
