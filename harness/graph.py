@@ -57,6 +57,7 @@ from harness.guardrails import (
     score_payload,
 )
 from harness.signing import sign_memory, verify_memory
+from harness.mcp_client import memory_server
 from harness.tool_guard import (
     EXECUTION_LEVELS,
     ValidationResult,
@@ -115,38 +116,35 @@ class AMPState(TypedDict):
 
 
 # ---------------------------------------------------------------------------
-# MCP helpers — thin wrappers around FastMCP server functions.
-# Swap direct imports for HTTP client calls when running remotely.
+# MCP helpers: the memory server's five tools (server/amp_memory_server.py).
+# With AMP_MCP_URL set (e.g. http://localhost:8001/mcp) they are called over the
+# Model Context Protocol; otherwise the server module is called in-process.
+# See harness/mcp_client.py. Tests replace these helpers with fakes.
 # ---------------------------------------------------------------------------
 
 def _mcp_store_memory(memory: UnifiedMemory) -> UnifiedMemory:
     """Persist a memory to ChromaDB."""
-    from server.amp_memory_server import store_memory
-    return store_memory(memory)
+    return memory_server().store_memory(memory)
 
 
 def _mcp_page_context(query: str, total_budget: int, session_id: str) -> PageContextResult:
     """Retrieve relevant memories within a token budget."""
-    from server.amp_memory_server import page_context
-    return page_context(query=query, total_budget=total_budget, session_id=session_id)
+    return memory_server().page_context(query=query, total_budget=total_budget, session_id=session_id)
 
 
 def _mcp_search_vault(query: str, top_k: int, session_id: str) -> List[RetrievedMemory]:
     """Semantic search across the vault."""
-    from server.amp_memory_server import search_vault
-    return search_vault(query=query, top_k=top_k, session_id=session_id)
+    return memory_server().search_vault(query=query, top_k=top_k, session_id=session_id)
 
 
 def _mcp_list_all_memories() -> List[UnifiedMemory]:
     """Fetch all memory records."""
-    from server.amp_memory_server import list_all_memories
-    return list_all_memories()
+    return memory_server().list_all_memories()
 
 
 def _mcp_delete_memory(memory_id: str) -> str:
     """Delete a memory record by ID."""
-    from server.amp_memory_server import delete_memory
-    return delete_memory(memory_id=memory_id)
+    return memory_server().delete_memory(memory_id=memory_id)
 
 
 # ---------------------------------------------------------------------------
