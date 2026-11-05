@@ -332,14 +332,11 @@ def llm_reasoning_node(state: AMPState) -> Dict[str, Any]:
         "Otherwise, answer the user directly."
     )
 
-    # LLM CALL — replace this stub with your provider:
-    #   from langchain_community.chat_models import ChatOllama
-    #   llm = ChatOllama(model="llama3")
-    #   reply_text = llm.invoke([SystemMessage(system_content)] + state["messages"]).content
-    reply_text = (
-        f"[LLM Stub] Responding to: '{last_human_msg}'. "
-        f"Retrieved {len(paged.memories)} memory/memories from vault."
-    )
+    # LLM CALL: local Ollama chat model (harness/chat_model.py). Besides the system
+    # prompt and this turn's messages, it sees the active context chunks, i.e. the
+    # recent conversation that is still inside the context window.
+    from harness.chat_model import chat_reply   # local import: keeps the shared import block untouched
+    reply_text = chat_reply(system_content, state["messages"], state.get("context_chunks", []))
 
     if reply_text.strip().startswith("TOOL: search_vault"):
         match = re.search(r'search_vault\("(.+?)"\)', reply_text)
