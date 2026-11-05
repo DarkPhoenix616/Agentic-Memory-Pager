@@ -48,6 +48,11 @@ _SEARCHED_NOTE = ("You have already searched the vault in this turn. Answer the 
                   "without a TOOL line.")
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 _TOOL_RE = re.compile(r"[ \t]*\bTOOL:[^\n]*")     # a TOOL: call, up to the end of its line
+# A real tool request: a line that starts with TOOL: search_vault or TOOL: run_memory_code.
+_REAL_TOOL_RE = re.compile(r"^[ \t]*TOOL:[ \t]*(search_vault|run_memory_code)\b", re.IGNORECASE | re.MULTILINE)
+# run_memory_code with the ```python block after it (removed whole when it may not run)
+_CODE_TOOL_RE = re.compile(r"[ \t]*\bTOOL:[ \t]*run_memory_code[^\n]*\n\s*```.*?(?:```|\Z)",
+                           re.IGNORECASE | re.DOTALL)
 
 
 class ChatModelError(RuntimeError):
@@ -102,7 +107,7 @@ def build_messages(
     searched = False
     for message in messages:
         text = str(message.content)
-        if text.startswith("[Vault Search") or message.additional_kwargs.get("amp_source") == "memory":
+        if text.startswith(("[Vault Search", "[Memory Code")) or message.additional_kwargs.get("amp_source") == "memory":
             searched = True
             turns.append(("user", text))
             continue
@@ -127,14 +132,15 @@ def build_messages(
 def _clean_reply(text: str, searched: bool) -> str:
     """The reply as the user should see it.
 
-    A reply that starts with TOOL: search_vault(...) is a real search request and
-    is returned as is, so the graph can run it (only once per turn). Every other
-    TOOL: text is removed: a repeated search would loop, and 8B models also
-    invent tools such as 'TOOL: recall_fact(...)' at the end of an answer."""
+    A reply with a real tool request (a line starting TOOL: search_vault or
+    TOOL: run_memory_code) is returned as is, so the graph can run it; only one
+    tool runs per turn. After that, every TOOL: text is removed (with the code
+    block of a run_memory_code request): a repeated request would loop, and 8B
+    models also invent tools such as 'TOOL: recall_fact(...)'."""
     text = _THINK_RE.sub("", text).strip()        # thinking models (qwen3) may include their reasoning
-    if not searched and text.startswith("TOOL: search_vault"):
+    if not searched and _REAL_TOOL_RE.search(text):
         return text
-    cleaned = _TOOL_RE.sub("", text).strip()
+    cleaned = _TOOL_RE.sub("", _CODE_TOOL_RE.sub("", text)).strip()
     if not cleaned and searched:
         cleaned = "I searched my memory but found nothing more about that."
     return cleaned or "(The model returned no answer.)"

@@ -3,7 +3,7 @@
 "use strict";
 
 const $ = (id) => document.getElementById(id);
-const ICONS = { monitor: "📊", dispatch: "🔀", compaction: "🗜️", search: "🔎", page_in: "📥", reply: "💬", error: "⚠️" };
+const ICONS = { monitor: "📊", dispatch: "🔀", compaction: "🗜️", search: "🔎", code: "🐍", page_in: "📥", reply: "💬", error: "⚠️" };
 const fmt = (n) => Number(n).toLocaleString("en-US");
 let state = null;
 let busy = false;
