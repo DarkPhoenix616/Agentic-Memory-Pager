@@ -9,6 +9,7 @@ import json
 RUNNER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sandbox_runner.py")
 
 DEFAULT_TIMEOUT = 5  # seconds
+MAX_PAYLOAD_BYTES = 5_000_000  # hard ceiling on the code + memories sent to the child
 
 
 def _child_env():
@@ -63,30 +64,79 @@ def _truncate(text, limit=MAX_OUTPUT_CHARS):
         return text
     return text[:limit] + f"\n...[truncated, {len(text) - limit} more characters]"
 
-def run_code(code, memories=None, timeout=DEFAULT_TIMEOUT):
+
+def _result(ok, output, error, loaded, scrub=None):
+    """
+    Build the result dict. Its keys match the SandboxResult model in
+    guardrails.py (ok, output, error, memories_loaded), so the caller can do
+    SandboxResult(**result). Do not add other keys without updating that model.
+
+    If a scrub function is given (for example the guardrails secret scrubber),
+    it runs BEFORE truncation, so a secret cannot be cut in half and leak.
+    """
+    if scrub is not None:
+        output = scrub(output)
+        error = scrub(error)
+    return {
+        "ok": ok,
+        "output": _truncate(output),
+        "error": _truncate(error),
+        "memories_loaded": loaded,
+    }
+
+
+def run_code(code, memories=None, timeout=DEFAULT_TIMEOUT, scrub=None):
+    """
+    Run model-written Python in a separate, restricted child process.
+
+    memories: list of UnifiedMemory records as plain JSON dicts, i.e.
+        [m.model_dump(mode="json") for m in unified_memories]. They reach the
+        code as the variable `memories`. This module does not import pydantic
+        or guardrails; it only needs JSON-serializable data.
+    scrub: optional function(str) -> str applied to the output and error text.
+
+    Returns {"ok", "output", "error", "memories_loaded"}.
+    """
+    memories = memories or []
+    loaded = len(memories)
+
     problem = check_code(code)
     if problem:
-        return {"ok": False, "output": "", "error": f"Blocked: {problem}"}
+        return _result(False, "", f"Blocked: {problem}", loaded, scrub)
 
-    payload = json.dumps({"code": code, "memories": memories or []})
+    try:
+        payload = json.dumps({"code": code, "memories": memories})
+    except (TypeError, ValueError) as e:
+        return _result(False, "", f"memories must be JSON-serializable: {e}", 0, scrub)
+
+    size = len(payload.encode("utf-8"))
+    if size > MAX_PAYLOAD_BYTES:
+        return _result(
+            False, "",
+            f"Too much data for the sandbox ({size} bytes, limit {MAX_PAYLOAD_BYTES}). Pass fewer memories.",
+            0, scrub,
+        )
 
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+        proc = subprocess.Popen(
+                # -X utf8 makes the child read and print UTF-8 on any OS, so
+                # non-English text in memories cannot crash it on Windows
+                # (-I would ignore the PYTHONIOENCODING variable).
+            [sys.executable, "-I", "-X", "utf8", RUNNER],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=tmp,
+            env=_child_env(),
+        )
         try:
-            proc = subprocess.run(
-                [sys.executable, "-I", RUNNER],
-                input=payload,
-                capture_output=True,
-                text=True,
+            stdout, stderr = proc.communicate(
+                input=payload.encode("utf-8"),
                 timeout=timeout,
-                cwd=tmp,
-                env=_child_env(),
             )
         except subprocess.TimeoutExpired:
-            return {"ok": False, "output": "",
-                    "error": f"Timed out after {timeout} seconds"}
-
-    return {
-        "ok": proc.returncode == 0,
-        "output": _truncate(proc.stdout),
-        "error": _truncate(proc.stderr),
-    }
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)  # suppress taskkill's own output, needed in windows to kill grandchild processes
+            return _result(False, "", f"Timed out after {timeout} seconds", loaded, scrub)
+        stdout_text = stdout.decode("utf-8", errors="replace")
+        stderr_text = stderr.decode("utf-8", errors="replace")
+    return _result(proc.returncode == 0, stdout_text, stderr_text, loaded, scrub)
