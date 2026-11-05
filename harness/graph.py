@@ -218,16 +218,16 @@ def ast_compactor_node(state: AMPState) -> Dict[str, Any]:
     raw_content: str = oldest_chunk.get("content", "")
     raw_token_count = _count_tokens(raw_content)
 
-    # TODO [Teammate 2]: Replace stub with tree-sitter AST parsing.
+    # [Teammate 2] AST code compactor (compactor/ast_code/code_parser.py).
     # Input:  raw_content (str)
-    # Output: code_schema (CodeMemorySchema) with imports, symbols, dependencies
-    code_schema = CodeMemorySchema(
+    # Output: code_schema (CodeMemorySchema): imports, symbols with signatures and
+    #         docstrings, dependencies. Function bodies are dropped. Never raises:
+    #         fragments that do not parse fall back to a line scan.
+    from compactor.ast_code import compact_code   # local import: keeps the shared import block untouched
+    code_schema = compact_code(
+        raw_content,
         file_path=oldest_chunk.get("file_path", "unknown/file.py"),
         language=oldest_chunk.get("language", "python"),
-        imports=[],
-        symbols=[],
-        dependencies=[],
-        summary="[AST stub — Teammate 2 will replace]",
         original_token_count=raw_token_count,
     )
     # END TODO [Teammate 2]
@@ -276,17 +276,16 @@ def rlm_summarizer_node(state: AMPState) -> Dict[str, Any]:
     raw_content: str = oldest_chunk.get("content", "")
     raw_token_count = _count_tokens(raw_content)
 
-    # TODO [Teammate 3]: Replace stub with multi-pass RLM summarization.
-    # Input:  raw_content (str)
-    # Output: text_schema (TextMemorySchema) with factual_summary, decisions, bugs, constraints
-    text_schema = TextMemorySchema(
-        chunk_index=0,
-        total_chunks=1,
-        timeframe="[Teammate 3 will set]",
-        factual_summary="[RLM stub — Teammate 3 will replace]",
-        architectural_decisions=[],
-        bugs_resolved=[],
-        user_constraints=[],
+    # [Teammate 3] RLM text summarizer (compactor/rlm_text/recursive_summarizer.py).
+    # Input:  raw_content (str): one message or a whole transcript
+    # Output: text_schema (TextMemorySchema): factual_summary, decisions, bugs, constraints.
+    #         Long text is split into pieces, summarized in parallel by a local Ollama
+    #         model (AMP_RLM_MODEL, default llama3.1:8b) and merged recursively.
+    #         Never raises: if Ollama is down, a rule-based extractor is used instead.
+    from compactor.rlm_text import summarize_text   # local import: keeps the shared import block untouched
+    text_schema = summarize_text(
+        raw_content,
+        role=oldest_chunk.get("role"),
         original_token_count=raw_token_count,
     )
     # END TODO [Teammate 3]
@@ -609,14 +608,11 @@ def _invoke_llm(system_content: str, state: AMPState, last_human_msg: str, memor
     The LLM call, kept in one place so it is easy to replace (and to stub in tests).
     Returns the raw reply text, which Layer 4 inspects for TOOL: lines.
     """
-    # LLM CALL — replace this stub with your provider:
-    #   from langchain_community.chat_models import ChatOllama
-    #   llm = ChatOllama(model="llama3")
-    #   return llm.invoke([SystemMessage(system_content)] + state["messages"]).content
-    return (
-        f"[LLM Stub] Responding to: '{last_human_msg}'. "
-        f"Retrieved {memory_count} memory/memories from vault."
-    )
+    # LLM CALL: local Ollama chat model (harness/chat_model.py). Besides the system
+    # prompt and this turn's messages, it sees the active context chunks, i.e. the
+    # recent conversation that is still inside the context window.
+    from harness.chat_model import chat_reply   # local import: keeps the shared import block untouched
+    return chat_reply(system_content, state["messages"], state.get("context_chunks", []))
 
 
 def llm_reasoning_node(state: AMPState) -> Dict[str, Any]:
