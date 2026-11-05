@@ -84,6 +84,14 @@ async function checkModel() {
     ready = status.ready;
     $("model").textContent = status.message;
     $("model").className = `pill ${ready ? "ok" : "bad"}`;
+    const vault = status.vault || {};
+    $("vault-mode").textContent = vault.mode === "mcp" ? "Memory: over MCP" : "Memory: in-process";
+    $("vault-mode").title = vault.message || "";
+    $("vault-mode").className = `pill ${vault.ok ? "ok" : "bad"}`;
+    if (!vault.ok) {
+      ready = false;
+      showError(vault.message);
+    }
   } catch (err) {
     ready = false;
     $("model").textContent = "server not reachable";
