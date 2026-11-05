@@ -89,7 +89,7 @@ Modern AI coding agents (Claude Code, Cursor, Aider) suffer from **Context Rot**
     1. Build the **LangGraph State Machine** managing the primary agent loop and monitoring context usage.
     2. Implement the **80% Compaction Trigger** that routes data to either the AST Compactor (Teammate 2) or RLM Compactor (Teammate 3).
     3. Integrate **Instructor + Pydantic** schemas to validate that all compacted outputs conform to strict JSON structures before DB ingestion.
-    4. Build a lightweight **Streamlit UI** / CLI displaying live token counts and memory page-ins.
+    4. Build a lightweight **web UI** (`app/`) / CLI displaying live token counts and memory page-ins.
 * **Deliverable:** The core execution harness that integrates all three sub-systems.
 
 ---
@@ -104,7 +104,7 @@ Modern AI coding agents (Claude Code, Cursor, Aider) suffer from **Context Rot**
 | **Inference (Local)** | `Ollama` (`Llama-3`, `Phi-3`) | Free local execution for summarization & reasoning |
 | **Storage** | `ChromaDB` + `SQLite` | Vector embeddings and structured relational metadata |
 | **Guardrails** | `Instructor` + `Pydantic` | Deterministic schema validation and output bounding |
-| **Observability** | `Langfuse` / `Streamlit` | Trace visualization and real-time memory monitoring |
+| **Observability** | `Langfuse` / web UI (`app/`) | Trace visualization and real-time memory monitoring |
 
 ---
 
@@ -127,7 +127,7 @@ agentic-memory-pager/
 │   └── token_monitor.py
 ├── storage/                # ChromaDB & SQLite database handlers
 │   └── memory_vault.py
-├── ui/                     # Streamlit observability dashboard
+├── app/                    # AMP Chat: web UI (static/) + server.py
 │   └── app.py
 ├── requirements.txt
 └── README.md
@@ -162,7 +162,7 @@ agentic-memory-pager/
 
 ## 💬 AMP Chat: run the whole system as a local chatbot
 
-`app/chat_app.py` is a Streamlit chat UI on top of the LangGraph harness. You chat with a local model. Behind the scenes, a side panel shows the memory pager at work:
+AMP Chat is a web app on top of the LangGraph harness. You chat with a local model. Behind the scenes, a side panel shows the memory pager at work:
 
 - **Token meter:** how full the context window is, with a line at the 80% trigger.
 - **Compactions:** each one is shown as it happens. Code blocks go to the **AST compactor**, and question-and-answer exchanges go to the **RLM summarizer**. The result is stored in the ChromaDB vault.
@@ -178,8 +178,19 @@ Paging works like an operating system reclaiming memory:
 ```bash
 ollama pull llama3.1:8b              # the chat model and the summarizer share it
 pip install -r requirements.txt
-streamlit run app/chat_app.py
+python -m app.server                 # then open http://127.0.0.1:8000
 ```
+
+It is plain HTML, CSS and JavaScript (`app/static/`), with no build step and no external libraries. The browser talks to a small Starlette server (`app/server.py`):
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/chat` | Send a message. The reply is a stream of the behind-the-scenes steps as they happen, then the answer. |
+| `GET /api/state` | The chat, context meter, activity and vault. |
+| `POST /api/settings` | Change the context window, the trigger and background compaction. |
+| `POST /api/new` | Start a new chat. |
+
+The server only listens on `127.0.0.1` and only accepts same-origin JSON, so other websites cannot use it.
 
 Everything runs locally:
 - **Chat and summaries:** through Ollama.

@@ -1,0 +1,249 @@
+"""
+app/server.py - AMP Chat web server
+===================================
+    python -m app.server                 # then open http://127.0.0.1:8000
+
+Serves the web UI (app/static/) and a small JSON API around one ChatSession:
+
+    GET  /api/status     is the local model ready?
+    GET  /api/state      the chat: transcript, context meter, activity, vault, ...
+    POST /api/chat       {"message": "..."} -> text/event-stream. One "event" per
+                         behind-the-scenes step as it happens (token count,
+                         compaction, memories paged in, reply), then "done" or "error".
+    POST /api/settings   {"token_limit": int, "threshold": float, "background": bool}
+    POST /api/new        start a new chat
+
+Local only: binds to 127.0.0.1, accepts only localhost Host headers (no DNS
+rebinding), and POST requests must be JSON from the same origin, so other
+websites open in the browser cannot drive it.
+"""
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import logging
+import os
+import sys
+import threading
+from typing import Any, Dict, Optional
+from urllib.parse import urlsplit
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
+from starlette.applications import Starlette  # noqa: E402
+from starlette.middleware import Middleware  # noqa: E402
+from starlette.middleware.trustedhost import TrustedHostMiddleware  # noqa: E402
+from starlette.requests import Request  # noqa: E402
+from starlette.responses import FileResponse, JSONResponse, StreamingResponse  # noqa: E402
+from starlette.routing import Mount, Route  # noqa: E402
+from starlette.staticfiles import StaticFiles  # noqa: E402
+
+from harness.chat_model import ChatModelError, chat_model_name, model_status  # noqa: E402
+from harness.chat_session import (  # noqa: E402
+    DEFAULT_THRESHOLD, DEFAULT_TOKEN_LIMIT, MAX_TOKEN_LIMIT, ChatSession, Event, MessageTooLong,
+)
+
+logger = logging.getLogger(__name__)
+
+STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+LOCAL_HOSTS = {"127.0.0.1", "localhost"}
+MIN_TOKEN_LIMIT = 1024
+MAX_EVENTS = 300            # most recent activity entries sent to the browser
+
+
+# ---------------------------------------------------------------------------
+# JSON views of the session
+# ---------------------------------------------------------------------------
+
+def event_view(event: Event) -> Dict[str, Any]:
+    data = {key: value for key, value in event.data.items() if key != "evicted"}   # raw chunk text stays server-side
+    return {"turn": event.turn, "kind": event.kind, "title": event.title, "detail": event.detail,
+            "seconds": round(event.seconds, 2), "data": data}
+
+
+def state_view(session: ChatSession) -> Dict[str, Any]:
+    code = sum(1 for chunk in session.chunks if chunk.get("type") == "code")
+    return {
+        "session_id": session.session_id,
+        "model": chat_model_name(),
+        "turn": session.turn,
+        "settings": {"token_limit": session.token_limit, "threshold": session.threshold,
+                     "background": session.background, "min_token_limit": MIN_TOKEN_LIMIT,
+                     "max_token_limit": MAX_TOKEN_LIMIT},
+        "context": {"tokens": session.context_tokens, "limit": session.token_limit,
+                    "trigger": session.trigger_tokens, "reclaim_target": session.reclaim_target,
+                    "chunks": len(session.chunks), "code_chunks": code},
+        "reclaiming": session.reclaiming,
+        "stats": {"compactions": session.compactions, "tokens_paged_out": session.tokens_evicted,
+                  "tokens_stored": session.tokens_stored},
+        "transcript": [dict(entry, status=session.message_status(entry["id"])) for entry in session.transcript],
+        "last_paged": session.last_paged,
+        "events": [event_view(e) for e in session.events[-MAX_EVENTS:]],
+        "vault": session.vault(),
+    }
+
+
+# ---------------------------------------------------------------------------
+# The app
+# ---------------------------------------------------------------------------
+
+class ChatApp:
+    """Holds the one chat session of this local app and serialises its turns."""
+
+    def __init__(self, graph: Any = None):
+        self._graph = graph
+        self.turn_lock = threading.Lock()
+        self.session = self._new_session(DEFAULT_TOKEN_LIMIT, DEFAULT_THRESHOLD, True)
+
+    def _new_session(self, token_limit: int, threshold: float, background: bool) -> ChatSession:
+        if self._graph is None:
+            from harness.graph import create_amp_graph
+            self._graph = create_amp_graph()
+        session = ChatSession(token_limit=token_limit, threshold=threshold, graph=self._graph)
+        session.background = background
+        return session
+
+    def reset(self) -> None:
+        old = self.session
+        old.wait_for_reclaim()
+        self.session = self._new_session(old.token_limit, old.threshold, old.background)
+
+
+def _bad_request(message: str, status: int = 400) -> JSONResponse:
+    return JSONResponse({"error": message}, status_code=status)
+
+
+def _check_post(request: Request) -> Optional[JSONResponse]:
+    """Same-origin JSON only. A JSON content type forces browsers to send a CORS
+    preflight for cross-site requests, which this server never approves."""
+    origin = request.headers.get("origin")
+    if origin and urlsplit(origin).hostname not in LOCAL_HOSTS:
+        return _bad_request("Cross-origin requests are not allowed.", 403)
+    if not request.headers.get("content-type", "").startswith("application/json"):
+        return _bad_request("Send JSON (Content-Type: application/json).", 415)
+    return None
+
+
+async def _json_body(request: Request) -> Dict[str, Any]:
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return {}
+    return body if isinstance(body, dict) else {}
+
+
+def create_app(graph: Any = None) -> Starlette:
+    chat = ChatApp(graph)
+
+    async def index(request: Request):
+        return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+
+    async def status(request: Request):
+        ready, message = await asyncio.to_thread(model_status)
+        return JSONResponse({"ready": ready, "message": message, "model": chat_model_name()})
+
+    async def state(request: Request):
+        return JSONResponse(await asyncio.to_thread(state_view, chat.session))
+
+    async def settings(request: Request):
+        if (error := _check_post(request)) is not None:
+            return error
+        body = await _json_body(request)
+        session = chat.session
+        try:
+            if "token_limit" in body:
+                session.token_limit = max(MIN_TOKEN_LIMIT, min(MAX_TOKEN_LIMIT, int(body["token_limit"])))
+            if "threshold" in body:
+                session.threshold = max(0.5, min(0.95, float(body["threshold"])))
+            if "background" in body:
+                session.background = bool(body["background"])
+        except (TypeError, ValueError):
+            return _bad_request("token_limit must be a number of tokens and threshold a fraction such as 0.8.")
+        return JSONResponse(await asyncio.to_thread(state_view, session))
+
+    async def new_chat(request: Request):
+        if (error := _check_post(request)) is not None:
+            return error
+        if not chat.turn_lock.acquire(blocking=False):
+            return _bad_request("Wait for the current answer to finish.", 409)
+        try:
+            await asyncio.to_thread(chat.reset)
+        finally:
+            chat.turn_lock.release()
+        return JSONResponse(await asyncio.to_thread(state_view, chat.session))
+
+    async def send(request: Request):
+        if (error := _check_post(request)) is not None:
+            return error
+        message = str((await _json_body(request)).get("message", "")).strip()
+        if not message:
+            return _bad_request("The message is empty.")
+        if not chat.turn_lock.acquire(blocking=False):
+            return _bad_request("Wait for the current answer to finish.", 409)
+
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue = asyncio.Queue()
+        session = chat.session
+
+        def put(kind: str, payload: Dict[str, Any]) -> None:
+            loop.call_soon_threadsafe(queue.put_nowait, (kind, payload))
+
+        def work() -> None:
+            try:
+                reply = session.ask(message, on_event=lambda e: put("event", event_view(e)))
+                put("done", {"reply": reply})
+            except (MessageTooLong, ChatModelError, ValueError) as exc:
+                put("error", {"message": str(exc)})
+            except Exception as exc:                      # keep the server alive whatever happens
+                logger.exception("Turn failed")
+                put("error", {"message": f"Unexpected error: {type(exc).__name__}: {exc}"})
+            finally:
+                chat.turn_lock.release()
+
+        threading.Thread(target=work, name="amp-turn", daemon=True).start()
+
+        async def stream():
+            while True:
+                kind, payload = await queue.get()
+                yield f"event: {kind}\ndata: {json.dumps(payload)}\n\n"
+                if kind in ("done", "error"):
+                    break
+
+        return StreamingResponse(stream(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    routes = [
+        Route("/", index),
+        Route("/api/status", status),
+        Route("/api/state", state),
+        Route("/api/settings", settings, methods=["POST"]),
+        Route("/api/new", new_chat, methods=["POST"]),
+        Route("/api/chat", send, methods=["POST"]),
+        Mount("/static", StaticFiles(directory=STATIC_DIR), name="static"),
+    ]
+    middleware = [Middleware(TrustedHostMiddleware, allowed_hosts=[*LOCAL_HOSTS, "testserver"])]
+    app = Starlette(routes=routes, middleware=middleware)
+    app.state.chat = chat
+    return app
+
+
+def main(argv=None) -> None:
+    parser = argparse.ArgumentParser(prog="python -m app.server", description="AMP Chat web server")
+    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--host", default="127.0.0.1",
+                        help="keep the default: the app has no login, so it should only be reachable from this machine")
+    args = parser.parse_args(argv)
+    if args.host not in LOCAL_HOSTS:
+        parser.error("AMP Chat has no login; serve it on 127.0.0.1 only.")
+
+    import uvicorn
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+    print(f"AMP Chat on http://{args.host}:{args.port}  (model: {chat_model_name()})")
+    uvicorn.run(create_app(), host=args.host, port=args.port, log_level="warning")
+
+
+if __name__ == "__main__":
+    main()

@@ -22,7 +22,7 @@ Between turns it keeps:
                 compacted is marked as paged out
     events      what happened behind the scenes, turn by turn
 
-The class has no UI code; app/chat_app.py draws it with Streamlit.
+The class has no UI code; app/server.py serves it to the web UI in app/static/.
 """
 from __future__ import annotations
 
