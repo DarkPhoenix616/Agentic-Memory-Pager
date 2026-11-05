@@ -78,9 +78,11 @@ def build_messages(
 ) -> Tuple[List[Dict[str, str]], bool]:
     """Ollama chat messages for one call, and whether a vault search already ran this turn.
 
-    System messages inside `messages` (vault search results) are folded into the
-    system prompt, and consecutive turns from the same role are joined, because
-    chat templates expect user and assistant turns to alternate."""
+    Vault search results are passed as user-role data, never as system text: memory
+    content must not get system-level authority. They are recognised by their
+    "[Vault Search" prefix or by additional_kwargs amp_source="memory" (the
+    guardrails branch sends them as tagged HumanMessages). Consecutive turns from
+    the same role are joined, because chat templates expect them to alternate."""
     system = f"{system_content.rstrip()}\n\n{_MEMORY_NOTE}"
     turns: List[Tuple[str, str]] = []
     for chunk in context_chunks:
@@ -95,9 +97,12 @@ def build_messages(
     searched = False
     for message in messages:
         text = str(message.content)
+        if text.startswith("[Vault Search") or message.additional_kwargs.get("amp_source") == "memory":
+            searched = True
+            turns.append(("user", text))
+            continue
         if isinstance(message, SystemMessage):
             system += f"\n\n{text}"
-            searched = searched or text.startswith("[Vault Search")
             continue
         turns.append(("assistant" if isinstance(message, AIMessage) else "user", text))
     if searched:

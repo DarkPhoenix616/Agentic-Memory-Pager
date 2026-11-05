@@ -138,8 +138,17 @@ def test_the_model_sees_alternating_turns_with_code_and_search_results():
     assert roles == ["system", "user", "assistant", "user"]
     assert payload[1]["content"].startswith("```python\nx = 1\n```\n\nLook:")
     assert payload[2]["content"].endswith("```javascript\nlet y = 2\n```")
-    assert "[Vault Search: 'x'] No results." in payload[0]["content"]
+    # search results are user-role data, never system text
+    assert payload[3]["content"] == "And now?\n\n[Vault Search: 'x'] No results."
+    assert "[Vault Search" not in payload[0]["content"]
     assert searched and "already searched" in payload[0]["content"]
+
+
+def test_search_results_sent_as_tagged_human_messages_are_recognised():
+    card = HumanMessage("<UNTRUSTED_MEMORY>Pixel</UNTRUSTED_MEMORY>", additional_kwargs={"amp_source": "memory"})
+    payload, searched = build_messages("SYSTEM PROMPT", [HumanMessage("My cat?"), card])
+    assert searched and payload[-1] == {"role": "user", "content": "My cat?\n\n<UNTRUSTED_MEMORY>Pixel</UNTRUSTED_MEMORY>"}
+    assert "Pixel" not in payload[0]["content"]
 
 
 def test_a_second_search_request_and_thinking_are_removed_from_the_reply():
@@ -167,7 +176,7 @@ def test_old_exchanges_are_paged_out_and_paged_back_in(vault, client):
     assert chat.message_status(chat.transcript[-1]["id"]) == "in context"
 
     # The last call to the model carried paged-in memories in its system prompt
-    assert "[Memory] Summary:" in client.calls[-1][0]["content"]
+    assert "Summary: User: Question number" in client.calls[-1][0]["content"]
     assert any(e.kind == "page_in" for e in chat.events)
     kinds = [e.kind for e in chat.events if e.turn == chat.turn]
     assert kinds[0] == "monitor" and "reply" in kinds
