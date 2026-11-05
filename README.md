@@ -158,3 +158,40 @@ agentic-memory-pager/
    python server/mcp_server.py
    ```
 ```
+---
+
+## 💬 AMP Chat: run the whole system as a local chatbot
+
+`app/chat_app.py` is a Streamlit chat UI on top of the LangGraph harness. You chat with a local model. Behind the scenes, a side panel shows the memory pager at work:
+
+- **Token meter:** how full the context window is, with a line at the 80% trigger.
+- **Compactions:** each one is shown as it happens. Code blocks go to the **AST compactor**, and question-and-answer exchanges go to the **RLM summarizer**. The result is stored in the ChromaDB vault.
+- **Paged-in memories:** which memories were paged back in to answer each question.
+
+Old messages in the chat are marked *📦 paged out*. Ask about them later and the bot still answers, because the memory is paged back in.
+
+Paging works like an operating system reclaiming memory:
+- **Background reclaim:** after each answer, if the window passed 80%, the oldest chunks are compacted in a background thread, down to 70%, while you read.
+- **Direct reclaim:** if a new message still pushes the window past 80%, the graph compacts inside the turn.
+- **Working set:** the latest exchange is never paged out in the background.
+
+```bash
+ollama pull llama3.1:8b              # the chat model and the summarizer share it
+pip install -r requirements.txt
+streamlit run app/chat_app.py
+```
+
+Everything runs locally:
+- **Chat and summaries:** through Ollama.
+- **Search:** ChromaDB's built-in embedding model.
+- **Vault:** stored in `storage/chroma_db/`.
+
+The context window is small by default (3,072 tokens), so you can see paging after a few messages. You can change it in the sidebar.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `AMP_CHAT_MODEL` | `llama3.1:8b` | chat model |
+| `AMP_RLM_MODEL` | `llama3.1:8b` | RLM summarizer model |
+| `OLLAMA_HOST` | `http://localhost:11434` | Ollama server |
+
+The core is `harness/chat_session.py` (`ChatSession.ask()`). It has no UI code, so it can also be used from scripts and tests.
