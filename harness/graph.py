@@ -201,16 +201,16 @@ def ast_compactor_node(state: AMPState) -> Dict[str, Any]:
     raw_content: str = oldest_chunk.get("content", "")
     raw_token_count = _count_tokens(raw_content)
 
-    # TODO [Teammate 2]: Replace stub with tree-sitter AST parsing.
+    # [Teammate 2] AST code compactor (compactor/ast_code/code_parser.py).
     # Input:  raw_content (str)
-    # Output: code_schema (CodeMemorySchema) with imports, symbols, dependencies
-    code_schema = CodeMemorySchema(
+    # Output: code_schema (CodeMemorySchema): imports, symbols with signatures and
+    #         docstrings, dependencies. Function bodies are dropped. Never raises:
+    #         fragments that do not parse fall back to a line scan.
+    from compactor.ast_code import compact_code   # local import: keeps the shared import block untouched
+    code_schema = compact_code(
+        raw_content,
         file_path=oldest_chunk.get("file_path", "unknown/file.py"),
         language=oldest_chunk.get("language", "python"),
-        imports=[],
-        symbols=[],
-        dependencies=[],
-        summary="[AST stub — Teammate 2 will replace]",
         original_token_count=raw_token_count,
     )
     # END TODO [Teammate 2]
