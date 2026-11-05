@@ -250,17 +250,16 @@ def rlm_summarizer_node(state: AMPState) -> Dict[str, Any]:
     raw_content: str = oldest_chunk.get("content", "")
     raw_token_count = _count_tokens(raw_content)
 
-    # TODO [Teammate 3]: Replace stub with multi-pass RLM summarization.
-    # Input:  raw_content (str)
-    # Output: text_schema (TextMemorySchema) with factual_summary, decisions, bugs, constraints
-    text_schema = TextMemorySchema(
-        chunk_index=0,
-        total_chunks=1,
-        timeframe="[Teammate 3 will set]",
-        factual_summary="[RLM stub — Teammate 3 will replace]",
-        architectural_decisions=[],
-        bugs_resolved=[],
-        user_constraints=[],
+    # [Teammate 3] RLM text summarizer (compactor/rlm_text/recursive_summarizer.py).
+    # Input:  raw_content (str): one message or a whole transcript
+    # Output: text_schema (TextMemorySchema): factual_summary, decisions, bugs, constraints.
+    #         Long text is split into pieces, summarized in parallel by a local Ollama
+    #         model (AMP_RLM_MODEL, default llama3.1:8b) and merged recursively.
+    #         Never raises: if Ollama is down, a rule-based extractor is used instead.
+    from compactor.rlm_text import summarize_text   # local import: keeps the shared import block untouched
+    text_schema = summarize_text(
+        raw_content,
+        role=oldest_chunk.get("role"),
         original_token_count=raw_token_count,
     )
     # END TODO [Teammate 3]
