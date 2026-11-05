@@ -294,6 +294,41 @@ def _sandbox_record(memory: UnifiedMemory) -> dict:
     }
 
 
+def _use_loaded_memories(code: str) -> Optional[str]:
+    """The code with any top-level `memories = ...` line removed, or None if it
+    assigns `memories` in some other way (a loop variable, inside a function).
+
+    Small models often start with a placeholder (`memories = [...]`) or re-type
+    the memories they saw in their prompt. Dropping that line makes the program
+    read the real, complete list that the sandbox loads."""
+    import ast
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return code                       # run_code reports the syntax error
+    drop = set()
+    for node in tree.body:                # top level: `memories = ...`, nothing else assigned
+        if (isinstance(node, (ast.Assign, ast.AnnAssign))
+                and all(isinstance(t, ast.Name) and t.id == "memories"
+                        for t in (node.targets if isinstance(node, ast.Assign) else [node.target]))):
+            drop.update(range(node.lineno, node.end_lineno + 1))
+    for node in ast.walk(tree):           # any other assignment to `memories` is refused
+        if isinstance(node, ast.Assign):
+            targets = node.targets
+        elif isinstance(node, (ast.AugAssign, ast.AnnAssign, ast.For, ast.comprehension, ast.With)):
+            targets = [getattr(node, "target", None)] if not isinstance(node, ast.With) else \
+                [item.optional_vars for item in node.items]
+        else:
+            continue
+        for target in targets:
+            if target is None or getattr(node, "lineno", 0) in drop:
+                continue
+            if any(isinstance(n, ast.Name) and n.id == "memories" for n in ast.walk(target)):
+                return None
+    lines = code.splitlines()
+    return "\n".join(line for number, line in enumerate(lines, 1) if number not in drop)
+
+
 @mcp.tool()
 def run_memory_code(code: str, session_id: str = "", timeout: int = 5) -> SandboxResult:
     """
@@ -304,7 +339,9 @@ def run_memory_code(code: str, session_id: str = "", timeout: int = 5) -> Sandbo
     every constraint, memories in a time range.
 
     Args:
-        code: Python that reads the list `memories` and print()s its answer.
+        code: Python that reads the list `memories` (already loaded; a top-level
+            `memories = ...` line is ignored, other assignments are refused)
+            and print()s its answer.
             Each memory is a dict: id, time (ISO string), kind ("text" or
             "code"), text, decisions, bugs, constraints (lists of strings) and
             file (code file path or ""). They are ordered oldest first.
@@ -318,6 +355,10 @@ def run_memory_code(code: str, session_id: str = "", timeout: int = 5) -> Sandbo
         A SandboxResult: ok, output (what it printed), error and
         memories_loaded. Output and error are secret-scrubbed and truncated.
     """
+    code = _use_loaded_memories(code)
+    if code is None:
+        return SandboxResult(ok=False, error="Blocked: `memories` is already loaded with the stored "
+                             "memories; read it, do not assign to it.")
     memories = [m for m in list_all_memories() if not session_id or m.session_id == session_id]
     memories.sort(key=lambda m: m.timestamp)
     records = [_sandbox_record(m) for m in memories]

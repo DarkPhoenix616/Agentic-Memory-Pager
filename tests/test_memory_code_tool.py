@@ -81,6 +81,15 @@ def test_the_server_tool_runs_code_over_one_sessions_memories():
     assert isinstance(result, SandboxResult) and result.ok and result.memories_loaded == 2
     assert result.output == "2 Switched the database to MongoDB.\n['We use PostgreSQL for the database.']\n"
 
+    # a placeholder or a re-typed copy at the top is dropped, so the code reads the real list
+    retyped = server.run_memory_code("memories = [{'text': 'made up'},\n            {'text': 'also made up'}, {}]\n"
+                                     "print(len(memories))", session_id="code-a")
+    assert retyped.ok and retyped.output == "2\n"
+    assert server.run_memory_code("memories = [...]  # loaded\nprint(len(memories))", session_id="code-a").output == "2\n"
+    looped = server.run_memory_code("for memories in [[1]]: print(memories)", session_id="code-a")
+    assert not looped.ok and "already loaded" in looped.error
+    assert server.run_memory_code("n = len([m for m in memories])\nprint(n)", session_id="code-a").output == "2\n"
+
     blocked = server.run_memory_code("import os", session_id="code-a")
     assert not blocked.ok and blocked.error.startswith("Blocked:")
     slow = server.run_memory_code("while True: pass", session_id="code-a", timeout=0)
@@ -152,7 +161,7 @@ def test_an_unreachable_sandbox_does_not_end_the_turn(scripted, monkeypatch):
 
 def test_the_system_prompt_describes_the_tool():
     prompt = graph._build_secure_system_prompt("ctx", "s1")
-    assert "TOOL: run_memory_code" in prompt and "`memories` is a list of dicts" in prompt
+    assert "TOOL: run_memory_code" in prompt and "`memories` is ALREADY LOADED" in prompt
     assert "7. A monitor outside you checks every TOOL: line" in prompt
 
 
