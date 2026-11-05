@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agentic Memory Pager — Technical Design Reference</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    :root {
+      --primary: #5b6cf8;
+      --accent: #8b5cf6;
+      --bg: #ffffff;
+      --surface: #f8f9fc;
+      --border: #e2e5ef;
+      --text: #1a1d2e;
+      --text-muted: #5c6380;
+      --code-bg: #1e2030;
+      --code-text: #cdd6f4;
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --red: #ef4444;
+      --blue: #3b82f6;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    /* ── Cover Page ── */
+    .cover {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      color: white;
+      text-align: center;
+      padding: 48px;
+      page-break-after: always;
+    }
+    .cover .badge {
+      background: rgba(91, 108, 248, 0.2);
+      border: 1px solid rgba(91, 108, 248, 0.5);
+      color: #a5b4fc;
+      padding: 6px 16px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 24px;
+    }
+    .cover h1 {
+      font-size: 48px;
+      font-weight: 700;
+      line-height: 1.15;
+      margin-bottom: 12px;
+      background: linear-gradient(90deg, #a5b4fc, #c4b5fd, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .cover .subtitle {
+      font-size: 20px;
+      color: #94a3b8;
+      max-width: 560px;
+      margin-bottom: 40px;
+    }
+    .cover .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      max-width: 600px;
+      width: 100%;
+    }
+    .cover .meta-card {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .cover .meta-card .label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+    .cover .meta-card .value { font-size: 15px; font-weight: 600; color: #e2e8f0; margin-top: 4px; }
+
+    /* ── Layout ── */
+    .page { max-width: 900px; margin: 0 auto; padding: 48px 48px; }
+
+    /* ── Section Headers ── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 48px 0 24px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid var(--border);
+    }
+    .section-header .num {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      color: white;
+      font-weight: 700;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .section-header h2 { font-size: 22px; font-weight: 700; color: var(--text); }
+
+    h3 { font-size: 16px; font-weight: 600; margin: 28px 0 10px; color: #2d3150; }
+    h4 { font-size: 14px; font-weight: 600; margin: 20px 0 8px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+
+    p { margin-bottom: 12px; color: var(--text); }
+    ul, ol { margin: 8px 0 12px 20px; }
+    li { margin-bottom: 6px; }
+
+    /* ── Tables ── */
+    table { width: 100%; border-collapse: collapse; margin: 16px 0 24px; font-size: 13px; }
+    thead tr { background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; }
+    thead th { padding: 10px 14px; text-align: left; font-weight: 600; }
+    tbody tr:nth-child(even) { background: var(--surface); }
+    tbody tr:hover { background: #eef0f8; }
+    td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .badge-pill {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .pill-blue  { background: #dbeafe; color: #1d4ed8; }
+    .pill-green { background: #dcfce7; color: #15803d; }
+    .pill-amber { background: #fef3c7; color: #92400e; }
+    .pill-purple{ background: #ede9fe; color: #6d28d9; }
+    .pill-red   { background: #fee2e2; color: #991b1b; }
+
+    /* ── Code Blocks ── */
+    pre {
+      background: var(--code-bg);
+      color: var(--code-text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      padding: 20px 24px;
+      border-radius: 12px;
+      overflow-x: auto;
+      margin: 12px 0 20px;
+      line-height: 1.6;
+      border: 1px solid #313244;
+    }
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      background: #eef0f8;
+      color: #5b6cf8;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+
+    /* Syntax highlight colours */
+    .kw  { color: #cba6f7; }  /* keywords */
+    .str { color: #a6e3a1; }  /* strings */
+    .cm  { color: #585b70; font-style: italic; }  /* comments */
+    .cls { color: #89dceb; }  /* class names */
+    .fn  { color: #89b4fa; }  /* function names */
+    .num { color: #fab387; }  /* numbers */
+    .typ { color: #f9e2af; }  /* types */
+
+    /* ── Info Boxes ── */
+    .callout {
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin: 16px 0;
+      border-left: 4px solid;
+      font-size: 13px;
+    }
+    .callout-blue   { background: #eff6ff; border-color: #3b82f6; }
+    .callout-green  { background: #f0fdf4; border-color: #22c55e; }
+    .callout-amber  { background: #fffbeb; border-color: #f59e0b; }
+    .callout-purple { background: #faf5ff; border-color: #8b5cf6; }
+    .callout strong { font-weight: 600; }
+
+    /* ── Architecture Diagram ── */
+    .arch-box {
+      background: var(--code-bg);
+      border-radius: 12px;
+      padding: 24px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11.5px;
+      color: #cdd6f4;
+      line-height: 1.8;
+      border: 1px solid #313244;
+      margin: 16px 0 24px;
+    }
+
+    /* ── Schema Cards ── */
+    .schema-card {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      margin: 20px 0;
+      overflow: hidden;
+    }
+    .schema-card-header {
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      color: white;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .schema-card-header .model-num {
+      background: rgba(255,255,255,0.2);
+      border-radius: 8px;
+      padding: 3px 10px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .schema-card-header h3 { margin: 0; font-size: 17px; font-weight: 700; color: white; }
+    .schema-card-header .owner { margin-left: auto; font-size: 12px; opacity: 0.8; }
+    .schema-card-body { padding: 16px 20px; }
+    .schema-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 14px; font-style: italic; }
+
+    /* ── MCP Tool Cards ── */
+    .tool-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin: 14px 0;
+      overflow: hidden;
+    }
+    .tool-card-header {
+      background: var(--surface);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .tool-name { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 14px; color: var(--primary); }
+    .tool-method { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+    .method-mcp { background: #ede9fe; color: #6d28d9; }
+    .tool-card-body { padding: 12px 16px; font-size: 13px; }
+    .tool-row { display: grid; grid-template-columns: 100px 1fr; gap: 8px; margin: 6px 0; }
+    .tool-label { font-weight: 600; color: var(--text-muted); font-size: 12px; }
+
+    /* ── Data Flow ── */
+    .flow-step {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      margin: 12px 0;
+    }
+    .flow-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      color: white;
+      font-weight: 700;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .flow-content { flex: 1; }
+    .flow-arrow {
+      text-align: center;
+      color: var(--primary);
+      font-size: 18px;
+      margin: 4px 0 4px 22px;
+    }
+
+    /* ── Print ── */
+    @media print {
+      body { font-size: 12px; }
+      .cover { min-height: auto; padding: 80px 48px; }
+      .cover h1 { font-size: 36px; }
+      pre { font-size: 10px; }
+      .page { padding: 32px 40px; }
+      .section-header { margin-top: 32px; }
+      .schema-card, .tool-card { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════ COVER PAGE -->
+<div class="cover">
+  <div class="badge">BTP Research Project · Phase 1</div>
+  <h1>Agentic Memory Pager</h1>
+  <p class="subtitle">Technical Design Reference — Schema Architecture, MCP Tool Contracts & Implementation Guide</p>
+  <div class="meta-grid">
+    <div class="meta-card">
+      <div class="label">Module</div>
+      <div class="value">Teammate 4<br>Harness &amp; Guardrails</div>
+    </div>
+    <div class="meta-card">
+      <div class="label">Phase</div>
+      <div class="value">Phase 1<br>Data Contracts</div>
+    </div>
+    <div class="meta-card">
+      <div class="label">Core File</div>
+      <div class="value">harness/<br>guardrails.py</div>
+    </div>
+  </div>
+</div>
+
+<div class="page">
+
+<!-- ═══════════════════════════════════════════════════════ §1 EXECUTIVE SUMMARY -->
+<div class="section-header"><div class="num">1</div><h2>Executive Summary</h2></div>
+
+<p>Modern AI coding agents (Claude Code, Cursor, Aider) suffer from two critical failure modes when working sessions grow long:</p>
+<ul>
+  <li><strong>Context Rot</strong> — When the active context window fills up, agents perform <em>lossy compaction</em>, summarising the chat into a paragraph and permanently discarding the raw logs.</li>
+  <li><strong>State Amnesia</strong> — Early architectural decisions, exact variable names, and reasoning chains are silently lost, causing the agent to contradict its own earlier work.</li>
+</ul>
+
+<p>The <strong>Agentic Memory Pager (AMP)</strong> solves this by introducing <strong>Virtual Memory Paging</strong> for LLMs — the same concept that operating systems use to handle RAM overflow by paging data to disk:</p>
+
+<div class="callout callout-purple">
+  <strong>Short-Term Memory (RAM) = Active LLM Context Window</strong><br>
+  <strong>Long-Term Storage (Disk) = External Vector Database (ChromaDB)</strong><br>
+  <strong>Page-Out = Compaction + Storage &nbsp;|&nbsp; Page-In = Semantic Retrieval</strong>
+</div>
+
+<p>AMP uses a <strong>Dual Compaction Engine</strong>: AST-aware parsing for source code and Recursive Language Models (RLMs) for conversational history. Both engines produce structured, validated data that conforms to the Pydantic schemas defined in <code>harness/guardrails.py</code>.</p>
+
+
+<!-- ═══════════════════════════════════════════════════════ §2 SYSTEM ARCHITECTURE -->
+<div class="section-header"><div class="num">2</div><h2>System Architecture</h2></div>
+
+<div class="arch-box">
+User / Agent Runtime
+        |
+        v  (token count monitored every turn)
++----------------------------------------------+
+|        LangGraph Agent Harness [T4]          |
+|  TokenState  ──►  80% Trigger  ──►  Router   |
++----------+--------------------+--------------+
+           |                    |
+   [Code]  v                    v  [Dialogue]
++--------------------+   +---------------------+
+|   AST Compactor    |   |    RLM Compactor    |
+|  tree-sitter/ast   |   |   Ollama (Phi/Llama)|
+|   [Teammate 2]     |   |   [Teammate 3]      |
++--------+-----------+   +---------+-----------+
+         |                         |
+         +----------+--------------+
+                    |
+                    v  Instructor + Pydantic Validation [T4]
+         +------------------------------+
+         |  FastMCP Memory Server [T1]  |
+         |  store_memory()              |
+         |  search_vault()              |
+         |  page_context()              |
+         +--------------+---------------+
+                        |
+                        v
+         +------------------------------+
+         |  ChromaDB  |  SQLite         |
+         |  (vectors) |  (metadata)     |
+         +------------------------------+
+</div>
+
+<h3>Team Ownership</h3>
+<table>
+  <thead><tr><th>Teammate</th><th>Module</th><th>Deliverable</th></tr></thead>
+  <tbody>
+    <tr><td><span class="badge-pill pill-blue">T1 — Protocol</span></td><td><code>server/</code></td><td>FastMCP server exposing JSON-RPC tools to any MCP client</td></tr>
+    <tr><td><span class="badge-pill pill-green">T2 — AST</span></td><td><code>compactor/ast_code/</code></td><td>5,000-token source file → 500-token structural skeleton</td></tr>
+    <tr><td><span class="badge-pill pill-amber">T3 — RLM</span></td><td><code>compactor/rlm_text/</code></td><td>50k tokens of dialogue → structured fact map</td></tr>
+    <tr><td><span class="badge-pill pill-purple">T4 — Harness</span></td><td><code>harness/</code>, <code>ui/</code></td><td>LangGraph state machine, 80% trigger, schemas, Streamlit UI</td></tr>
+  </tbody>
+</table>
+
+
+<!-- ═══════════════════════════════════════════════════════ §3 TECH STACK -->
+<div class="section-header"><div class="num">3</div><h2>Technology Stack &amp; Design Choices</h2></div>
+
+<table>
+  <thead><tr><th>Layer</th><th>Technology</th><th>Owner</th><th>Why This Choice</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Protocol</td><td><code>FastMCP</code></td><td>T1</td>
+      <td>Native Python MCP server. Exposes tools as JSON-RPC endpoints compatible with any MCP client (Claude, Cursor).</td>
+    </tr>
+    <tr>
+      <td>Orchestration</td><td><code>LangGraph</code> + <code>LiteLLM</code></td><td>T4</td>
+      <td>LangGraph provides typed, stateful graph execution. LiteLLM gives model-agnostic inference routing with a single API.</td>
+    </tr>
+    <tr>
+      <td>Code Parsing</td><td><code>tree-sitter</code> / <code>ast</code></td><td>T2</td>
+      <td>AST parsing is the only lossless way to extract structure from code. Tree-sitter supports 40+ languages; Python's built-in <code>ast</code> is a fallback.</td>
+    </tr>
+    <tr>
+      <td>Local Inference</td><td><code>Ollama</code> (Llama-3, Phi-3)</td><td>T3</td>
+      <td>Self-hosted inference means zero API cost and full data privacy. Phi-3-Mini is fast for summarization; Llama-3-8B is more capable.</td>
+    </tr>
+    <tr>
+      <td>Vector Storage</td><td><code>ChromaDB</code></td><td>T1</td>
+      <td>Embedded, file-based vector database. No infrastructure required. Supports metadata filtering alongside semantic search.</td>
+    </tr>
+    <tr>
+      <td>Relational Storage</td><td><code>SQLite</code></td><td>T1</td>
+      <td>Stores structured metadata (session IDs, timestamps, token counts) for fast non-semantic queries. Ships with Python.</td>
+    </tr>
+    <tr>
+      <td>Guardrails</td><td><code>Instructor</code> + <code>Pydantic</code></td><td>T4</td>
+      <td>Instructor patches LLM outputs through Pydantic models, guaranteeing that every compacted payload conforms to the schema before DB write.</td>
+    </tr>
+    <tr>
+      <td>Observability</td><td><code>Langfuse</code> / <code>Streamlit</code></td><td>T4</td>
+      <td>Langfuse traces every LLM call. Streamlit provides a live dashboard showing token counts and memory page-ins.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout callout-amber">
+  <strong>Key Constraint:</strong> The entire system must run locally with no paid APIs. All inference uses Ollama. All storage is file-based (ChromaDB + SQLite). This keeps the project self-contained, free, and offline-capable.
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════ §4 PYDANTIC SCHEMAS -->
+<div class="section-header"><div class="num">4</div><h2>Pydantic Data Schemas — Full Reference</h2></div>
+
+<p>All schemas live in <code>harness/guardrails.py</code>. This is the <strong>single source of truth</strong> for inter-module data exchange. Every module imports from this file — never pass raw dictionaries between teammates' components.</p>
+
+<!-- ─── Schema 1: CodeSymbol ─── -->
+<div class="schema-card">
+  <div class="schema-card-header">
+    <span class="model-num">Model 1</span>
+    <h3>CodeSymbol</h3>
+    <span class="owner">Used by: T2 → T4</span>
+  </div>
+  <div class="schema-card-body">
+    <p class="schema-desc">A single structural unit extracted from a source file — one function, one class, one method, or a module-level variable. Storing symbols individually allows retrieval of a specific function without fetching the entire file.</p>
+    <table>
+      <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Explanation</th></tr></thead>
+      <tbody>
+        <tr><td><code>name</code></td><td>str</td><td><span class="badge-pill pill-red">Yes</span></td><td>The identifier name, e.g., <code>"calculate_tokens"</code></td></tr>
+        <tr><td><code>type</code></td><td>Literal["class","function","method","variable"]</td><td><span class="badge-pill pill-red">Yes</span></td><td>What kind of construct this symbol is</td></tr>
+        <tr><td><code>signature</code></td><td>str</td><td><span class="badge-pill pill-red">Yes</span></td><td>Full signature with type hints: <code>"def foo(x: int) -&gt; str:"</code></td></tr>
+        <tr><td><code>docstring</code></td><td>Optional[str]</td><td><span class="badge-pill pill-green">No</span></td><td>Preserved docstring from source, if present. Defaults to <code>None</code>.</td></tr>
+        <tr><td><code>start_line</code></td><td>int (≥1)</td><td><span class="badge-pill pill-red">Yes</span></td><td>1-indexed line number in the original file — enables traceability back to source</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ─── Schema 2: CodeMemorySchema ─── -->
+<div class="schema-card">
+  <div class="schema-card-header">
+    <span class="model-num">Model 2</span>
+    <h3>CodeMemorySchema</h3>
+    <span class="owner">T2 output → T4 wraps in UnifiedMemory → T1 stores</span>
+  </div>
+  <div class="schema-card-body">
+    <p class="schema-desc">The complete compacted output for an entire source file. A 5,000-token file is reduced to ~500 tokens by keeping only the structural skeleton: imports, class hierarchy, function signatures, and docstrings. Function bodies are stripped.</p>
+    <table>
+      <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Explanation</th></tr></thead>
+      <tbody>
+        <tr><td><code>file_path</code></td><td>str</td><td><span class="badge-pill pill-red">Yes</span></td><td>Relative path to the parsed file, e.g., <code>"harness/token_monitor.py"</code></td></tr>
+        <tr><td><code>language</code></td><td>str</td><td><span class="badge-pill pill-red">Yes</span></td><td>Programming language — e.g., <code>"python"</code>. Needed so tree-sitter loads the correct grammar.</td></tr>
+        <tr><td><code>imports</code></td><td>List[str]</td><td><span class="badge-pill pill-green">No</span></td><td>All import/require statements, verbatim. Defaults to <code>[]</code>.</td></tr>
+        <tr><td><code>symbols</code></td><td>List[CodeSymbol]</td><td><span class="badge-pill pill-green">No</span></td><td>All extracted structural symbols. Defaults to <code>[]</code>.</td></tr>
+        <tr><td><code>dependencies</code></td><td>List[str]</td><td><span class="badge-pill pill-green">No</span></td><td>Cross-file or external module dependencies. Defaults to <code>[]</code>.</td></tr>
+        <tr><td><code>summary</code></td><td>Optional[str]</td><td><span class="badge-pill pill-green">No</span></td><td>AI-generated one-paragraph description of the file's role and responsibilities.</td></tr>
+        <tr><td><code>original_token_count</code></td><td>int (≥0)</td><td><span class="badge-pill pill-red">Yes</span></td><td>Token count before compaction — used to compute compression ratio.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ─── Schema 3: TextMemorySchema ─── -->
+<div class="schema-card">
+  <div class="schema-card-header">
+    <span class="model-num">Model 3</span>
+    <h3>TextMemorySchema</h3>
+    <span class="owner">T3 output → T4 wraps in UnifiedMemory → T1 stores</span>
+  </div>
+  <div class="schema-card-body">
+    <p class="schema-desc">The compacted output for a single chunk of conversation history. Instead of keeping 50,000+ tokens of raw dialogue, the RLM engine distills each chunk into a structured fact map containing only semantically important information. Supports multi-pass compaction via chunk_index / total_chunks.</p>
+    <table>
+      <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Explanation</th></tr></thead>
+      <tbody>
+        <tr><td><code>chunk_index</code></td><td>int (≥0)</td><td><span class="badge-pill pill-red">Yes</span></td><td>0-indexed position of this chunk in the current compaction pass. Must be &lt; total_chunks.</td></tr>
+        <tr><td><code>total_chunks</code></td><td>int (≥1)</td><td><span class="badge-pill pill-red">Yes</span></td><td>Total chunks in this pass. E.g., if a conversation is split into 3 parts, total_chunks = 3.</td></tr>
+        <tr><td><code>timeframe</code></td><td>str</td><td><span class="badge-pill pill-red">Yes</span></td><td>Human-readable window, e.g., <code>"Session 0 to 80% token limit, messages 1-247"</code></td></tr>
+        <tr><td><code>architectural_decisions</code></td><td>List[str]</td><td><span class="badge-pill pill-green">No</span></td><td>Key design choices made in this context window. E.g., <code>"Use ChromaDB not Pinecone"</code>.</td></tr>
+        <tr><td><code>bugs_resolved</code></td><td>List[str]</td><td><span class="badge-pill pill-green">No</span></td><td>Issues identified and fixed in this chunk.</td></tr>
+        <tr><td><code>user_constraints</code></td><td>List[str]</td><td><span class="badge-pill pill-green">No</span></td><td>Explicit rules or preferences the user stated. E.g., <code>"No paid APIs"</code>.</td></tr>
+        <tr><td><code>factual_summary</code></td><td>str</td><td><span class="badge-pill pill-red">Yes</span></td><td>Dense prose paragraph of everything in this chunk — the primary field used for semantic retrieval.</td></tr>
+        <tr><td><code>original_token_count</code></td><td>int (≥0)</td><td><span class="badge-pill pill-red">Yes</span></td><td>Token count of the raw dialogue chunk before summarization.</td></tr>
+      </tbody>
+    </table>
+    <div class="callout callout-blue">
+      <strong>Validation Rule:</strong> A <code>model_validator</code> enforces that <code>chunk_index &lt; total_chunks</code>. Violating this raises a <code>ValidationError</code>.
+    </div>
+  </div>
+</div>
+
+<!-- ─── Schema 4: UnifiedMemory ─── -->
+<div class="schema-card">
+  <div class="schema-card-header">
+    <span class="model-num">Model 4</span>
+    <h3>UnifiedMemory</h3>
+    <span class="owner">T4 creates → T1 stores &amp; retrieves</span>
+  </div>
+  <div class="schema-card-body">
+    <p class="schema-desc">The universal envelope that is persisted to ChromaDB and SQLite. Wraps either a CodeMemorySchema or TextMemorySchema with consistent metadata. T1's MCP tools only deal in this type — the storage layer is completely agnostic to content type.</p>
+    <table>
+      <thead><tr><th>Field</th><th>Type</th><th>Required</th><th>Explanation</th></tr></thead>
+      <tbody>
+        <tr><td><code>id</code></td><td>str (UUID4)</td><td>Auto</td><td>Auto-generated UUID4. Unique identifier for this memory object.</td></tr>
+        <tr><td><code>timestamp</code></td><td>datetime (UTC)</td><td>Auto</td><td>Auto-generated UTC timestamp of creation.</td></tr>
+        <tr><td><code>session_id</code></td><td>str</td><td><span class="badge-pill pill-red">Yes</span></td><td>Links this memory to the current agent session.</td></tr>
+        <tr><td><code>memory_type</code></td><td>Literal["code","text"]</td><td><span class="badge-pill pill-red">Yes</span></td><td>Indicates which payload is populated.</td></tr>
+        <tr><td><code>compaction_source</code></td><td>Literal["ast","rlm"]</td><td><span class="badge-pill pill-red">Yes</span></td><td>Which engine produced the payload. Must be consistent with memory_type.</td></tr>
+        <tr><td><code>code_payload</code></td><td>Optional[CodeMemorySchema]</td><td>Conditional</td><td>Required when memory_type == "code". Otherwise None.</td></tr>
+        <tr><td><code>text_payload</code></td><td>Optional[TextMemorySchema]</td><td>Conditional</td><td>Required when memory_type == "text". Otherwise None.</td></tr>
+        <tr><td><code>raw_token_count</code></td><td>int (≥0)</td><td><span class="badge-pill pill-red">Yes</span></td><td>Tokens consumed by the original pre-compaction content.</td></tr>
+        <tr><td><code>vector_embedding_id</code></td><td>Optional[str]</td><td>Post-write</td><td>ChromaDB doc ID. Starts as None, set by T1's store_memory() after writing.</td></tr>
+      </tbody>
+    </table>
+    <div class="callout callout-blue">
+      <strong>Cross-field Validation:</strong> A <code>model_validator</code> enforces consistency:<br>
+      <code>memory_type="code"</code> requires <code>compaction_source="ast"</code> and <code>code_payload</code> set.<br>
+      <code>memory_type="text"</code> requires <code>compaction_source="rlm"</code> and <code>text_payload</code> set.
+    </div>
+  </div>
+</div>
+
+<!-- ─── Schema 5: TokenState ─── -->
+<div class="schema-card">
+  <div class="schema-card-header">
+    <span class="model-num">Model 5</span>
+    <h3>TokenState</h3>
+    <span class="owner">T4 internal — LangGraph state object</span>
+  </div>
+  <div class="schema-card-body">
+    <p class="schema-desc">The live state object that flows through every node of the LangGraph state machine. Not persisted — lives in memory for the duration of a session. Carries all information needed to decide: should we compact? What do we compact? This is T4's central nervous system.</p>
+    <table>
+      <thead><tr><th>Field</th><th>Type</th><th>Default</th><th>Explanation</th></tr></thead>
+      <tbody>
+        <tr><td><code>session_id</code></td><td>str</td><td>—</td><td>Current session ID. Matches session_id in stored UnifiedMemory records.</td></tr>
+        <tr><td><code>current_token_count</code></td><td>int (≥0)</td><td>0</td><td>Live count of tokens in the active context window.</td></tr>
+        <tr><td><code>token_limit</code></td><td>int (≥1)</td><td>—</td><td>Model's max context window size, e.g., 128000 for Llama-3.</td></tr>
+        <tr><td><code>compaction_threshold</code></td><td>float (0–1]</td><td>0.80</td><td>Fraction of token_limit at which compaction fires. Configurable per session.</td></tr>
+        <tr><td><code>context_chunks</code></td><td>List[dict]</td><td>[]</td><td>Raw message dicts in the active window. Each has role, content, type fields.</td></tr>
+        <tr><td><code>oldest_chunk_type</code></td><td>Literal["code","text"]</td><td>"text"</td><td>Content type of oldest chunk — drives routing to AST or RLM compactor.</td></tr>
+        <tr><td><code>compaction_in_progress</code></td><td>bool</td><td>False</td><td>Guard flag preventing re-entrant compaction. Set True when compaction begins.</td></tr>
+        <tr><td><code>total_compactions</code></td><td>int (≥0)</td><td>0</td><td>Telemetry counter — how many compaction cycles have completed this session.</td></tr>
+      </tbody>
+    </table>
+    <h4>Computed Properties</h4>
+    <table>
+      <thead><tr><th>Property</th><th>Returns</th><th>Logic</th></tr></thead>
+      <tbody>
+        <tr><td><code>utilization</code></td><td>float</td><td><code>current_token_count / token_limit</code> — context window fill percentage</td></tr>
+        <tr><td><code>should_compact</code></td><td>bool</td><td><code>utilization &gt;= compaction_threshold AND NOT compaction_in_progress</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════ §5 MCP TOOLS -->
+<div class="section-header"><div class="num">5</div><h2>MCP Tool Catalogue</h2></div>
+
+<p>These are the FastMCP tools exposed by Teammate 1's server (<code>server/mcp_server.py</code>). Any MCP client (Claude, Cursor, custom agent) can call these. All tools use the Pydantic schemas from <code>harness/guardrails.py</code> as their input and output types.</p>
+
+<div class="tool-card">
+  <div class="tool-card-header">
+    <span class="tool-name">store_memory</span>
+    <span class="tool-method method-mcp">MCP TOOL</span>
+  </div>
+  <div class="tool-card-body">
+    <div class="tool-row"><span class="tool-label">Input</span><span><code>UnifiedMemory</code> + <code>session_id: str</code></span></div>
+    <div class="tool-row"><span class="tool-label">Output</span><span><code>str</code> — The assigned <code>id</code> (UUID) of the stored memory</span></div>
+    <div class="tool-row"><span class="tool-label">Description</span><span>Saves a validated UnifiedMemory object to ChromaDB (vector embedding of <code>factual_summary</code> or <code>summary</code>) and SQLite (full JSON metadata). Sets <code>vector_embedding_id</code> on the object after writing.</span></div>
+  </div>
+</div>
+
+<div class="tool-card">
+  <div class="tool-card-header">
+    <span class="tool-name">search_vault</span>
+    <span class="tool-method method-mcp">MCP TOOL</span>
+  </div>
+  <div class="tool-card-body">
+    <div class="tool-row"><span class="tool-label">Input</span><span><code>query: str</code>, <code>session_id: str</code>, <code>top_k: int = 5</code></span></div>
+    <div class="tool-row"><span class="tool-label">Output</span><span><code>List[UnifiedMemory]</code></span></div>
+    <div class="tool-row"><span class="tool-label">Description</span><span>Semantic similarity search across all stored memories for the given session. Embeds the query, queries ChromaDB, and returns the top-k most relevant <code>UnifiedMemory</code> objects. Used by the agent to "page in" relevant past context.</span></div>
+  </div>
+</div>
+
+<div class="tool-card">
+  <div class="tool-card-header">
+    <span class="tool-name">page_context</span>
+    <span class="tool-method method-mcp">MCP TOOL</span>
+  </div>
+  <div class="tool-card-body">
+    <div class="tool-row"><span class="tool-label">Input</span><span><code>session_id: str</code>, <code>limit: int = 10</code></span></div>
+    <div class="tool-row"><span class="tool-label">Output</span><span><code>List[UnifiedMemory]</code></span></div>
+    <div class="tool-row"><span class="tool-label">Description</span><span>Pages the most recent N memory objects back into the active context, ordered by timestamp descending. Used when resuming a session to reload recent memories without semantic search.</span></div>
+  </div>
+</div>
+
+<div class="tool-card">
+  <div class="tool-card-header">
+    <span class="tool-name">get_token_state</span>
+    <span class="tool-method method-mcp">MCP TOOL</span>
+  </div>
+  <div class="tool-card-body">
+    <div class="tool-row"><span class="tool-label">Input</span><span><code>session_id: str</code></span></div>
+    <div class="tool-row"><span class="tool-label">Output</span><span><code>TokenState</code></span></div>
+    <div class="tool-row"><span class="tool-label">Description</span><span>Returns the current live <code>TokenState</code> for a session. Used by the Streamlit dashboard to display real-time token utilization and compaction statistics.</span></div>
+  </div>
+</div>
+
+<div class="tool-card">
+  <div class="tool-card-header">
+    <span class="tool-name">list_sessions</span>
+    <span class="tool-method method-mcp">MCP TOOL</span>
+  </div>
+  <div class="tool-card-body">
+    <div class="tool-row"><span class="tool-label">Input</span><span><em>none</em></span></div>
+    <div class="tool-row"><span class="tool-label">Output</span><span><code>List[str]</code> — all session IDs in the database</span></div>
+    <div class="tool-row"><span class="tool-label">Description</span><span>Returns all active session IDs stored in SQLite. Used for dashboard session selection and debugging.</span></div>
+  </div>
+</div>
+
+<div class="tool-card">
+  <div class="tool-card-header">
+    <span class="tool-name">delete_memory</span>
+    <span class="tool-method method-mcp">MCP TOOL</span>
+  </div>
+  <div class="tool-card-body">
+    <div class="tool-row"><span class="tool-label">Input</span><span><code>memory_id: str</code> (UUID of the target memory)</span></div>
+    <div class="tool-row"><span class="tool-label">Output</span><span><code>bool</code> — True if deletion succeeded</span></div>
+    <div class="tool-row"><span class="tool-label">Description</span><span>Deletes a specific <code>UnifiedMemory</code> object from both ChromaDB and SQLite atomically. Used for memory pruning or cleanup.</span></div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════ §6 DATA FLOW -->
+<div class="section-header"><div class="num">6</div><h2>End-to-End Data Flow</h2></div>
+
+<p>The following shows the complete lifecycle of one compaction event, from trigger to storage:</p>
+
+<div class="flow-step">
+  <div class="flow-num">1</div>
+  <div class="flow-content">
+    <strong>Token Monitor fires</strong><br>
+    <code>TokenState.should_compact</code> returns <code>True</code> because <code>current_token_count / token_limit ≥ 0.80</code>. The LangGraph conditional edge routes to the compaction node. <code>compaction_in_progress</code> is set to <code>True</code>.
+  </div>
+</div>
+<div class="flow-arrow">↓</div>
+<div class="flow-step">
+  <div class="flow-num">2</div>
+  <div class="flow-content">
+    <strong>Dynamic Router decides</strong><br>
+    Inspects <code>TokenState.oldest_chunk_type</code>. If <code>"code"</code> → calls T2's AST Compactor. If <code>"text"</code> → calls T3's RLM Compactor.
+  </div>
+</div>
+<div class="flow-arrow">↓</div>
+<div class="flow-step">
+  <div class="flow-num">3</div>
+  <div class="flow-content">
+    <strong>Compactor produces schema</strong><br>
+    T2 returns a <code>CodeMemorySchema</code> object. T3 returns a <code>TextMemorySchema</code> object. Both are Pydantic-validated at the point of creation.
+  </div>
+</div>
+<div class="flow-arrow">↓</div>
+<div class="flow-step">
+  <div class="flow-num">4</div>
+  <div class="flow-content">
+    <strong>Instructor validates via guardrails</strong><br>
+    T4 uses <code>Instructor</code> to patch the LLM output through the Pydantic schema a second time, guaranteeing structured conformance before DB write. Any invalid output is retried.
+  </div>
+</div>
+<div class="flow-arrow">↓</div>
+<div class="flow-step">
+  <div class="flow-num">5</div>
+  <div class="flow-content">
+    <strong>UnifiedMemory envelope created</strong><br>
+    T4 wraps the validated payload in a <code>UnifiedMemory</code> object with auto-generated <code>id</code> and <code>timestamp</code>. The cross-field validator ensures <code>memory_type</code>, <code>compaction_source</code>, and payload fields are consistent.
+  </div>
+</div>
+<div class="flow-arrow">↓</div>
+<div class="flow-step">
+  <div class="flow-num">6</div>
+  <div class="flow-content">
+    <strong>FastMCP <code>store_memory()</code> called</strong><br>
+    T1 receives the <code>UnifiedMemory</code> envelope, embeds the summary text into ChromaDB, saves the full JSON to SQLite, sets <code>vector_embedding_id</code>, and returns the memory's <code>id</code>.
+  </div>
+</div>
+<div class="flow-arrow">↓</div>
+<div class="flow-step">
+  <div class="flow-num">7</div>
+  <div class="flow-content">
+    <strong>Context window cleared</strong><br>
+    The raw context chunks are removed from the active window, freeing the tokens. <code>TokenState.compaction_in_progress</code> is reset to <code>False</code> and <code>total_compactions</code> is incremented.
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════ §7 FILES CREATED -->
+<div class="section-header"><div class="num">7</div><h2>Files Created — Phase 1</h2></div>
+
+<table>
+  <thead><tr><th>File</th><th>Lines</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>harness/__init__.py</code></td><td>~10</td>
+      <td>Package init with module-level docstring describing the harness package.</td>
+    </tr>
+    <tr>
+      <td><code>harness/guardrails.py</code></td><td>~280</td>
+      <td>All 5 Pydantic schemas with full Google-style docstrings, validators, and properties. The shared data contract for the entire project.</td>
+    </tr>
+    <tr>
+      <td><code>tests/__init__.py</code></td><td>~5</td>
+      <td>Tests package init.</td>
+    </tr>
+    <tr>
+      <td><code>tests/test_schemas.py</code></td><td>~290</td>
+      <td>Comprehensive pytest suite: positive tests, negative/ValidationError tests, computed property tests, and JSON round-trip serialization tests.</td>
+    </tr>
+    <tr>
+      <td><code>requirements.txt</code></td><td>~12</td>
+      <td>All Python dependencies for the project.</td>
+    </tr>
+    <tr>
+      <td><code>.agents/skills/amp-development/SKILL.md</code></td><td>~186</td>
+      <td>Antigravity skill file: architecture, team ownership, tech stack, 80% trigger walkthrough, code quality rules, file naming conventions.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout callout-green" style="margin-top: 32px;">
+  <strong>To run the tests:</strong><br>
+  <code>pip install pydantic pytest &amp;&amp; pytest tests/test_schemas.py -v</code>
+</div>
+
+<p style="text-align: center; margin-top: 48px; color: var(--text-muted); font-size: 12px;">
+  Agentic Memory Pager · BTP Phase 1 · Teammate 4 · Technical Design Reference
+</p>
+
+</div><!-- /page -->
+</body>
+</html>
