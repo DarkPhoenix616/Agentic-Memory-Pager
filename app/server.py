@@ -2,10 +2,12 @@
 app/server.py - AMP Chat web server
 ===================================
     python -m app.server                 # then open http://127.0.0.1:8000
+    python -m app.server --mcp-url http://localhost:8001/mcp
+                                         # memory over MCP (start server/amp_memory_server.py first)
 
 Serves the web UI (app/static/) and a small JSON API around one ChatSession:
 
-    GET  /api/status     is the local model ready?
+    GET  /api/status     is the local model ready, and how is the vault reached (MCP or in-process)?
     GET  /api/state      the chat: transcript, context meter, activity, vault, ...
     POST /api/chat       {"message": "..."} -> text/event-stream. One "event" per
                          behind-the-scenes step as it happens (token count,
@@ -42,6 +44,7 @@ from starlette.routing import Mount, Route  # noqa: E402
 from starlette.staticfiles import StaticFiles  # noqa: E402
 
 from harness.chat_model import ChatModelError, chat_model_name, model_status  # noqa: E402
+from harness.mcp_client import MCP_URL_ENV, MCPError, memory_server, vault_mode  # noqa: E402
 from harness.chat_session import (  # noqa: E402
     DEFAULT_THRESHOLD, DEFAULT_TOKEN_LIMIT, MAX_TOKEN_LIMIT, ChatSession, Event, MessageTooLong,
 )
@@ -112,6 +115,20 @@ class ChatApp:
         self.session = self._new_session(old.token_limit, old.threshold, old.background)
 
 
+def vault_status() -> Dict[str, Any]:
+    """How the vault is reached and whether it answers."""
+    status = vault_mode()
+    if status["mode"] == "mcp":
+        try:
+            memory_server().ping()
+            status["ok"], status["message"] = True, f"Memory over MCP ({status['url']})"
+        except MCPError as exc:
+            status["ok"], status["message"] = False, str(exc)
+    else:
+        status["ok"], status["message"] = True, "Memory in-process (no MCP server)"
+    return status
+
+
 def _bad_request(message: str, status: int = 400) -> JSONResponse:
     return JSONResponse({"error": message}, status_code=status)
 
@@ -143,10 +160,14 @@ def create_app(graph: Any = None) -> Starlette:
 
     async def status(request: Request):
         ready, message = await asyncio.to_thread(model_status)
-        return JSONResponse({"ready": ready, "message": message, "model": chat_model_name()})
+        return JSONResponse({"ready": ready, "message": message, "model": chat_model_name(),
+                             "vault": await asyncio.to_thread(vault_status)})
 
     async def state(request: Request):
-        return JSONResponse(await asyncio.to_thread(state_view, chat.session))
+        try:
+            return JSONResponse(await asyncio.to_thread(state_view, chat.session))
+        except MCPError as exc:
+            return _bad_request(str(exc), 503)
 
     async def settings(request: Request):
         if (error := _check_post(request)) is not None:
@@ -195,7 +216,7 @@ def create_app(graph: Any = None) -> Starlette:
             try:
                 reply = session.ask(message, on_event=lambda e: put("event", event_view(e)))
                 put("done", {"reply": reply})
-            except (MessageTooLong, ChatModelError, ValueError) as exc:
+            except (MessageTooLong, ChatModelError, MCPError, ValueError) as exc:
                 put("error", {"message": str(exc)})
             except Exception as exc:                      # keep the server alive whatever happens
                 logger.exception("Turn failed")
@@ -233,15 +254,22 @@ def create_app(graph: Any = None) -> Starlette:
 def main(argv=None) -> None:
     parser = argparse.ArgumentParser(prog="python -m app.server", description="AMP Chat web server")
     parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--mcp-url", default=None,
+                        help="reach the memory server over MCP, e.g. http://localhost:8001/mcp "
+                             f"(default: ${MCP_URL_ENV}, else in-process)")
     parser.add_argument("--host", default="127.0.0.1",
                         help="keep the default: the app has no login, so it should only be reachable from this machine")
     args = parser.parse_args(argv)
     if args.host not in LOCAL_HOSTS:
         parser.error("AMP Chat has no login; serve it on 127.0.0.1 only.")
 
+    if args.mcp_url:
+        os.environ[MCP_URL_ENV] = args.mcp_url
+
     import uvicorn
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
-    print(f"AMP Chat on http://{args.host}:{args.port}  (model: {chat_model_name()})")
+    print(f"AMP Chat on http://{args.host}:{args.port}  (model: {chat_model_name()}; "
+          f"{vault_status()['message']})")
     uvicorn.run(create_app(), host=args.host, port=args.port, log_level="warning")
 
 

@@ -192,6 +192,22 @@ It is plain HTML, CSS and JavaScript (`app/static/`), with no build step and no 
 
 The server only listens on `127.0.0.1` and only accepts same-origin JSON, so other websites cannot use it.
 
+### Memory over MCP
+
+The vault is the memory server in `server/amp_memory_server.py`. It has five tools: `store_memory`, `search_vault`, `page_context`, `list_all_memories` and `delete_memory`. The chat app can reach it in two ways:
+
+| Mode | How | When |
+|---|---|---|
+| **Over MCP** | Start the server, then point the app at it:<br>`python server/amp_memory_server.py`<br>`python -m app.server --mcp-url http://localhost:8001/mcp` | The real architecture. Every memory call goes over the Model Context Protocol (streamable HTTP), and only the server process opens ChromaDB. |
+| **In-process** (default) | `python -m app.server` | Quick runs and tests. The server's tool functions are called directly, with no second process. |
+
+The page header shows which mode is active (*Memory: over MCP* or *Memory: in-process*).
+
+Because the vault is a standard MCP server, other MCP clients can use the same memory. For example, Claude Code:
+`claude mcp add --transport http amp-memory http://localhost:8001/mcp`
+
+The switch lives in `harness/mcp_client.py`. The graph's five `_mcp_*` helpers call `memory_server()`, which returns the MCP client when `AMP_MCP_URL` is set, and the server module otherwise.
+
 Everything runs locally:
 - **Chat and summaries:** through Ollama.
 - **Search:** ChromaDB's built-in embedding model.
@@ -204,5 +220,9 @@ The context window is small by default (3,072 tokens), so you can see paging aft
 | `AMP_CHAT_MODEL` | `llama3.1:8b` | chat model |
 | `AMP_RLM_MODEL` | `llama3.1:8b` | RLM summarizer model |
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama server |
+| `AMP_MCP_URL` | not set (in-process) | Reach the memory server over MCP, e.g. `http://localhost:8001/mcp` |
+| `AMP_MCP_PORT` | `8001` | Port of the MCP memory server |
+| `AMP_CHROMA_PATH` | `storage/chroma_db` | Folder of the ChromaDB vault (tests use a temporary one) |
+| `AMP_SIGNING_KEY` | not set (memories unsigned) | HMAC key for memory signing; use the same value for the app and the server |
 
 The core is `harness/chat_session.py` (`ChatSession.ask()`). It has no UI code, so it can also be used from scripts and tests.

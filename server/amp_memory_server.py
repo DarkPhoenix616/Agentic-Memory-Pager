@@ -18,7 +18,8 @@ encoder=tiktoken.get_encoding("cl100k_base") # gpt-4 one to count the number of 
 # ---------------------------------------------------------------------------
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(THIS_DIR)
-CHROMA_DB_PATH = os.path.join(PROJECT_ROOT, "storage", "chroma_db")
+# AMP_CHROMA_PATH overrides the location (tests use a temporary folder).
+CHROMA_DB_PATH = os.environ.get("AMP_CHROMA_PATH") or os.path.join(PROJECT_ROOT, "storage", "chroma_db")
 
 os.makedirs(CHROMA_DB_PATH, exist_ok=True)
 
@@ -29,7 +30,10 @@ if PROJECT_ROOT not in sys.path:
 
 from harness.guardrails import UnifiedMemory, RetrievedMemory, PageContextResult
 
-mcp = FastMCP("amp-memory", host="localhost", port=8001)
+# Clients reach it at http://localhost:<port>/mcp (AMP_MCP_URL in the harness).
+# AMP_MCP_PORT overrides the port; the host stays localhost, so only this machine can connect.
+MCP_PORT = int(os.environ.get("AMP_MCP_PORT", "8001"))
+mcp = FastMCP("amp-memory", host="localhost", port=MCP_PORT)
 
 chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
 collection = chroma_client.get_or_create_collection("amp_memory")
@@ -273,4 +277,5 @@ def page_context(query: str, total_budget: int = 1000, session_id: str = "", can
 
 if __name__ == "__main__":
     print(f"ChromaDB persisting to: {CHROMA_DB_PATH}")
+    print(f"MCP endpoint: http://localhost:{MCP_PORT}/mcp")
     mcp.run(transport="streamable-http")

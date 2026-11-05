@@ -54,9 +54,21 @@ def test_the_page_and_its_files_are_served(web):
     assert web.get("/static/style.css").headers["content-type"].startswith("text/css")
 
 
-def test_status_reports_the_local_model(web):
-    assert web.get("/api/status").json() == {"ready": True, "message": "llama3.1:8b (local, Ollama)",
-                                             "model": "llama3.1:8b"}
+def test_status_reports_the_local_model_and_the_vault(web, monkeypatch):
+    monkeypatch.delenv("AMP_MCP_URL", raising=False)
+    assert web.get("/api/status").json() == {
+        "ready": True, "message": "llama3.1:8b (local, Ollama)", "model": "llama3.1:8b",
+        "vault": {"mode": "in-process", "url": None, "ok": True, "message": "Memory in-process (no MCP server)"}}
+
+
+def test_status_reports_an_unreachable_mcp_server(web, monkeypatch):
+    from harness import mcp_client
+    monkeypatch.setenv("AMP_MCP_URL", "http://localhost:9/mcp")            # nothing listens on port 9
+    monkeypatch.setattr(mcp_client, "_clients", {"http://localhost:9/mcp": mcp_client.MCPMemoryClient(
+        "http://localhost:9/mcp", connect_timeout=5)})
+    vault = web.get("/api/status").json()["vault"]
+    assert vault["mode"] == "mcp" and vault["ok"] is False
+    assert "Cannot reach the MCP memory server" in vault["message"]
 
 
 # ---------------------------------------------------------------------------
