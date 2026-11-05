@@ -158,6 +158,15 @@ def test_a_second_search_request_and_thinking_are_removed_from_the_reply():
     assert chat_model._clean_reply('TOOL: search_vault("cat")', searched=False).startswith("TOOL:")
 
 
+def test_invented_tool_calls_are_removed_from_answers():
+    clean = chat_model._clean_reply
+    assert clean('Your lucky number is 47. TOOL: recall_fact("<lucky number> = 47")', searched=False) == \
+        "Your lucky number is 47."
+    assert clean("We use ChromaDB.\nTOOL: store_memory(x)\nAnything else?", searched=False) == \
+        "We use ChromaDB.\n\nAnything else?"
+    assert clean('TOOL: recall_fact("cat")', searched=False) == "(The model returned no answer.)"
+
+
 # ---------------------------------------------------------------------------
 # Whole turns through the real graph
 # ---------------------------------------------------------------------------

@@ -45,6 +45,7 @@ _MEMORY_NOTE = (
 _SEARCHED_NOTE = ("You have already searched the vault in this turn. Answer the user now, "
                   "without a TOOL line.")
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+_TOOL_RE = re.compile(r"[ \t]*\bTOOL:[^\n]*")     # a TOOL: call, up to the end of its line
 
 
 class ChatModelError(RuntimeError):
@@ -122,11 +123,19 @@ def build_messages(
 
 
 def _clean_reply(text: str, searched: bool) -> str:
+    """The reply as the user should see it.
+
+    A reply that starts with TOOL: search_vault(...) is a real search request and
+    is returned as is, so the graph can run it (only once per turn). Every other
+    TOOL: text is removed: a repeated search would loop, and 8B models also
+    invent tools such as 'TOOL: recall_fact(...)' at the end of an answer."""
     text = _THINK_RE.sub("", text).strip()        # thinking models (qwen3) may include their reasoning
-    if searched and text.startswith("TOOL:"):     # a second search request would loop; drop it
-        text = text.split("\n", 1)[1].strip() if "\n" in text else ""
-        text = text or "I searched my memory but found nothing more about that."
-    return text or "(The model returned an empty reply.)"
+    if not searched and text.startswith("TOOL: search_vault"):
+        return text
+    cleaned = _TOOL_RE.sub("", text).strip()
+    if not cleaned and searched:
+        cleaned = "I searched my memory but found nothing more about that."
+    return cleaned or "(The model returned no answer.)"
 
 
 def chat_reply(
