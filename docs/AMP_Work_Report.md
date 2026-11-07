@@ -1,8 +1,10 @@
 # AMP work report: Akshay's part (Teammate 2 + Teammate 3)
 
 Running log of what was built for the Agentic Memory Pager (AMP) BTP, why each
-choice was made, and the measured results. **Kept outside the git repo on
-purpose: never commit or push this file.**
+choice was made, and the measured results. Since 2026-11-07 it lives in the
+repo at `docs/AMP_Work_Report.md` on the user's branch `akshaybranch` (the user
+moved it there; `main` has no `docs/` because PR #9 removed it, so don't pull
+main into `akshaybranch` or the folder disappears).
 
 How to use this file:
 - New chat? Read this first; it is the source of truth for status and numbers.
@@ -403,6 +405,16 @@ Checked with a simulated merge in a throwaway worktree: **289 passed, 1 skipped*
 - Code tool: llama3.1:8b's programs over the memories are not always right (counted 2 of 3 bugs). Try a stronger coder: qwen3:8b with `think=False`, or a bigger model.
 - The secret scrubber's regexes need a word boundary before a key (`\bsk-...`). A key glued to letters (`xxxsk-...`) is not detected. Rare in real text.
 - Chat: answer quality is limited by the 8B model. For example, it described LangGraph wrongly as an NLP tool. Could compare `qwen3:8b`.
+- **Aman's idea (2026-11-07): real LLM apps (ChatGPT, Claude) use our MCP server, and use it at 80% context.** Checked, not built:
+  - **Connecting: possible.** Claude Code reaches `http://localhost:8001/mcp` directly. claude.ai and ChatGPT (Developer mode, paid plans) only connect to a **public HTTPS** URL, so they need a tunnel (ngrok / cloudflared) and auth.
+  - **The 80% trigger: not through MCP alone.** An MCP server only sees the tool calls; the app owns the chat and its token count. In AMP Chat it works because our LangGraph harness holds the chat.
+  - **Closest real option: Claude Code hooks.** `PreCompact` runs just before Claude Code compacts and gets `transcript_path`, so a script can run AST/RLM on the transcript and store it. A `UserPromptSubmit` hook can page memories back in each turn. ChatGPT / claude.ai have no hooks; there the model only calls our tools when it decides to.
+  - **Full 80% control with a cloud model:** keep our harness and swap Ollama for the Claude/OpenAI API in `harness/chat_model.py`. It costs money, and the design doc says "no paid APIs".
+  - **Server changes needed for outside clients:**
+    - `store_memory` takes a full `UnifiedMemory`, and compaction runs in the harness, so add a simple server-side tool such as `save_context(raw_text)` that runs AST/RLM itself.
+    - Layer 4 (tool_guard) runs in our harness, so outside clients skip it and can call `delete_memory`. Add the checks on the server side.
+    - Add a default session id.
+    - Add auth before any tunnel.
 
 ---
 
