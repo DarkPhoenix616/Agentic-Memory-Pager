@@ -6,7 +6,6 @@ storage/chroma_db/
 *.sqlite3
 .DS_Store
 .agents
-docs
 .pytest_cache
 .venv
 __pycache__/
