@@ -1,0 +1,420 @@
+# AMP work report: Akshay's part (Teammate 2 + Teammate 3)
+
+Running log of what was built for the Agentic Memory Pager (AMP) BTP, why each
+choice was made, and the measured results. **Kept outside the git repo on
+purpose: never commit or push this file.**
+
+How to use this file:
+- New chat? Read this first; it is the source of truth for status and numbers.
+- After each step, update **Status**, add to the **Decision log**, and put new
+  numbers under **Results** with the date and the exact command that produced them.
+- Numbers come only from runs that were actually done. Unverified ideas go
+  under **Open questions**.
+
+Paths: repo `BTP/AgenticMemoryPager/` (clone of
+`github.com/DarkPhoenix616/Agentic-Memory-Pager`), eval scripts and saved outputs
+in `BTP/report_eval/`, test venv `AgenticMemoryPager/.venv` (git-ignored).
+
+---
+
+## 1. Status (last updated 2026-11-05)
+
+| Part | Branch | State |
+|---|---|---|
+| T2 AST code compactor | `feature/ast-compactor` | Done. PR #2 merged into main (merge commit `9afb773`). Branch deleted. |
+| T3 RLM text summarizer | `feature/rlm-summarizer` (deleted) | **Merged** into main by the user as PR #3 (`f5c8066`). |
+| AMP Chat (the user's idea, 2026-11-05) | `feature/chat-app` (deleted) | **Merged** into main by the user as PR #4 (`bc20b99`). Plain web app: `python -m app.server`, http://127.0.0.1:8000. **Headline result: AMP recalled 16/16 facts vs 1/16 for a plain chatbot (section 5.3b).** 160 tests pass on main. |
+
+Next steps:
+1. PRs #3 and #4 are merged (2026-11-05). Main is at `bc20b99`, and 160 tests pass.
+2. Guardrails conflict fixed (2026-11-05):
+   - **What I did:** branch `feature/guardrails-merge` = Aman's `feature/guardrails` (left unchanged at `d307d34`) + `main` merged in.
+   - **Resolution:** kept his `llm_reasoning_node`; `_invoke_llm` calls `chat_reply`.
+   - **New `tests/conftest.py`:** a stub chat model for all tests, because his Phase 2–4 tests would otherwise call the real model.
+   - **Label fix:** a prompt line stops the model saying "READ_ONLY memory entry" to users.
+   - **Checks:** 305 tests pass; a live Pixel chat on the merged code recalls paged-out facts.
+   - **PR #5** was **merged by the user** (`c504037`). Main now has everything: AST, RLM, AMP Chat and guardrails Layers 1–4 + signing. **305 tests pass on main.** The chat app was restarted on it.
+   - Leftover remote branches, both fully merged (0 commits not in main): `feature/guardrails-merge` (delete it from PR #5) and Aman's `feature/guardrails` (his to delete, or he merges main to continue on it).
+3. **Real MCP transport** (2026-11-05), branch `feature/mcp-transport`, **PR #6 open** (MERGEABLE): https://github.com/DarkPhoenix616/Agentic-Memory-Pager/pull/6
+   - **Before:** the graph imported the server's functions directly, so the MCP protocol was never used. I verified the server *does* work as a real MCP server (protocol 2025-11-25, 5 tools).
+   - **Now:** `harness/mcp_client.py`. With `AMP_MCP_URL` set, every memory call goes over MCP; otherwise it stays in-process, which is the default for tests.
+   - **Chat app:** `--mcp-url` option, plus a "Memory: over MCP" pill in the header.
+   - **Tests:** 7 real-MCP tests, with the server in its own process on a temporary vault. 313 tests pass in total.
+   - **Live run:** the Pixel chat over MCP, with the real model and vault, recalled every fact.
+   - **Found on the way:** the chat tests ran a real search on `storage/chroma_db`. Fixed: all five helpers are now faked, and `conftest.py` forces a temporary vault for every test run.
+4. **Sandbox as the 6th MCP tool** (2026-11-05), branch `feature/sandbox-tool`, **PR #7 open** (MERGEABLE): https://github.com/DarkPhoenix616/Agentic-Memory-Pager/pull/7
+   - **Tushar's commits:** his 2 `mcp-server` commits are merged with his authorship.
+   - **Linux bug:** `taskkill` is Windows-only, so a timeout crashed, and the runaway child kept spinning at 100% CPU (reproduced). Fixed with a process group plus killpg.
+   - **OS limits:** CPU time, 512 MB, 1 MB per file, no new processes. Checked: a 2 GB memory bomb gives MemoryError; an endless loop is killed at the timeout with nothing left running.
+   - **The tool:** `run_memory_code` (new `SandboxResult` model). Layer 4 allowlists it at SEARCH_ONLY and runs its origin check on the code. The graph routes it to `memory_code_node`, and its output reaches the model as untrusted, HTML-escaped data.
+   - **Signing key:** AMP Chat now creates a local key (`storage/.amp_signing_key`, 0600, git-ignored). Without one, every memory is READ_ONLY, and Layer 4 blocks memory-shaped tool calls.
+   - **Live findings (llama3.1:8b):**
+     - **(a) Prompt regression with signed memories.** The model refused general questions ("not in my memories") and pasted `<MEMORY_ENTRY>` markup into answers. Fixed in the memory note, plus tag stripping: 8-turn replay went from 3 problem replies to **0/8**, and both recall questions were right.
+     - **(b) Re-typed memories.** The model started its code with `memories = [...]`, or re-typed the memories from its prompt. Fixed: top-level `memories = ...` lines are dropped, so the code reads the real list.
+     - **(c) Wrong programs.** Its programs can still be wrong: it counted 2 of 3 bugs, twice. When it isn't asked to use the tool, it answers from paged-in memories correctly (3 bugs, MongoDB).
+     - **(d) qwen3:8b.** It returned empty replies; its thinking uses up the reply budget (needs Ollama `think=False`).
+   - **Tests:** 341 pass (27 new).
+   - **PR #7 merged by the user** (`49da247`). Main now has everything built on 2026-11-05. Tushar's `mcp-server` and Aman's `feature/guardrails` are both fully in main.
+5. Still to do: the BTP report and slides, and the README extras (Tree-sitter, LiteLLM, Langfuse, encryption).
+6. Open ideas are in section 7.
+
+---
+
+## 2. Project context (short)
+
+AMP treats an LLM's context window like RAM and long-term storage (ChromaDB) like disk.
+
+- **When it compacts:** when `harness/graph.py` (LangGraph) sees the context at **80%** of the token limit, it takes the **oldest** chunk.
+- **Where it goes:**
+  - Code chunks go to the **AST compactor (T2)**.
+  - Text and dialogue chunks go to the **RLM summarizer (T3)**.
+- **What is stored:** the compacted result is wrapped in `UnifiedMemory` and stored through the MCP server (`store_memory`). The raw chunk is then evicted, and its tokens are freed.
+- **Schemas** are in `harness/guardrails.py` (Aman, T4): `CodeMemorySchema` for T2 and `TextMemorySchema` for T3. Both scrub secrets and enforce size limits.
+
+One fact shaped T3's design. The server embeds **only `factual_summary`** for a text memory (`server/amp_memory_server.py::_embedding_text`). `llm_reasoning_node` also shows only that field to the model. So anything that appears only in the lists can't be found by search and is never shown to the model.
+
+---
+
+## 3. T2: AST code compactor (done)
+
+**What:** `compactor/ast_code/code_parser.py`.
+
+`compact_code(source, file_path, language, original_token_count, docstrings)` returns a `CodeMemorySchema`. It keeps imports, classes, function and method signatures, docstrings, module-level variables and dependencies, and drops function bodies.
+
+**How it handles code that doesn't parse.** It tries four parse strategies, in order:
+1. full parse;
+2. dedented parse;
+3. trailing lines trimmed, with a dangling block closed by `...`;
+4. a line-by-line scan.
+
+A context chunk can be a cut-off fragment, and the graph must never crash on one.
+
+**Safety:**
+- Values of credential-like variables are hidden.
+- Paths are made relative, with no `..`.
+- Signatures and docstrings go through `_scrub_secrets`.
+- Every limit in the schema is respected.
+
+**Results:**
+
+- **Compression** on 4 project files: the skeleton is **35.6%** of the original tokens with full docstrings, and **18.0%** with only the first paragraph of each docstring.
+- **Tests:**
+  - 54 unit tests (`tests/test_ast_compactor.py`).
+  - 3 graph tests (`tests/test_graph_ast_node.py`).
+  - Full suite on main after the merge: 93 passed.
+
+**Bugs found while testing T2:**
+- The credential-name check was too broad: it hid `MAX_TOKENS`. Fixed with whole-word matching.
+- Strategy 3 lost symbols that were in the trimmed lines. Fixed by line-scanning the trimmed tail, seeded with the classes still open at the cut.
+- tiktoken crashed on special-token text such as `<|endoftext|>`, and when its vocabulary couldn't be downloaded. Fixed with `disallowed_special=()` and a fallback of about 4 characters per token.
+
+---
+
+## 4. T3: RLM text summarizer
+
+### 4.1 What was built
+
+| File | Purpose |
+|---|---|
+| `compactor/rlm_text/recursive_summarizer.py` | The pipeline: `summarize_text()`, `distill()`, `RLMConfig` |
+| `compactor/rlm_text/__main__.py` | CLI: `python -m compactor.rlm_text chat.txt [--json] [--pieces] [--no-llm]` |
+| `tests/test_rlm_summarizer.py` | 34 tests with a fake LLM, plus 1 live test (opt-in, `AMP_RLM_LIVE=1`) |
+| `tests/test_graph_rlm_node.py` | 4 tests: the real node, a fake store, a fake model |
+| `harness/graph.py` | Only the `TODO [Teammate 3]` block changed: it now calls `summarize_text(raw_content, role=..., original_token_count=...)` |
+
+The README asked for three things:
+1. recursive delegation that splits huge histories;
+2. parallel sub-LLM batching on local models (Phi-3 or Llama-3-8B via Ollama) that extracts decisions, bugs and constraints;
+3. no loss of meaning across multi-pass compaction.
+
+The deliverable is a script that turns about 50k tokens of chat into fact maps.
+
+### 4.2 Pipeline
+
+1. **Split:** find the turns (`User:`, `**Assistant:**`, `Human:` and so on) and pack **whole turns** into pieces of at most **2,000 tokens**. A turn that is too long by itself is cut at paragraphs, then lines, then sentences, then words, then characters.
+2. **Map:** each piece goes to `llama3.1:8b` with up to **4 calls in parallel**. Each call returns a JSON fact map: `summary` plus the three lists.
+3. **Reduce:**
+   - The **lists are merged in code**: duplicates are removed and order is kept.
+   - The **summaries are merged by the LLM** in batches that fit one call, level by level, up to 6 levels.
+4. **Guard:** names (files, `func()`, snake_case, CamelCase, versions) that appear in the piece summaries or the lists, but are missing from the final summary, are appended as `Key terms: ...`.
+5. **Fallback:** if Ollama is down or its reply is unusable, a rule-based extractor handles that piece, using cue words and the first sentence of each message.
+
+### 4.3 Design decisions and why
+
+| Decision | Why |
+|---|---|
+| Recursive map-reduce, not one call | The 8B model runs with `num_ctx=8192`, and 50k tokens can't fit. A 2,000-token piece leaves room for the prompt and a reply of up to 1,536 tokens. |
+| Split at turn boundaries | Keeps who said what. Constraints are things the *user* states, so the role must survive the split. |
+| Merge the lists in code; the LLM merges only summaries | Re-summarising lists rewords them and drops items. Merging in code keeps the exact wording; in run 1, all 50 planted facts survived in the lists. |
+| Key-term guard | Only `factual_summary` is embedded and shown to the reasoning LLM (section 2), so a name dropped there can't be searched. In run 1 the guard restored **26** names. |
+| JSON-schema structured output, temperature 0, seed 0 | Replies can be parsed, and runs can be repeated. A reply that isn't JSON is retried once, then the rules take over. |
+| Transcript wrapped in `<transcript>` tags, with copies of the tag inside defused | Prompt-injection defence. Chat text can't close the data block and add instructions. |
+| Circuit breaker: `ConnectionError` or a 404 stops calls at once; otherwise after 3 failures | The graph must never crash or hang when Ollama is down. The rest of the run switches to rules. |
+| Text of 150 tokens or fewer is stored word for word | A summary of a short message would be longer and lossy. Most graph chunks are single messages. |
+| Secrets scrubbed **before** clipping to 500 characters | A cut can leave half a key that the regex no longer matches. A test covers this. |
+| More than 50 items: the LLM merges related ones; if that fails, keep the latest 50 | Schema limit. A 50k chat can easily produce more than 50 decisions. Later decisions replace earlier ones. |
+| `summarize_text` never raises; its last resort stores the clipped raw text | A compaction cycle must never lose the chunk. |
+| Default model `llama3.1:8b`, changeable with `AMP_RLM_MODEL` | The README names Llama-3-8B or Phi-3. Llama 3.1 8B is installed and runs on the laptop's RTX 3050 (6 GB). |
+| graph.py: local import, and only the TODO block edited | Aman's branch edits the lines right after the block (`score_payload`, signing). The same approach merged cleanly for T2. |
+
+### 4.4 Results
+
+**Unit and graph tests** (2026-11-05, `.venv/bin/python -m pytest tests/ -q`):
+
+| | Count |
+|---|---|
+| New T3 tests | 38: 34 unit + 4 graph |
+| Live test (opt-in) | 1, skipped by default |
+| Full suite | **131 passed, 1 skipped** |
+
+What the tests cover:
+- A synthetic 50,372-token conversation, with 30 decisions, 20 bugs and 10 rules planted: every item recovered, and every fact tag in the summary, in the original order.
+- Calls run in parallel (more than one in flight at a time).
+- Ollama down: exactly 1 call, then rules for the rest.
+- A reply that isn't JSON: retried once, then rules.
+- Prompt injection.
+- Secrets.
+- Schema bounds.
+
+**Live test** (`AMP_RLM_LIVE=1 pytest -k live`): passed in **19.4 s** on `llama3.1:8b`.
+
+**Live 50k evaluation, run 1** (old prompts, 2026-11-05):
+- Input: `report_eval/make_chat.py` (seed 7) builds **58,309 tokens in 360 messages**, with **20 decisions, 20 bug fixes and 10 user rules** planted, each with a unique name or number.
+- Command: `python -m compactor.rlm_text chat.txt --pieces`.
+- Saved output: `report_eval/rlm_run1_old_prompts.txt`.
+
+| Metric | Value |
+|---|---|
+| Compression | 58,309 → **474** summary tokens (**0.8%**) |
+| Pieces / reduce levels / LLM calls / fallbacks | 33 / 2 / 36 / **0** |
+| Wall time | **512.5 s** (~14 s per call) |
+| Planted facts kept in their list | decisions **20/20**, bugs **20/20**, constraints **10/10** |
+| Items in each list | decisions 36 (16 extra), bugs 20 (0 extra), constraints 36 (26 extra) |
+| Planted facts named in the summary | decisions 11/20, bugs 20/20, constraints **0/10** |
+
+Reading run 1:
+- **Recall is perfect, but precision is weak.**
+  - Extra "decisions" were descriptions of how the system works ("components use a similar architecture").
+  - Extra "constraints" were the user's questions turned into rules ("Test the dashboard without a running model"), plus some decisions.
+- **The summary skipped all 10 user rules.** That matters, because the summary is the only searchable field.
+- **Fix:** both prompts were tightened. Questions aren't constraints, and descriptions of existing code aren't decisions. Summaries now lead with what was decided, fixed or required, including the limits.
+
+**Live 50k evaluation, run 2** (tightened prompts, same input, 2026-11-05):
+- Command: `python -m compactor.rlm_text chat.txt --json -v`.
+- Saved output: `report_eval/rlm_run2_new_prompts.json`.
+- Check: `python3 report_eval/recall.py report_eval/facts.json report_eval/rlm_run2_new_prompts.json`.
+
+| Metric | Run 1 (old prompts) | Run 2 (new prompts) |
+|---|---|---|
+| Summary tokens (share of 58,309) | 474 (0.8%) | 778 (1.3%) |
+| Pieces / reduce levels / LLM calls / fallbacks | 33 / 2 / 36 / 0 | 33 / 2 / 36 / 0 |
+| Wall time | 512.5 s | 555.1 s |
+| Planted facts kept in their list | 20/20, 20/20, 10/10 | **20/20, 20/20, 10/10** |
+| Constraints listed (10 planted) | 36 (26 extra) | **12 (2 extra)** |
+| Decisions listed (20 planted) | 36 (16 extra) | 41 (21 extra) |
+| Bugs listed (20 planted) | 20 (0 extra) | 20 (0 extra) |
+| Decisions named in the summary | 11/20 | **19/20** |
+| Bugs named in the summary | 20/20 | 20/20 (16 in the prose, 4 only via Key terms) |
+| Constraints named in the summary | 0/10 | **6/10** |
+| Names added back by the key-term guard | 26 | 6 |
+
+Reading run 2:
+- **Constraints are now precise:** 2 extra instead of 26, and both extras ("dashboard should not exceed 109 / 119 lines") come from facts that really are in the chat.
+- **The summary now carries the facts:** 19/20 decisions and 6/10 user rules, against 11/20 and 0/10 before. It costs 304 more summary tokens, still only 1.3% of the input.
+- The guard had less to do (6 names instead of 26), because the prose itself now keeps more names.
+- **Still weak: the decisions list.** The 21 extras are true statements copied from the repeated explanations ("The system uses a token monitor…", "components never edit content in place"). They're filed as decisions, but no one made a choice in those turns. They aren't hallucinations, just the wrong category.
+- Next: an A/B test of the decisions wording on the first 8 pieces (section 4.4, A/B test).
+
+**GPU observation** (2026-11-05, during run 2):
+- `ollama ps` showed `llama3.1:8b` taking 6.2 GB with an 8,192-token context, split **22% CPU / 78% GPU**.
+- `nvidia-smi` showed 55% GPU use, 4.8 of 6.1 GB, 71 °C and 52 W.
+- The model doesn't fit in the RTX 3050's 6 GB, so part of every call runs on the CPU. That is the likely cause of the ~15 s per call (not measured).
+
+Caveat for every live number: the test chat is synthetic, and its filler explanations repeat. A real chat is less repetitive, so precision may be better there; that is not measured yet.
+
+**A/B test of the decisions wording** (2026-11-05):
+- Setup: the first 8 pieces of the same chat, 8 calls per prompt variant.
+- Current prompt: 10 decisions (6 planted, 4 extra). Stricter variant ("include only a choice shown being made…"): 9 decisions (6 planted, 3 extra).
+- Verdict: one item of difference is within run-to-run noise. **The prompt was kept unchanged.** The extra "decisions" are a limit of an 8B model.
+- Possible fixes, both untested: a larger model, or a filter in code.
+
+**Lists can come back empty for a single exchange:**
+- In the chat app, a 541-token exchange was summarised with both facts in the summary ("the user decided to use LangGraph", "replies must stay under 200 words"), but both lists came back empty.
+- Calling `distill()` on a similar text gave `["Use LangGraph for pager orchestration"]` and `["Replies must stay under 200 words"]`. So the code works, and the model is inconsistent.
+- Recall is unaffected: the summary is what gets embedded and paged in.
+
+### 4.5 Bugs the T3 tests found (and fixes)
+
+1. **Distinct facts merged into one.**
+   - Problem: the near-duplicate rule (80% shared words) merged **19 of 20 different bugs**, because "crash in `module_3.py`" and "crash in `module_7.py`" share most of their words.
+   - Fix: two items can merge only if their names and numbers ("anchors") match.
+   - Test: `test_merge_items_keeps_facts_about_different_files_and_numbers_apart`.
+2. **Negation risk.**
+   - Problem: "Use Redis …" and "Do not use Redis …" could have been merged into one.
+   - Fix: items whose negation words differ never merge.
+   - Test: `test_merge_items_never_joins_an_item_with_its_negation`.
+3. **A user rule filed as a decision.**
+   - Problem: the rule-based extractor filed "Don't use SQLite, we use ChromaDB" (from the user) as a decision.
+   - Fix: for user messages, constraints are checked before decisions.
+4. **Repeated sentences in the fallback summary.**
+   - Problem: the rule-based summary repeated the same opening sentences when the chat repeated itself.
+   - Fix: repeated openers are skipped.
+
+These failures were mistakes in the tests, not in the code:
+- The pieces were joined with the wrong separator.
+- The test chat came to only 45k tokens, below the 50k target.
+- The planted test data overwrote itself.
+
+---
+
+## 5. AMP Chat: the whole system as a local chatbot (the user's idea)
+
+The user's idea (2026-11-05): make AMP a chatbot on local models. The user types into a chat window, and saving to the DB, compression and MCP all happen behind the scenes. The user said team-area boundaries don't need to be followed for this.
+
+### 5.1 What was built
+
+| File | Purpose |
+|---|---|
+| `harness/chat_model.py` | The real chat LLM in `llm_reasoning_node`, replacing the stub. It uses `llama3.1:8b` via Ollama (`AMP_CHAT_MODEL`). |
+| `harness/chat_session.py` | `ChatSession.ask()`: one turn through `create_amp_graph()`. Keeps the chunks, the transcript and the event log. No UI code. |
+| `app/chat_app.py` | The Streamlit UI. Chat on the left; on the right, the token meter with the trigger line, compaction stats, paged-in memories, the activity log and the vault. |
+| `tests/test_chat_session.py` | 13 tests: the real graph with a fake vault, a fake Ollama client and a fake RLM model. |
+| `README.md` | New section "AMP Chat" on how to run it. |
+
+Run it with `ollama pull llama3.1:8b`, then `streamlit run app/chat_app.py`. The context window defaults to 3,072 tokens, small so paging is visible.
+
+### 5.2 Design decisions and why
+
+| Decision | Why |
+|---|---|
+| Memory unit = one **exchange** (question + answer) as a text chunk, plus one chunk per code block | Per-message chunks were under 150 tokens, so the RLM stored them word for word: measured 378 tokens out, 358 stored, no compression. Exchanges are bigger and get real summaries. Code blocks go to the AST compactor. |
+| **Background reclaim** after the reply (thread, 80% → 70%), plus **direct reclaim** in the graph | The same split as Linux's kswapd (background) and direct reclaim. An RLM summary took ~14 s inside a turn; the background thread moves that off the user's wait. |
+| **Working set:** the latest exchange is never paged out in the background | Without this, one long answer pushed the context over the line and the reclaim paged out *everything*, including the turn the user was reading. |
+| Chat model = summarizer model, same `num_ctx=8192` | On the 6 GB GPU, a second model, or a different context size, makes Ollama reload. |
+| Panel drawn *after* a pending message is handled | Otherwise the panel's refresh, when background compaction ended, swallowed a message the user had just sent (found in the AppTest run). |
+| Vault search results go to the model as user-role data, never system text | Memory text must not carry system authority, in line with Aman's Phase 4. It also makes the repeated-search guard work with his tagged `HumanMessage` cards. |
+| Only the stub lines of `graph.py` changed; the model lives in a new file | Aman's branch rewrote `llm_reasoning_node`, so this keeps the conflict to one small hunk. |
+
+### 5.3 Results (2026-11-05, llama3.1:8b on an RTX 3050 6 GB)
+
+| Check | Result |
+|---|---|
+| Tests | 13 chat tests; full suite on `feature/chat-app`: **144 passed, 1 skipped** |
+| Headless e2e, per-message chunks (limit 1,024) | 9 compactions (8 RLM, 1 AST). "Pixel" was recalled after it had been paged out. 378 → 358 tokens: no compression, which led to the exchange design. |
+| Headless e2e, exchange chunks (limit 1,024) | One long exchange: **541 → 198 tokens** (RLM, 13.8 s). The recall question was answered correctly 2 turns later. |
+| Streamlit AppTest, real app (limit 1,024) | 3 turns. Turn 3, *"What is my cat's name?"* → *"Your cat's name is Pixel. I remember that from earlier"*, after turn 1 had been paged out. **506 → 174 tokens** stored (66% smaller). |
+| Reply time | Short answers 1.6–6.6 s; long answers (400–570 words) 28–39 s, about 20 tokens/s |
+
+### 5.3b The headline result: AMP vs a plain chatbot (2026-11-05)
+
+**Question:** does AMP make the bot remember more than a normal chatbot, which drops old messages when the window is full?
+
+**Setup** (`report_eval/chat_recall_eval.py`):
+- **One code path, one variable.** Both systems use the same `ChatSession`, graph, prompts, model (`llama3.1:8b`) and context window (**2,048 tokens**, compaction at 80%). The only difference is the vault:
+  - **AMP:** compacted chunks are stored in ChromaDB and paged back in.
+  - **Baseline:** compacted chunks are thrown away, which makes it a plain sliding window.
+- **Script:** 16 fact turns ("my cat is called Pixel", "the server runs on port 8001", "the bug in pager_v3.py was an off-by-one"…), each followed by a filler question with a long answer, which pushes the facts out of the window. Then 16 probe questions, one per fact.
+- **Scoring:** a probe counts as recalled if the answer contains the expected keyword.
+
+**Results:**
+
+| Metric | AMP | Baseline |
+|---|---|---|
+| **Facts recalled** | **16/16 (100%)** | **1/16 (6%)** |
+| Recalled although the fact was *not* in the context window | 15 | 0 |
+| Fact present in the paged-in memories (retrieval hit) | 16/16 | n/a |
+| Compactions | 46 | 45 |
+| Tokens paged out → stored | 11,439 → 2,624 (**77% smaller**) | 11,059 → 0 (discarded) |
+| Prompt tokens per probe (mean) | 1,824 | 1,114 |
+| Memories paged in per probe (mean) | 16.2 | 0 |
+| Total time, 48 turns | 964 s | 807 s |
+| Median reply time | 3.8 s | 6.5 s |
+
+The baseline's one hit was the last fact, still in its window. For the other 15 it said "I don't have any information about …". It didn't invent answers.
+
+**Conclusion:** with the same model and the same window, AMP recalled 16/16 facts against 1/16 for a plain chatbot. It stored the paged-out text at 23% of its size. The cost is ~700 extra prompt tokens per question (under 1 s of prompt reading at ~1,000 tok/s) and ~19% more total time for the summaries.
+
+**Caveats:**
+- One run.
+- Scripted facts.
+- Keyword scoring.
+- Every AMP answer also ended with an invented `TOOL: recall_fact(...)` line. That line is now stripped (commit `58b87cf`), and it doesn't affect the scores.
+
+**Decision on the relevance cut-off (idea 3):** not added. Retrieval already found the right memory 16/16 times. The ~16 memories per probe cost ~700 prompt tokens, which is negligible in time. A cut-off could only lower recall.
+
+**Decision on speed (idea 2):**
+- Measured: 18.9 / 20.0 / 23.4 tok/s at `num_ctx` 8192 / 6144 / 4096. The model doesn't fit fully on the GPU even at 4096 (14% CPU).
+- So the window stays at 8192. Instead the model is asked for short answers unless the user wants detail (commit `8bc6782`).
+- Median reply time went from ~30 s (long answers) to **3.8 s**.
+
+### 5.4 Merging with Aman's `feature/guardrails`
+
+There is one conflict in `harness/graph.py` (`llm_reasoning_node`). To resolve it:
+
+1. Keep Aman's version.
+2. In his `_invoke_llm`, return `chat_reply(system_content, state["messages"], state.get("context_chunks", []))`.
+3. In his `test_compiled_graph_still_answers_plainly`, monkeypatch `harness.chat_model.chat_reply` to return a stub.
+
+Checked with a simulated merge in a throwaway worktree: **289 passed, 1 skipped**.
+
+### 5.5 Bugs found while testing the chat app
+
+1. **Lost message (AppTest).** When background compaction ended, the panel's refresh dropped a message the user had just sent. Fixed by handling the message before drawing the panel.
+2. **Working set evicted.** The reclaim paged out the turn that had just ended. Fixed by never evicting the last turn in the background.
+3. **Search loop after the merge.** In the simulated merge with guardrails, a model that always asks to search looped until LangGraph's recursion limit, because Aman sends search cards as tagged `HumanMessage`s. Fixed in `chat_model.py`. Found only by running the tests on the simulated merge.
+4. **"I can't remember."** The model told the user it couldn't remember things, because its prompt didn't explain the memory. Fixed with a memory note in the system prompt; the model now says "I've taken note that your cat's name is Pixel."
+
+---
+
+## 6. Decision log
+
+| Date | Decision | Why |
+|---|---|---|
+| 2026-11-05 | T2 used Python's `ast` with fallbacks, not Tree-sitter | No extra dependency. The schema's `language` field allows adding Tree-sitter later. |
+| 2026-11-05 | PR #2 merged without waiting for review (the user chose "Merge now") | Main had no protection rule, and PR #1 had been self-merged too. |
+| 2026-11-05 | T3 default model `llama3.1:8b` | Named in the README, installed locally, fits the 6 GB GPU. |
+| 2026-11-05 | T3 stores **one** merged memory per chunk, not one per piece | Storing one per piece would mean editing graph.py outside the TODO block, where Aman's branch also makes changes. |
+| 2026-11-05 | Prompts tightened after run 1 | Precision problems and 0/10 constraints in the summary (section 4.4). Run 2 confirmed it: constraint extras went from 26 to 2, and constraints named in the summary from 0/10 to 6/10. |
+| 2026-11-05 | Decision wording tried as an A/B test on 8 pieces, not a full run | A full run takes ~9 min. 8 pieces show the category error just as well. Result: 4 → 3 extras, noise level, so the prompt was kept. |
+| 2026-11-05 | Build AMP Chat (the user's idea), ignoring team-area boundaries | The user asked for it. The stub `llm_reasoning_node` was the missing piece for a real demo. |
+| 2026-11-05 | Exchange-level chunks, background reclaim, working set | Measured problems; see section 5.2. |
+| 2026-11-05 | PR #4 based on `feature/rlm-summarizer`, not main | The chat app needs the RLM summarizer. GitHub retargets it to main after #3 merges. |
+| 2026-11-05 | Streamlit replaced by a plain web app (HTML/CSS/JS + Starlette) | The user asked for web technologies. No build step, no external libraries. Streaming over `POST /api/chat`. Local-only protections: binds 127.0.0.1, checks the Host header, same-origin JSON only, model output escaped (tested in Node). |
+| 2026-11-05 | Short answers by default; context window kept at 8192 | Measured that answer length, not `num_ctx`, sets reply time (section 5.3b). |
+| 2026-11-05 | No relevance cut-off for paging | Retrieval was already 16/16; a cut-off could only lose recall (section 5.3b). |
+| 2026-11-05 | Strip invented `TOOL:` lines from answers | Seen in all 16 AMP probe answers of the comparison. |
+| 2026-11-05 | Real MCP behind a switch (`AMP_MCP_URL`), in-process as the default | Matches the "MCP server" architecture, and lets other MCP clients share the vault. The default keeps tests and quick runs single-process. |
+| 2026-11-05 | Sandbox as the 6th MCP tool, `run_memory_code`, checked by Layer 4 | It completes the README's "sub-agents inspect stored context programmatically". It is read-only over the memories, so it has the same level as `search_vault`. |
+| 2026-11-05 | Drop top-level `memories = ...` lines instead of refusing the code | Refusing made the model fall back to a wrong answer (4 bugs); dropping the line makes it read the real list. |
+| 2026-11-05 | AMP Chat creates a local signing key | Unsigned memories are READ_ONLY, which blocks memory-shaped tool calls. |
+| 2026-11-05 | One MCP session in a background thread; calls queued to it | The graph and chat code are synchronous and run in several threads; MCP's client is async. One owner task also avoids anyio errors from cancel scopes crossing tasks. |
+
+---
+
+## 7. Open questions / ideas (not verified)
+
+- Speed: the model is split 22% CPU / 78% GPU (section 4.4). Would a smaller `num_ctx` (such as 4096, with `piece_tokens` 1500) or fewer parallel calls let it fit fully on the GPU, and how much faster would that be? Also, does `max_workers=4` help at all, or does Ollama serve one request at a time here (`OLLAMA_NUM_PARALLEL`)? Not measured.
+- Compare `qwen3:8b` (installed) with `llama3.1:8b` on the same chat: recall, precision and time.
+- Measure precision on a real chat log instead of the synthetic one.
+- Phi-3 (named in the README) isn't installed; it would need `ollama pull phi3`.
+- Chat: the vault returns memories up to the 1,000-token budget whatever their distance (`page_context` has no relevance cut-off), so unrelated memories are paged in too. A distance threshold could help; not measured.
+- Chat: after a very long answer, the working-set rule leaves the context above 70%, so the next message may still trigger direct reclaim (~8 s inside the turn).
+- ~~Chat: the graph calls the MCP server's tool functions in-process.~~ Done: real MCP via `AMP_MCP_URL` (PR #6).
+- Code tool: llama3.1:8b's programs over the memories are not always right (counted 2 of 3 bugs). Try a stronger coder: qwen3:8b with `think=False`, or a bigger model.
+- The secret scrubber's regexes need a word boundary before a key (`\bsk-...`). A key glued to letters (`xxxsk-...`) is not detected. Rare in real text.
+- Chat: answer quality is limited by the 8B model. For example, it described LangGraph wrongly as an NLP tool. Could compare `qwen3:8b`.
+
+---
+
+## 8. How to reproduce
+
+```bash
+cd BTP/AgenticMemoryPager
+.venv/bin/python -m pytest tests/ -q                              # unit + graph tests
+AMP_RLM_LIVE=1 .venv/bin/python -m pytest tests/test_rlm_summarizer.py -k live   # needs Ollama
+cd ../report_eval && python3 make_chat.py                          # writes chat.txt + facts.json
+cd ../AgenticMemoryPager && .venv/bin/python -m compactor.rlm_text ../report_eval/chat.txt --json > ../report_eval/run.json
+python3 ../report_eval/recall.py ../report_eval/facts.json ../report_eval/run.json
+.venv/bin/python -m pytest tests/test_chat_session.py -q          # chat app core (fakes, no GPU)
+streamlit run app/chat_app.py                                      # the chat app itself
+```
