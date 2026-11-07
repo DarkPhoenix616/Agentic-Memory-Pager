@@ -8,6 +8,7 @@ storage/chroma_db/
 .agents
 .pytest_cache
 .venv
+docs/
 __pycache__/
 *.pyc
 *.pyo
