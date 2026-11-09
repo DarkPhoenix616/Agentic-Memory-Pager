@@ -5,8 +5,7 @@ choice was made, and the measured results. Since 2026-11-07 it lives in the
 repo at `docs/AMP_Work_Report.md` on the user's branch `akshaybranch` (the user
 moved it there; `main` has no `docs/` because PR #9 removed it). Since
 2026-11-09 PR #9 is already merged into `akshaybranch` with the report kept and
-`docs/` left out of `.gitignore`, so merging main again will not remove it. A PR
-from `akshaybranch` into main would add `docs/` to main.
+`docs/` left out of `.gitignore`, so merging main again will not remove it.
 
 How to use this file:
 - New chat? Read this first; it is the source of truth for status and numbers.
@@ -25,7 +24,7 @@ in `BTP/report_eval/`, test venv `AgenticMemoryPager/.venv` (git-ignored).
 
 | Part | Branch | State |
 |---|---|---|
-| Server-side guards + risk model (Aman's open placeholders, 2026-11-09) | `feature/server-guards` (from main `a4e2d55`) | **Done, 4 commits, merged into `akshaybranch` (`cca2915`) and pushed.** The feature branch itself is not pushed. Every `TODO [T1]` placeholder is filled, the server loads the same signing key and a new admin token, and the risk model is real. 369 tests pass. Details and numbers: section 5b. |
+| Server-side guards + risk model (Aman's open placeholders, 2026-11-09) | `feature/server-guards` (from main `a4e2d55`; merged into `akshaybranch`, then deleted) | **Done, 4 commits, merged into `akshaybranch` (`cca2915`) and pushed.** The feature branch was deleted afterwards. Every `TODO [T1]` placeholder is filled, the server loads the same signing key and a new admin token, and the risk model is real. 369 tests pass. Details and numbers: section 5b. |
 | T2 AST code compactor | `feature/ast-compactor` | Done. PR #2 merged into main (merge commit `9afb773`). Branch deleted. |
 | T3 RLM text summarizer | `feature/rlm-summarizer` (deleted) | **Merged** into main by the user as PR #3 (`f5c8066`). |
 | AMP Chat (the user's idea, 2026-11-05) | `feature/chat-app` (deleted) | **Merged** into main by the user as PR #4 (`bc20b99`). Plain web app: `python -m app.server`, http://127.0.0.1:8000. **Headline result: AMP recalled 16/16 facts vs 1/16 for a plain chatbot (section 5.3b).** 160 tests pass on main. |
@@ -65,7 +64,7 @@ Next steps:
 7. **Server-side guards** (2026-11-09), branch `feature/server-guards`, 4 commits. On 2026-11-09 Aman said work was still left: the placeholders in his code and "the keys". All of it is done now; see section 5b.
    - **Merged into `akshaybranch`** (`cca2915`) on the user's request and pushed. 369 tests pass on the merge.
    - `feature/server-guards` is based on main, so the merge also brought in PR #9's deletion of `docs/`. Resolved by keeping the report and dropping `docs/` from `.gitignore`.
-   - **Not done yet:** these changes are not in main. A PR from `feature/server-guards` (not from `akshaybranch`) brings them to main without `docs/`.
+   - `feature/server-guards` was deleted after the merge (local only, never pushed; all 4 commits are in `akshaybranch`).
 
 ---
 
