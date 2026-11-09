@@ -545,6 +545,12 @@ def test_secrets_in_user_sentences_are_never_copied_back():
     assert "sk-" not in memory.factual_summary and "A1b2C3d4E5" not in memory.factual_summary
 
 
+def test_questions_are_not_added_back():
+    memory = distill(exchange("For the pager, should we use ChromaDB or write our own? Explain vector databases."),
+                     llm=forgetful(), config=cfg()).memory
+    assert "User said" not in memory.factual_summary
+
+
 def test_code_in_a_user_message_is_not_treated_as_facts():
     question = "Why is this slow?\n```python\nclass VaultIndex:\n    def Rebuild(self): ...\n```"
     memory = distill(exchange(question), llm=forgetful(), config=cfg()).memory

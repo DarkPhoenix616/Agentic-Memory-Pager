@@ -868,7 +868,8 @@ def user_fact_terms(sentence: str) -> List[str]:
 
 
 def _keep_user_facts(summary: str, turns: Sequence[Turn], budget: int) -> str:
-    """Add back, word for word, the user's sentences whose names the summary lost."""
+    """Add back, word for word, the user's statements whose names the summary lost.
+    Questions are skipped: the facts are in their answers, which the summary covers."""
     present = summary.lower()
     added: List[str] = []
     room = budget
@@ -876,6 +877,8 @@ def _keep_user_facts(summary: str, turns: Sequence[Turn], budget: int) -> str:
         if turn.role != "user":
             continue
         for sentence in _sentences(_scrub_secrets(_body(turn))):     # never copy a secret back in
+            if sentence.endswith("?"):
+                continue                        # a question states no fact (its answer does)
             if not any(term.lower() not in present for term in user_fact_terms(sentence)):
                 continue
             sentence = _clip(_one_line(sentence), USER_FACT_SENTENCE)
