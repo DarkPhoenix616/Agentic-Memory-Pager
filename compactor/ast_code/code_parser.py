@@ -39,12 +39,14 @@ from __future__ import annotations
 
 import ast
 import copy
+import os
 import re
 import textwrap
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Dict, List, Optional, Tuple
 
+from compactor.ast_code import ts_parser
 from harness.guardrails import CodeMemorySchema, CodeSymbol, _scrub_secrets
 
 # ---------------------------------------------------------------------------
@@ -131,8 +133,12 @@ def _safe_relative_path(path: Optional[str]) -> str:
 
 def _normalise_language(language: Optional[str], file_path: str) -> str:
     lang = (language or "").strip().lower()
+    lang = ts_parser.ALIASES.get(lang, lang)
     if lang in ("py", "python3", "python2") or (not lang and file_path.endswith(".py")):
         lang = "python"
+    by_extension = ts_parser.LANGUAGE_BY_EXT.get(os.path.splitext(file_path)[1].lower(), "")
+    if by_extension and lang in ("", "python"):      # "python" is compact_code's default: a .js file is JavaScript
+        lang = by_extension
     if not lang or len(lang) > MAX_LANGUAGE or not _LANGUAGE_RE.match(lang):
         lang = "unknown"
     return lang
@@ -470,13 +476,28 @@ def compact_code(
         original_token_count = count_tokens(source)
     original_token_count = min(max(0, int(original_token_count)), MAX_TOKENS)
 
-    if lang == "python":
+    out = None
+    grammar = None if lang == "python" else ts_parser.grammar_for(lang, safe_path)
+    if grammar and ts_parser.available(grammar):
+        visitor = _Visitor(source, docstrings)
+        try:
+            ts_parser.extract(source, grammar, visitor)
+            out, strategy = visitor.out, "tree-sitter"
+        except Exception:                       # a grammar error must not lose the file: line scan below
+            out = None
+
+    if out is not None:
+        pass
+    elif lang == "python":
         parsed = _parse(source)
     else:
         parsed = _Parsed(None, source, "line scan, no AST parser for this language")
-    strategy = parsed.strategy
+    if out is None:
+        strategy = parsed.strategy
 
-    if parsed.tree is None:
+    if out is not None:
+        pass
+    elif parsed.tree is None:
         out = _extract_from_lines(parsed.text)
         if strategy == "line scan":
             strategy = "line scan, the code could not be parsed"

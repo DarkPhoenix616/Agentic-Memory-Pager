@@ -5,6 +5,8 @@ langgraph
 litellm
 chromadb
 cryptography
+tree-sitter
+tree-sitter-language-pack
 langfuse
 pytest
 black
