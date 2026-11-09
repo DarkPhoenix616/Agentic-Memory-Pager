@@ -33,8 +33,8 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from harness.guardrails import (
-    HIGH_RISK_THRESHOLD, MemoryInfo, PageContextResult, RetrievedMemory, SandboxResult, UnifiedMemory,
-    _scrub_secrets, risk_level_for_score, score_payload,
+    HIGH_RISK_THRESHOLD, MemoryInfo, PageContextResult, RetrievedMemory, SandboxResult, SessionInfo,
+    UnifiedMemory, _scrub_secrets, risk_level_for_score, score_payload,
 )
 from harness.local_keys import ensure_admin_token, ensure_signing_key, is_admin
 from harness.signing import SIGNING_KEY_ENV, sign_memory, verify_memory
@@ -403,6 +403,39 @@ def list_all_memories(admin_token: str = "", ctx: Optional[Context] = None) -> L
                                 memory_type=meta["memory_type"], compaction_source=meta.get("compaction_source", "rlm"),
                                 timestamp=str(meta.get("timestamp", "")), risk_score=risk, encrypted=encrypted))
     return infos
+
+
+@mcp.tool()
+def list_sessions(admin_token: str = "", ctx: Optional[Context] = None) -> List[SessionInfo]:
+    """
+    Every chat session in the vault, most recently used first. Admin only.
+
+    Args:
+        admin_token: The vault's admin token (AMP_ADMIN_TOKEN, else the
+            storage/.amp_admin_token file).
+
+    Returns:
+        One SessionInfo per session: its ID, how many memories it has and the
+        times of its oldest and newest memory. No content: reading a session
+        needs its key (list_session_memories).
+    """
+    if not is_admin(admin_token):
+        _audit("list_sessions", "", _caller(ctx), "refused: missing or wrong admin token")
+        raise PermissionError("list_sessions needs the admin token.")
+    sessions: dict = {}
+    for meta in collection.get(include=["metadatas"]).get("metadatas") or []:
+        if not meta or not meta.get("session_id"):
+            continue
+        sid = str(meta["session_id"])
+        stamp = str(meta.get("timestamp", ""))
+        info = sessions.setdefault(sid, {"session_id": sid, "memories": 0, "first_time": stamp,
+                                         "last_time": stamp, "encrypted": True})
+        info["memories"] += 1
+        info["first_time"] = min(info["first_time"], stamp) if info["first_time"] else stamp
+        info["last_time"] = max(info["last_time"], stamp)
+        info["encrypted"] = info["encrypted"] and bool(meta.get("encrypted"))
+    ordered = sorted(sessions.values(), key=lambda info: info["last_time"], reverse=True)
+    return [SessionInfo(**info) for info in ordered]
 
 
 @mcp.tool()

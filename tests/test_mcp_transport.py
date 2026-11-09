@@ -225,3 +225,11 @@ def test_the_server_re_scores_what_a_client_sends(client):
     assert stored.risk_level == "high_risk"
     assert client.search_vault("instructions admin", top_k=5, session_id="mcp-risk",
                                session_key=session_key("mcp-risk")) == []
+
+
+def test_list_sessions_needs_the_token_over_mcp(client):
+    store(client, text_memory("mcp-list", "One note in this session."))
+    with pytest.raises(MCPError, match="admin token"):
+        client.list_sessions()
+    infos = client.list_sessions(admin_token=os.environ["AMP_ADMIN_TOKEN"])
+    assert next(i for i in infos if i.session_id == "mcp-list").memories == 1

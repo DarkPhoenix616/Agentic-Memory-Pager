@@ -8,6 +8,7 @@ harness/mcp_client.py - The memory server, in-process or over MCP
         list_session_memories(session_id, session_key, ...)         -> List[UnifiedMemory]
         run_memory_code(code, session_id, timeout, session_key)     -> SandboxResult
         list_all_memories(admin_token)                              -> List[MemoryInfo]   (admin only)
+        list_sessions(admin_token)                                  -> List[SessionInfo]  (admin only)
         delete_memory(memory_id, admin_token)                       -> str                (admin only)
 
 Every session tool needs that session's key; memories are stored encrypted with it.
@@ -32,7 +33,7 @@ import os
 import threading
 from typing import Any, Dict, List, Optional
 
-from harness.guardrails import MemoryInfo, PageContextResult, RetrievedMemory, SandboxResult, UnifiedMemory
+from harness.guardrails import MemoryInfo, PageContextResult, RetrievedMemory, SandboxResult, SessionInfo, UnifiedMemory
 
 MCP_URL_ENV = "AMP_MCP_URL"
 CALL_TIMEOUT = 60.0
@@ -90,6 +91,10 @@ class MCPMemoryClient:
     def list_all_memories(self, admin_token: str = "") -> List[MemoryInfo]:
         data = self._call("list_all_memories", {"admin_token": admin_token})
         return [MemoryInfo.model_validate(item) for item in data.get("result", [])]
+
+    def list_sessions(self, admin_token: str = "") -> List[SessionInfo]:
+        data = self._call("list_sessions", {"admin_token": admin_token})
+        return [SessionInfo.model_validate(item) for item in data.get("result", [])]
 
     def delete_memory(self, memory_id: str, admin_token: str = "") -> str:
         return str(self._call("delete_memory", {"memory_id": memory_id, "admin_token": admin_token}).get("result", ""))
