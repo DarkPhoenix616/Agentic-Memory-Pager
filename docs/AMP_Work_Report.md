@@ -24,6 +24,7 @@ in `BTP/report_eval/`, test venv `AgenticMemoryPager/.venv` (git-ignored).
 
 | Part | Branch | State |
 |---|---|---|
+| Step 4: code graph in the AST compactor | `feature/code-graph` (merged, then deleted) | **Done.** Each function records what it calls; 453 links in this repo; old seals still verify. Section 5g. |
 | Step 3: red-team test against the real model (Aman's Phase 5) | none (test script only) | **Done.** 12 of 13 attacks blocked with llama3.1:8b; fact poisoning got through. Section 5f. |
 | Step 2: saving chats and reopening them | `feature/chat-history` (merged, then deleted) | **Done.** Chats are saved when left; the web page lists and reopens them. Live test recalled both facts after reopening. Section 5e. |
 | Fix: the summary lost what the user said | `feature/rlm-user-facts` (merged, then deleted) | **Done.** 17/25 → 25/25 facts kept; the 50-fact regression is still 50/50. 402 tests pass. Section 5d. |
@@ -73,8 +74,8 @@ Next steps:
    1. **Session keys + encryption.** Done, see section 5c. The user's choices: the admin token can see and delete memories but not read them; encrypt the existing memories; skip `get_token_state` (the web page already shows live tokens).
    2. **Old-chat list + reopening a chat.** Done, see section 5e. Also fixed on the way: the summary lost facts the user stated (section 5d).
    3. **Red-team test against the real model** (Aman's Phase 5). Done, see section 5f.
-   4. **Code graph** in the AST compactor (which function calls which). Next.
-   5. **Tree-sitter**, so JavaScript/TypeScript, Java and C/C++ can be compacted too.
+   4. **Code graph** in the AST compactor (which function calls which). Done, see section 5g.
+   5. **Tree-sitter**, so JavaScript/TypeScript, Java and C/C++ can be compacted too. Next.
    6. Optional, to agree with Aman: Phi-3 comparison, Instructor, LiteLLM, Langfuse, SQLite.
    - How each step is done: a branch from `akshaybranch`, build, test, live check with the real model, merge into `akshaybranch`, delete the branch, push, and update this report.
 
@@ -687,6 +688,28 @@ Aman's own tests (Phases 1–4) used a scripted fake model; this is the first te
     - show the source of a fact in the answer.
 - **Limits of this test.** It covers 13 attacks, one model and one run each; it is not a benchmark.
   - The "paged in" column in the raw results matches note text, so notes changed by Layer 1 redaction show as not paged in.
+
+## 5g. Step 4: the code graph (2026-11-10)
+
+**What:** Aman's original plan asked the AST part for "dependency maps showing how functions and classes relate". Before this, a code memory recorded only which modules a file imports.
+
+**How it works:**
+- `CodeSymbol` has a new `calls` list: the functions and classes that this function or method calls, in source order, at most 20.
+- **What counts:** only names the file defines or imports by name (`from x import y`). `self.f()` is written as `Class.f`, and library noise (`print`, `json.dumps`) is left out.
+- **Validation:** every entry must be a dotted name.
+- **Where it shows up:** the searchable text (`"checkout calls load_cart, pay"`) and `run_memory_code`'s records (`calls`).
+
+**Old seals:** an empty `calls` list is left out of the signed bytes, so memories signed before the code graph still verify. A non-empty list is sealed: changing it breaks the seal.
+
+**Results:**
+- **Tests:** 406 passed. 4 new: the links, name validation, seal compatibility plus tampering, and search text.
+- **The real vault:** the 3 signed memories still verify.
+- **This repo:** 25 files and 285 functions/methods give 453 call links. Example: `ChatSession.save_all` → `ChatSession.wait_for_reclaim`, `ChatSession._emitter`, `ChatSession._compact_oldest`.
+
+**Limits:**
+- **Cost:** the searchable text of code memories grows by 33% (8,023 → 10,677 tokens over the repo), so a code memory uses more of the 1,000-token paging budget.
+- **Unresolved calls:** a call on a local variable (`cart.total()`) is not linked, because the type of `cart` isn't known without running the code.
+- **Python only:** other languages come with Tree-sitter (step 5).
 
 ---
 
