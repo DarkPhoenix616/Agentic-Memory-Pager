@@ -89,7 +89,7 @@ Modern AI coding agents (Claude Code, Cursor, Aider) suffer from **Context Rot**
     1. Build the **LangGraph State Machine** managing the primary agent loop and monitoring context usage.
     2. Implement the **80% Compaction Trigger** that routes data to either the AST Compactor (Teammate 2) or RLM Compactor (Teammate 3).
     3. Integrate **Instructor + Pydantic** schemas to validate that all compacted outputs conform to strict JSON structures before DB ingestion.
-    4. Build a lightweight **Streamlit UI** / CLI displaying live token counts and memory page-ins.
+    4. Build a lightweight **web UI** (`app/`) / CLI displaying live token counts and memory page-ins.
 * **Deliverable:** The core execution harness that integrates all three sub-systems.
 
 ---
@@ -104,7 +104,7 @@ Modern AI coding agents (Claude Code, Cursor, Aider) suffer from **Context Rot**
 | **Inference (Local)** | `Ollama` (`Llama-3`, `Phi-3`) | Free local execution for summarization & reasoning |
 | **Storage** | `ChromaDB` + `SQLite` | Vector embeddings and structured relational metadata |
 | **Guardrails** | `Instructor` + `Pydantic` | Deterministic schema validation and output bounding |
-| **Observability** | `Langfuse` / `Streamlit` | Trace visualization and real-time memory monitoring |
+| **Observability** | `Langfuse` / web UI (`app/`) | Trace visualization and real-time memory monitoring |
 
 ---
 
@@ -127,7 +127,7 @@ agentic-memory-pager/
 │   └── token_monitor.py
 ├── storage/                # ChromaDB & SQLite database handlers
 │   └── memory_vault.py
-├── ui/                     # Streamlit observability dashboard
+├── app/                    # AMP Chat: web UI (static/) + server.py
 │   └── app.py
 ├── requirements.txt
 └── README.md
@@ -158,3 +158,94 @@ agentic-memory-pager/
    python server/mcp_server.py
    ```
 ```
+---
+
+## 💬 AMP Chat: run the whole system as a local chatbot
+
+AMP Chat is a web app on top of the LangGraph harness. You chat with a local model. Behind the scenes, a side panel shows the memory pager at work:
+
+- **Token meter:** how full the context window is, with a line at the 80% trigger.
+- **Compactions:** each one is shown as it happens. Code blocks go to the **AST compactor**, and question-and-answer exchanges go to the **RLM summarizer**. The result is stored in the ChromaDB vault.
+- **Paged-in memories:** which memories were paged back in to answer each question.
+
+Old messages in the chat are marked *📦 paged out*. Ask about them later and the bot still answers, because the memory is paged back in.
+
+Paging works like an operating system reclaiming memory:
+- **Background reclaim:** after each answer, if the window passed 80%, the oldest chunks are compacted in a background thread, down to 70%, while you read.
+- **Direct reclaim:** if a new message still pushes the window past 80%, the graph compacts inside the turn.
+- **Working set:** the latest exchange is never paged out in the background.
+
+```bash
+ollama pull llama3.1:8b              # the chat model and the summarizer share it
+pip install -r requirements.txt
+python -m app.server                 # then open http://127.0.0.1:8000
+```
+
+It is plain HTML, CSS and JavaScript (`app/static/`), with no build step and no external libraries. The browser talks to a small Starlette server (`app/server.py`):
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/chat` | Send a message. The reply is a stream of the behind-the-scenes steps as they happen, then the answer. |
+| `GET /api/state` | The chat, context meter, activity and vault. |
+| `POST /api/settings` | Change the context window, the trigger and background compaction. |
+| `POST /api/new` | Start a new chat. |
+
+The server only listens on `127.0.0.1` and only accepts same-origin JSON, so other websites cannot use it.
+
+### Memory over MCP
+
+The vault is the memory server in `server/amp_memory_server.py`. It has five tools: `store_memory`, `search_vault`, `page_context`, `list_all_memories` and `delete_memory`. The chat app can reach it in two ways:
+
+| Mode | How | When |
+|---|---|---|
+| **Over MCP** | Start the server, then point the app at it:<br>`python server/amp_memory_server.py`<br>`python -m app.server --mcp-url http://localhost:8001/mcp` | The real architecture. Every memory call goes over the Model Context Protocol (streamable HTTP), and only the server process opens ChromaDB. |
+| **In-process** (default) | `python -m app.server` | Quick runs and tests. The server's tool functions are called directly, with no second process. |
+
+The page header shows which mode is active (*Memory: over MCP* or *Memory: in-process*).
+
+Because the vault is a standard MCP server, other MCP clients can use the same memory. For example, Claude Code:
+`claude mcp add --transport http amp-memory http://localhost:8001/mcp`
+
+The switch lives in `harness/mcp_client.py`. The graph's `_mcp_*` helpers call `memory_server()`, which returns the MCP client when `AMP_MCP_URL` is set, and the server module otherwise.
+
+### Python over the memories (`run_memory_code`, the sixth tool)
+
+Some questions are easier to compute than to read: *the latest decision about the database*, *how many bugs were fixed*, *every constraint the user gave*. For these, the model can write a short program over all of the session's memories:
+
+````text
+TOOL: run_memory_code
+```python
+db = [m for m in memories if "database" in m["text"].lower()]
+print(max(db, key=lambda m: m["time"])["text"])
+```
+````
+
+**What the program sees:** `memories`, a list of simple records, oldest first. Each has `id`, `time`, `kind`, `text`, `decisions`, `bugs`, `constraints` and `file`.
+
+**Where it runs:** in the sandbox (`server/sandbox.py`), behind the memory server, with these protections:
+- **Checked first:** only safe modules can be imported (`json`, `re`, `math`, `collections`…), and `open`, `eval`, `exec` and `__` names are blocked.
+- **Separate process:** an empty environment, run in a temporary folder.
+- **Operating-system limits** (Linux/macOS): CPU time, 512 MB of memory, no new processes.
+- **Timeout:** the whole process tree is killed on timeout.
+- **Clean output:** secrets are scrubbed, and the output is truncated.
+
+**How it's checked:** Layer 4 checks a code request like a search. Code built from words that only an untrusted memory contained is blocked. The output goes back to the model as untrusted data, never as instructions.
+
+Everything runs locally:
+- **Chat and summaries:** through Ollama.
+- **Search:** ChromaDB's built-in embedding model.
+- **Vault:** stored in `storage/chroma_db/`.
+
+The context window is small by default (3,072 tokens), so you can see paging after a few messages. You can change it in the sidebar.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `AMP_CHAT_MODEL` | `llama3.1:8b` | chat model |
+| `AMP_RLM_MODEL` | `llama3.1:8b` | RLM summarizer model |
+| `OLLAMA_HOST` | `http://localhost:11434` | Ollama server |
+| `AMP_MCP_URL` | not set (in-process) | Reach the memory server over MCP, e.g. `http://localhost:8001/mcp` |
+| `AMP_MCP_PORT` | `8001` | Port of the MCP memory server |
+| `AMP_CHROMA_PATH` | `storage/chroma_db` | Folder of the ChromaDB vault (tests use a temporary one) |
+| `AMP_SIGNING_KEY` | AMP Chat creates `storage/.amp_signing_key` | HMAC key for memory signing. Without one, memories are unverified (READ_ONLY) and Layer 4 blocks memory-shaped tool calls. |
+
+The core is `harness/chat_session.py` (`ChatSession.ask()`). It has no UI code, so it can also be used from scripts and tests.

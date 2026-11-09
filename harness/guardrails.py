@@ -1150,6 +1150,29 @@ class PageContextResult(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Model 4c: SandboxResult
+# ---------------------------------------------------------------------------
+
+class SandboxResult(BaseModel):
+    """
+    The result of running model-written Python over the stored memories in the
+    sandbox (server/sandbox.py, MCP tool run_memory_code).
+
+    The keys match the dict server/sandbox.py's run_code returns, so the server
+    can build it with SandboxResult(**result). output and error are already
+    secret-scrubbed and truncated by the sandbox; this model bounds them again.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    ok: bool = Field(..., description="True if the code ran to the end without an error.")
+    output: str = Field(default="", max_length=5000, description="What the code printed.")
+    error: str = Field(default="", max_length=5000,
+                       description="Why it was blocked, timed out or failed; empty on success.")
+    memories_loaded: int = Field(default=0, ge=0, description="How many memories the code could see.")
+
+
+# ---------------------------------------------------------------------------
 # Model 5: TokenState
 # ---------------------------------------------------------------------------
 
