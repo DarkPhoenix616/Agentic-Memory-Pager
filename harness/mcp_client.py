@@ -5,8 +5,8 @@ harness/mcp_client.py - The memory server, in-process or over MCP
         store_memory(memory)                          -> UnifiedMemory
         search_vault(query, top_k, session_id)        -> List[RetrievedMemory]
         page_context(query, total_budget, session_id) -> PageContextResult
-        list_all_memories()                           -> List[UnifiedMemory]
-        delete_memory(memory_id)                      -> str
+        list_all_memories(admin_token)                -> List[UnifiedMemory]   (admin only)
+        delete_memory(memory_id, admin_token)         -> str                   (admin only)
         run_memory_code(code, session_id, timeout)    -> SandboxResult
 
 Two ways to reach the server:
@@ -73,11 +73,12 @@ class MCPMemoryClient:
         return PageContextResult.model_validate(self._call(
             "page_context", {"query": query, "total_budget": total_budget, "session_id": session_id}))
 
-    def list_all_memories(self) -> List[UnifiedMemory]:
-        return [UnifiedMemory.model_validate(item) for item in self._call("list_all_memories", {}).get("result", [])]
+    def list_all_memories(self, admin_token: str = "") -> List[UnifiedMemory]:
+        data = self._call("list_all_memories", {"admin_token": admin_token})
+        return [UnifiedMemory.model_validate(item) for item in data.get("result", [])]
 
-    def delete_memory(self, memory_id: str) -> str:
-        return str(self._call("delete_memory", {"memory_id": memory_id}).get("result", ""))
+    def delete_memory(self, memory_id: str, admin_token: str = "") -> str:
+        return str(self._call("delete_memory", {"memory_id": memory_id, "admin_token": admin_token}).get("result", ""))
 
     def run_memory_code(self, code: str, session_id: str = "", timeout: int = 5) -> SandboxResult:
         return SandboxResult.model_validate(self._call(

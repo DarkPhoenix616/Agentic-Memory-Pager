@@ -58,6 +58,7 @@ from harness.guardrails import (
     score_payload,
 )
 from harness.signing import sign_memory, verify_memory
+from harness.local_keys import admin_token
 from harness.mcp_client import memory_server
 from harness.tool_guard import (
     EXECUTION_LEVELS,
@@ -143,13 +144,13 @@ def _mcp_search_vault(query: str, top_k: int, session_id: str) -> List[Retrieved
 
 
 def _mcp_list_all_memories() -> List[UnifiedMemory]:
-    """Fetch all memory records."""
-    return memory_server().list_all_memories()
+    """Fetch all memory records (admin tool: sends the admin token)."""
+    return memory_server().list_all_memories(admin_token=admin_token())
 
 
 def _mcp_delete_memory(memory_id: str) -> str:
-    """Delete a memory record by ID."""
-    return memory_server().delete_memory(memory_id=memory_id)
+    """Delete a memory record by ID (admin tool: sends the admin token)."""
+    return memory_server().delete_memory(memory_id=memory_id, admin_token=admin_token())
 
 
 def _mcp_run_memory_code(code: str, session_id: str) -> SandboxResult:
