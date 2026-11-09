@@ -222,8 +222,7 @@ class ChatSession:
 
     def vault(self) -> List[Dict[str, Any]]:
         """This session's stored memories, newest first."""
-        memories = [m for m in amp._mcp_list_all_memories() if m.session_id == self.session_id]
-        memories.sort(key=lambda m: m.timestamp, reverse=True)
+        memories = amp._mcp_list_session_memories(self.session_id)      # newest first
         return [_memory_view(m) for m in memories]
 
     # -- one turn ------------------------------------------------------------

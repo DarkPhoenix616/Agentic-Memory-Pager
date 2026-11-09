@@ -14,3 +14,4 @@ __pycache__/
 storage/.amp_signing_key
 storage/.amp_admin_token
 storage/amp_audit.log
+storage/.amp_session_keys
