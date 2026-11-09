@@ -24,6 +24,8 @@ in `BTP/report_eval/`, test venv `AgenticMemoryPager/.venv` (git-ignored).
 
 | Part | Branch | State |
 |---|---|---|
+| Step 2: saving chats and reopening them | `feature/chat-history` (merged, then deleted) | **Done.** Chats are saved when left; the web page lists and reopens them. Live test recalled both facts after reopening. Section 5e. |
+| Fix: the summary lost what the user said | `feature/rlm-user-facts` (merged, then deleted) | **Done.** 17/25 → 25/25 facts kept; the 50-fact regression is still 50/50. 402 tests pass. Section 5d. |
 | Session keys + encryption (Aman's original plan, step 1 of the 2026-11-09 plan) | `feature/session-keys` (from `akshaybranch`; merged as `431d54e`, then deleted) | **Done.** Every session's memories are encrypted with its own key; the 7 memories in the real vault are encrypted too. 382 tests pass. Details and numbers: section 5c. |
 | Server-side guards + risk model (Aman's open placeholders, 2026-11-09) | `feature/server-guards` (from main `a4e2d55`; merged into `akshaybranch`, then deleted) | **Done, 4 commits, merged into `akshaybranch` (`cca2915`) and pushed.** The feature branch was deleted afterwards. Every `TODO [T1]` placeholder is filled, the server loads the same signing key and a new admin token, and the risk model is real. 369 tests pass. Details and numbers: section 5b. |
 | T2 AST code compactor | `feature/ast-compactor` | Done. PR #2 merged into main (merge commit `9afb773`). Branch deleted. |
@@ -68,8 +70,8 @@ Next steps:
    - `feature/server-guards` was deleted after the merge (local only, never pushed; all 4 commits are in `akshaybranch`).
 8. **Plan for what is left in Aman's original docs** (made 2026-11-09, the user chose the order and the options):
    1. **Session keys + encryption.** Done, see section 5c. The user's choices: the admin token can see and delete memories but not read them; encrypt the existing memories; skip `get_token_state` (the web page already shows live tokens).
-   2. **Old-chat list + reopening a chat:** `list_sessions` (admin), a "latest N memories" tool (what `page_context` meant in the design doc), and a list of old chats on the web page. Next.
-   3. **Red-team test against the real model** (Aman's Phase 5), plus re-running his Phase 4 scenarios with llama3.1:8b.
+   2. **Old-chat list + reopening a chat.** Done, see section 5e. Also fixed on the way: the summary lost facts the user stated (section 5d).
+   3. **Red-team test against the real model** (Aman's Phase 5), plus re-running his Phase 4 scenarios with llama3.1:8b. Next.
    4. **Code graph** in the AST compactor (which function calls which).
    5. **Tree-sitter**, so JavaScript/TypeScript, Java and C/C++ can be compacted too.
    6. Optional, to agree with Aman: Phi-3 comparison, Instructor, LiteLLM, Langfuse, SQLite.
@@ -553,7 +555,91 @@ Checked afterwards:
 - **Found while testing, not caused by this work:** when an exchange is longer than 150 tokens (so it's summarized rather than kept verbatim) and is mostly a long explanation, the RLM summary can drop small personal facts.
   - In one live run, "Pixel" and "ZEBRAFISH" from the first message were missing from the summary, so the last answer couldn't recall them.
   - The same chat on the code before this branch stored that exchange verbatim (it came out under 150 tokens) and recalled both.
-  - The summarizer is unchanged on this branch (`git diff akshaybranch -- compactor/` is empty). This is an open RLM quality issue.
+  - The summarizer is unchanged on this branch (`git diff akshaybranch -- compactor/` is empty). This was an RLM quality issue: **fixed in section 5d.**
+
+## 5d. The summary kept losing what the user said (fixed 2026-11-09)
+
+### 5d.1 The problem
+
+Found during the live tests of section 5c: in one chat the last answer couldn't recall the user's cat ("Pixel") or codename ("ZEBRAFISH").
+
+When an exchange is longer than 150 tokens and is mostly a long explanation, llama3.1:8b's RLM summary kept the explanation and dropped the small facts the user stated. Two things caused it:
+- **The prompt.** The map and reduce prompts only asked to keep "files, functions, classes, libraries, versions, commands, numbers and error messages", never facts about the user or the project.
+- **The key-term guard.** It only protects code-like names (`snake_case`, `ChromaDB`, `file.py`), and it compares the merged summary with the piece summaries, never with what the user typed.
+
+### 5d.2 The fix (branch `feature/rlm-user-facts`, merged, then deleted)
+
+- **Prompts.** The map summary now starts with "the facts the user stated about themselves or their project (names of people, pets, projects and codenames, places, dates, devices …), exactly as written". The reduce prompt keeps them too, plus every `User said: "..."` sentence.
+- **User-fact guard** (plain code, no model). It reads only the **user's** sentences:
+  - **Which names count:** capitalized names, all-caps words of 3+ letters, words mixing letters and digits (`qwen3:8b`, `LHC-104`), and identifiers.
+  - **When it acts:** if a sentence holds such a name and the summary lost it, the sentence is added back word for word as `User said: "..."`.
+  - **Limits:** at most 400 characters per piece and 800 after a merge.
+  - **What it skips:** questions and code blocks, since a question holds no fact (its answer does).
+- **Secrets.** Secrets are scrubbed before the guard reads a sentence, and piece summaries are scrubbed before the key-term guard reads them. The existing secret test caught a leak here: the guard copied back an API key, and the key-term step then kept its body without the `sk-` prefix.
+
+### 5d.3 Results
+
+Test set: 12 exchanges where the user states small facts and asks for a ~150-word explanation. llama3.1:8b wrote the answers once, and they are saved, so every version sees the same text. Scripts are in `BTP/report_eval/user_facts_eval/`.
+
+| Summarizer | 12 single exchanges | The 12 joined as one long chat (2 pieces + merge) |
+|---|---|---|
+| Before | 17 / 25 facts | 14 / 25 |
+| Old prompt + guard only | 25 / 25 (the guard stepped in 6 times) | 24 / 25 (lost "8001": plain numbers are not guarded on purpose) |
+| **New prompt + guard (final)** | **25 / 25** | **25 / 25** |
+
+- **Size.** Summaries grow a little: the 12 single summaries went from 988 to 1,085 tokens in total, and the long chat from 164 to 346 tokens (6% → 13% of its 2,707 tokens).
+- **Regression check** on the 58,309-token test chat (50 planted facts, as in section 4.4): still 50 / 50 facts (20 decisions, 20 bugs, 10 constraints, as before). The summary is 916 tokens instead of 778 (1.6% instead of 1.3% of the original), and the run took 565 s instead of 555 s.
+  - An earlier run of the guard also re-added the user's *questions* there, taking the summary to 971 tokens; that is why questions are now skipped.
+
+**Tests:** 9 new unit tests with a model that "forgets" on purpose:
+- the names it detects;
+- a lost fact is added back word for word;
+- nothing is added when a fact was kept;
+- the assistant's names are not added;
+- the size limit;
+- the merge;
+- secrets;
+- questions;
+- code.
+
+## 5e. Step 2: saving chats and reopening them (2026-11-09)
+
+### 5e.1 What was built (branch `feature/chat-history`, merged, then deleted)
+
+- **Saving on leave.** Leaving a chat (*New chat*, or opening another) first pages out everything still in its context window (`ChatSession.save_all`). Before this, a chat that never reached 80% left nothing in the vault. If saving fails (e.g. the model is down), the app stays on the chat.
+- **`list_sessions`** (admin MCP tool). Every session with its memory count and its first and last time, newest first; never content.
+- **"Your chats" on the web page.** It lists the chats this computer can reopen (key in the local keyring), titled by their first memory.
+  - Opening one shows its latest 5 memories as "where it left off".
+  - Older memories are paged in when asked about.
+- **New endpoints:** `GET /api/sessions` and `POST /api/open`.
+- **The design doc's "latest N memories" for a resumed session** is `list_session_memories(limit=N)`, built in step 1.
+
+### 5e.2 Results
+
+**Tests:** 402 passed, 1 skipped. Step 2 has 11 new tests:
+- saving on leave;
+- a failed save keeps the chat;
+- reopening shows the latest memories, newest first, and pages old ones back in;
+- only chats with a local key are listed;
+- titles;
+- the web endpoints (listing, reopening, unknown or bad ID, busy, save failure);
+- `list_sessions` in-process and over MCP.
+
+**The real vault, read only:** both old chats are listed with titles. `chat-b4b4602b` reopened with its 4 memories.
+
+**Live, real llama3.1:8b, through the web server** (`report_eval/live_chat_history.py`, temporary vault): 
+1. A chat with "My cat is called Pixel and my codename is ZEBRAFISH" plus one more question was left with *New chat*; its 2 exchanges were saved in 10.0 s.
+2. It was listed as "The user's cat is called Pixel and their codename …".
+3. It was reopened with 2 "where it left off" memories.
+4. Asked "What is my cat called and what is my codename?", the answer was "your cat is called Pixel and your codename is ZEBRAFISH".
+5. "ZEBRAFISH" appeared 0 times in the vault files.
+
+### 5e.3 What it does not do (by design for now)
+
+- **No full transcript.** Only memories are stored. A reopened chat shows its saved notes, not the old messages; the model still recalls them through paging.
+  - Showing the full message history, as ChatGPT and Claude do, would need the message list saved too, encrypted with the session key. Discussed with the user, not built.
+- **No save on close.** A chat is saved only when the user leaves it in the app. Closing the tab or stopping the server loses what was not yet paged out.
+  - Saving on shutdown and every few minutes was proposed, not built.
 
 ---
 
@@ -588,6 +674,10 @@ Checked afterwards:
 | 2026-11-09 | Each session's memories encrypted with its own key; the server keeps only a fingerprint | Aman's original plan ("session keys and encrypted local storage"). The vault alone can't be read. |
 | 2026-11-09 | The admin token can list and delete but not read (user's choice) | A server master key would make the admin token a key to every session. |
 | 2026-11-09 | Existing memories encrypted (user's choice); `get_token_state` skipped (user's choice) | The web page already shows live token counts. |
+| 2026-11-09 | Keep user-stated facts: prompt change plus a code guard that re-adds the user's own sentence | The prompt alone fixed the 12-exchange test; the guard keeps it working when the model still drops a fact (25/25 with the old prompt). |
+| 2026-11-09 | The guard skips questions and plain numbers | Questions hold no facts and inflated the long summary; plain numbers are mostly "in 150 words". |
+| 2026-11-09 | Save a chat when the user leaves it; stay on it if saving fails | A chat under 80% left nothing in the vault, so it could not be reopened. |
+| 2026-11-09 | Reopened chats show memories, not the old messages (user agreed for now) | AMP stores memories, not transcripts; a full encrypted transcript was discussed as a later option. |
 | 2026-11-09 | Rebuild the vault after encrypting old rows | ChromaDB's write-ahead log and free pages still held the old text; `chroma vacuum` alone did not remove it. |
 
 ---
@@ -642,4 +732,9 @@ ollama pull llama-guard3:1b                                        # only for th
 .venv/bin/python -m server.backfill --apply                        # encrypt plain rows, then rebuild the vault
 .venv/bin/python -m server.backfill --rebuild                      # only the rebuild (no old copies left in ChromaDB)
 grep -r -a -c "some phrase" storage/chroma_db                      # check: 0 means no readable copy
+
+# User facts in summaries (section 5d) and reopening chats (section 5e)
+.venv/bin/python -I ../report_eval/user_facts_eval/eval_user_facts.py final   # 12 exchanges + one long chat
+.venv/bin/python -I ../report_eval/user_facts_eval/eval_guard_only.py         # the guard with the old prompts
+.venv/bin/python -I ../report_eval/live_chat_history.py                       # chat, leave, reopen, recall (real model)
 ```
