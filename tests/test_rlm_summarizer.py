@@ -463,7 +463,96 @@ def test_merge_items_never_joins_an_item_with_its_negation():
 
 
 # ---------------------------------------------------------------------------
-# 6. Live check with a real model (opt-in)
+# 6. User facts: names the user stated are not lost in a summary
+# ---------------------------------------------------------------------------
+
+EXPLANATION = ("A vector database stores each item as a list of numbers called an embedding, and finds the "
+               "items whose numbers are closest to a query. It builds an index so the search stays fast "
+               "when there are millions of items, and it can filter results by their metadata. ") * 3
+
+
+def forgetful(summary="A vector database stores embeddings and finds the closest ones quickly.",
+              merged="The user asked about vector databases."):
+    """A model that keeps only the explanation, as llama3.1:8b sometimes did."""
+    def llm(system, user, schema):
+        if "<transcript>" in user:
+            return json.dumps({"summary": summary, "architectural_decisions": [], "bugs_resolved": [],
+                               "user_constraints": []})
+        if "<summaries>" in user:
+            return json.dumps({"summary": merged})
+        return json.dumps({"items": []})
+    return llm
+
+
+def exchange(question, answer=EXPLANATION):
+    return f"User: {question}\n\nAssistant: {answer}"
+
+
+def test_user_fact_terms_finds_names_not_ordinary_words():
+    assert rs.user_fact_terms("My cat is called Pixel and my codename is ZEBRAFISH.") == ["Pixel", "ZEBRAFISH"]
+    assert rs.user_fact_terms("Our backup model is qwen3:8b, the demo is in room LHC-104.") == ["qwen3:8b", "LHC-104"]
+    assert rs.user_fact_terms("Sanya picked teal; the contract ends in March.") == ["Sanya", "March"]
+    assert rs.user_fact_terms("Explain in about 150 words what a vector database is.") == []
+    assert rs.user_fact_terms("I'm happy. Can you help me? Please write it in the UI.") == []
+    assert rs._sentences("Dr. Mehta wants IEEE format. Explain it.") == ["Dr. Mehta wants IEEE format.", "Explain it."]
+
+
+def test_a_lost_user_fact_is_added_back_word_for_word():
+    text = exchange("My cat is called Pixel and my codename is ZEBRAFISH. Explain in about 150 words "
+                    "what a vector database is.")
+    assert count_tokens(text) > RLMConfig().verbatim_tokens            # the summarizer runs, not the verbatim path
+    memory = distill(text, llm=forgetful(), config=cfg()).memory
+    assert memory.factual_summary.startswith("A vector database stores embeddings")
+    assert memory.factual_summary.endswith('User said: "My cat is called Pixel and my codename is ZEBRAFISH."')
+
+
+def test_nothing_is_added_when_the_summary_kept_the_facts():
+    text = exchange("My cat is called Pixel. Explain what a vector database is.")
+    memory = distill(text, llm=forgetful(summary="The user's cat is called Pixel; vector databases were explained."),
+                     config=cfg()).memory
+    assert "User said" not in memory.factual_summary
+
+
+def test_names_only_the_assistant_used_are_not_added():
+    text = exchange("Explain what a vector database is.", EXPLANATION + " Examples are Pinecone, Weaviate and Milvus.")
+    memory = distill(text, llm=forgetful(), config=cfg()).memory
+    assert "User said" not in memory.factual_summary and "Milvus" not in memory.factual_summary
+
+
+def test_what_is_added_back_is_bounded():
+    many = " ".join(f"Teammate Person{n} works from City{n} on Project{n}." for n in range(40))
+    memory = distill(exchange(many), llm=forgetful(), config=cfg()).memory
+    added = memory.factual_summary.split(" User said: ", 1)[1]
+    assert len(added) <= rs.USER_FACT_CHARS and added.startswith('"Teammate Person0 works from City0')
+
+
+def test_the_merge_of_several_pieces_keeps_user_facts():
+    turns = [exchange(f"Note {n}: nothing personal here, explain caching again.") for n in range(12)]
+    turns.insert(6, exchange("Our client is Tata Motors and the contract ends in March. Explain caching."))
+    text = "\n\n".join(turns)
+    result = distill(text, llm=forgetful(), config=cfg(piece_tokens=500))
+    assert len(result.pieces) > 1 and result.reduce_levels >= 1
+    summary = result.memory.factual_summary
+    assert summary.startswith("The user asked about vector databases.")      # the merge lost it...
+    assert '"Our client is Tata Motors and the contract ends in March."' in summary   # ...the guard kept it
+
+
+def test_secrets_in_user_sentences_are_never_copied_back():
+    key = "sk-" + "A1b2C3d4E5" * 3
+    memory = distill(exchange(f"My cat Pixel ate my notes and my key is {key}. Explain vector databases."),
+                     llm=forgetful(), config=cfg()).memory
+    assert "Pixel" in memory.factual_summary
+    assert "sk-" not in memory.factual_summary and "A1b2C3d4E5" not in memory.factual_summary
+
+
+def test_code_in_a_user_message_is_not_treated_as_facts():
+    question = "Why is this slow?\n```python\nclass VaultIndex:\n    def Rebuild(self): ...\n```"
+    memory = distill(exchange(question), llm=forgetful(), config=cfg()).memory
+    assert "User said" not in memory.factual_summary
+
+
+# ---------------------------------------------------------------------------
+# 7. Live check with a real model (opt-in)
 # ---------------------------------------------------------------------------
 
 @pytest.mark.skipif(os.environ.get("AMP_RLM_LIVE") != "1",
