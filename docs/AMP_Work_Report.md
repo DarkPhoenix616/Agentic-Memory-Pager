@@ -24,6 +24,7 @@ in `BTP/report_eval/`, test venv `AgenticMemoryPager/.venv` (git-ignored).
 
 | Part | Branch | State |
 |---|---|---|
+| Session keys + encryption (Aman's original plan, step 1 of the 2026-11-09 plan) | `feature/session-keys` (from `akshaybranch`; merged as `431d54e`, then deleted) | **Done.** Every session's memories are encrypted with its own key; the 7 memories in the real vault are encrypted too. 382 tests pass. Details and numbers: section 5c. |
 | Server-side guards + risk model (Aman's open placeholders, 2026-11-09) | `feature/server-guards` (from main `a4e2d55`; merged into `akshaybranch`, then deleted) | **Done, 4 commits, merged into `akshaybranch` (`cca2915`) and pushed.** The feature branch was deleted afterwards. Every `TODO [T1]` placeholder is filled, the server loads the same signing key and a new admin token, and the risk model is real. 369 tests pass. Details and numbers: section 5b. |
 | T2 AST code compactor | `feature/ast-compactor` | Done. PR #2 merged into main (merge commit `9afb773`). Branch deleted. |
 | T3 RLM text summarizer | `feature/rlm-summarizer` (deleted) | **Merged** into main by the user as PR #3 (`f5c8066`). |
@@ -65,6 +66,14 @@ Next steps:
    - **Merged into `akshaybranch`** (`cca2915`) on the user's request and pushed. 369 tests pass on the merge.
    - `feature/server-guards` is based on main, so the merge also brought in PR #9's deletion of `docs/`. Resolved by keeping the report and dropping `docs/` from `.gitignore`.
    - `feature/server-guards` was deleted after the merge (local only, never pushed; all 4 commits are in `akshaybranch`).
+8. **Plan for what is left in Aman's original docs** (made 2026-11-09, the user chose the order and the options):
+   1. **Session keys + encryption.** Done, see section 5c. The user's choices: the admin token can see and delete memories but not read them; encrypt the existing memories; skip `get_token_state` (the web page already shows live tokens).
+   2. **Old-chat list + reopening a chat:** `list_sessions` (admin), a "latest N memories" tool (what `page_context` meant in the design doc), and a list of old chats on the web page. Next.
+   3. **Red-team test against the real model** (Aman's Phase 5), plus re-running his Phase 4 scenarios with llama3.1:8b.
+   4. **Code graph** in the AST compactor (which function calls which).
+   5. **Tree-sitter**, so JavaScript/TypeScript, Java and C/C++ can be compacted too.
+   6. Optional, to agree with Aman: Phi-3 comparison, Instructor, LiteLLM, Langfuse, SQLite.
+   - How each step is done: a branch from `akshaybranch`, build, test, live check with the real model, merge into `akshaybranch`, delete the branch, push, and update this report.
 
 ---
 
@@ -471,6 +480,81 @@ A memory counts as hidden when max(word rules, model) is 70 or more.
 - **The model reads the first 8 pieces** of 6,000 characters each; the word rules read everything.
 - **Not built:** the design doc's SQLite metadata store, the `get_token_state` and `list_sessions` tools, Langfuse, LiteLLM and Instructor. Phase 4's "re-run the scenarios against a real LLM" is also not done.
 
+## 5c. Session keys and encryption (2026-11-09)
+
+### 5c.1 Why
+
+Aman's original plan (the `btp timeline.pdf` chat and the README's job list, line 61) has "session keys and encrypted local storage": every project's memories locked with its own key, so Project X can never read Project Y. It replaced the blockchain idea from the first Gemini answer. Nothing of it existed: anyone who could reach the server and knew a session ID could read that session.
+
+### 5c.2 What was built (branch `feature/session-keys`)
+
+| Part | What it does | Where |
+|---|---|---|
+| Keyring | One random key per session (64 hex characters), made the first time the session stores a memory and kept in `storage/.amp_session_keys` (0600, git-ignored; `AMP_SESSION_KEYS_FILE` moves it). | `harness/local_keys.py` |
+| Encryption | HKDF-SHA256 turns the session key into an AES-256-GCM data key and a fingerprint (the "key check"). Each memory's JSON is encrypted with a fresh 12-byte nonce. Session ID and memory ID are bound in as associated data, so an envelope copied to another row or session does not open. | `server/session_crypto.py` |
+| What the vault stores | The search vector, plus session ID, type, source, time, risk score, `encrypted`, the key check and the encrypted envelope. No document text: the server embeds the text itself and stores only the vector. | `server/amp_memory_server.py` |
+| Key check on every session tool | `store_memory`, `search_vault`, `page_context`, `run_memory_code` and the new `list_session_memories` need `session_id` + `session_key`. The first memory stored fixes a session's key; a missing, malformed or wrong key is refused and written to the audit log. Searching all sessions at once is no longer possible. | same |
+| Admin | `list_all_memories` now returns `MemoryInfo` (ID, session, type, time, risk score, encrypted), never the content. `delete_memory` works without the session key. | same, `harness/guardrails.py` |
+| App side | The graph's `_mcp_*` helpers send the session's key from the keyring. The vault panel uses `list_session_memories`; the memory audit works on its own session. | `harness/graph.py`, `harness/mcp_client.py`, `harness/chat_session.py` |
+| Old rows | `python -m server.backfill --apply` encrypts plain rows (new key for a session without one, saved to the keyring) and then rebuilds the vault. `--rebuild` runs only the rebuild. | `server/backfill.py` |
+
+### 5c.3 Design decisions and why
+
+- **The admin can see and delete, not read** (the user's choice, option 1). A master key on the server would let anyone with the admin token read everything.
+- **The server never stores session keys**, only a one-way fingerprint. The vault folder alone can't be read.
+- **The first stored memory fixes a session's key** (trust on first use). A wrong key later is refused, so nobody can plant memories in someone else's session.
+- **No document text in ChromaDB.** Checked first: ChromaDB searches fine with only the vectors (`query_texts` is embedded by the collection's embedding function).
+- **Rebuild after encrypting old rows.** Found during the real-vault migration: after the rows were encrypted, "merge sort" was still in `chroma.sqlite3`. ChromaDB keeps every write in its own write-ahead log (`embeddings_queue`, 171 entries) until about 1,000 operations, and `chroma vacuum` did not clear it. Copying the rows into a fresh collection, dropping the old one (and its log) and running SQLite `VACUUM` left no readable copy. Tested on a copy of the vault first.
+- **`page_context` checks the key once**, through an internal `_search`, so its refusals are logged under its own name.
+
+### 5c.4 Results
+
+**Tests:** 382 passed, 1 skipped (was 369).
+- 13 new tests in `tests/test_session_keys.py`:
+  - no readable text in the row, nor in the `chroma.sqlite3` file;
+  - the right key reads, while a missing, malformed or wrong key is refused by all 5 session tools and logged;
+  - sessions are kept apart;
+  - the first key fixes the session;
+  - an envelope doesn't open in another row or session, and a swapped row is skipped;
+  - a session listing is newest first with a limit, and hides high-risk memories by default;
+  - the admin can see and delete but not read;
+  - the audit stays in its own session;
+  - the keyring;
+  - backfill + rebuild leave no readable copy.
+- Other suites updated for the keys, plus a wrong-key and a missing-key test over MCP.
+
+**Live, over MCP, real llama3.1:8b** (server as its own process, temporary vault):
+- 7 questions caused 3 compactions.
+- The vault panel showed 3 memories.
+- A wrong key was refused (`Wrong session key for live-enc`) and logged.
+- The admin list showed only metadata.
+- The codename "BLUEHERON" from the chat was found **0 times** in the vault folder.
+
+**Live, in-process:** the codename was found 0 times in the vault folder.
+
+**The real vault (2026-11-09):**
+1. Dry run first: 7 rows, 7 to encrypt, 2 new session keys, all safe.
+2. `--apply` encrypted all 7. Risk scores went 0.0 → 0.6, 0.3 and 8.3 for the 3 signed rows, which were signed again.
+3. Then `--rebuild`.
+
+Checked afterwards:
+- 7 rows, all encrypted.
+- 0 plain envelopes and 0 document texts.
+- 0 hits in the vault folder for "merge sort", "PostgreSQL for the vault", "KeyError in pager", "web development", "B-tree" and "akshay".
+- Both sessions are readable with their keyring keys (3 + 4 memories), and the 3 signed rows still verify.
+- The temporary plain backup was deleted afterwards.
+
+### 5c.5 Limits (honest)
+
+- **Search vectors are not encrypted**, because search needs them. They don't hold the text, but they hint at a memory's topic.
+- **Whoever can read the keyring file can read its sessions.** This protects against other apps, other users and copied vault folders, not against the account that runs AMP Chat.
+- **Trust on first use:** an empty session takes the first key it sees.
+- **Old chats can't be reopened in the web page yet.** Their keys are in the keyring; that is step 2.
+- **Found while testing, not caused by this work:** when an exchange is longer than 150 tokens (so it's summarized rather than kept verbatim) and is mostly a long explanation, the RLM summary can drop small personal facts.
+  - In one live run, "Pixel" and "ZEBRAFISH" from the first message were missing from the summary, so the last answer couldn't recall them.
+  - The same chat on the code before this branch stored that exchange verbatim (it came out under 150 tokens) and recalled both.
+  - The summarizer is unchanged on this branch (`git diff akshaybranch -- compactor/` is empty). This is an open RLM quality issue.
+
 ---
 
 ## 6. Decision log
@@ -501,6 +585,10 @@ A memory counts as hidden when max(word rules, model) is 70 or more.
 | 2026-11-09 | Risk model default: the chat model (llama3.1:8b), not Llama Guard 3 1B | Measured: 12/15 attacks and 2/111 normal memories hidden (no false alarm added to word rules), vs 10/15 and 15/111 for Llama Guard. Already loaded, so no extra GPU memory. |
 | 2026-11-09 | Old rows are scored on read; writing back is a separate command, dry run by default | Reads shouldn't write to the vault. Signing unsigned rows vouches for them, so it is opt-in. |
 | 2026-11-09 | Code on a new branch from main (`feature/server-guards`), the report stays on `akshaybranch` | A PR from `akshaybranch` would bring `docs/` back into main. |
+| 2026-11-09 | Each session's memories encrypted with its own key; the server keeps only a fingerprint | Aman's original plan ("session keys and encrypted local storage"). The vault alone can't be read. |
+| 2026-11-09 | The admin token can list and delete but not read (user's choice) | A server master key would make the admin token a key to every session. |
+| 2026-11-09 | Existing memories encrypted (user's choice); `get_token_state` skipped (user's choice) | The web page already shows live token counts. |
+| 2026-11-09 | Rebuild the vault after encrypting old rows | ChromaDB's write-ahead log and free pages still held the old text; `chroma vacuum` alone did not remove it. |
 
 ---
 
@@ -547,4 +635,11 @@ python3 ../report_eval/recall.py ../report_eval/facts.json ../report_eval/run.js
 ollama pull llama-guard3:1b                                        # only for the comparison
 .venv/bin/python -I ../report_eval/guard_eval/eval_guard3.py       # word rules vs Llama Guard vs llama3.1:8b
 .venv/bin/python -I ../report_eval/guard_eval/live_mcp_check.py    # server as its own process, outside client
+
+# Session keys and encryption (section 5c)
+.venv/bin/python -m pytest tests/test_session_keys.py -q
+.venv/bin/python -m server.backfill                                # dry run: what would be encrypted / re-scored
+.venv/bin/python -m server.backfill --apply                        # encrypt plain rows, then rebuild the vault
+.venv/bin/python -m server.backfill --rebuild                      # only the rebuild (no old copies left in ChromaDB)
+grep -r -a -c "some phrase" storage/chroma_db                      # check: 0 means no readable copy
 ```
