@@ -389,8 +389,8 @@ def _scrub_list(items: List[str]) -> List[str]:
 # LAYER 2: SEMANTIC RISK SCORING (Phase 2, T4)
 # Layer 1 redacts KNOWN phrases; Layer 2 scores how "instruction-like" a memory
 # is so subtle attacks (role-play, tool-call bait) can be filtered at retrieval.
-# Thresholds are shared: T1's page_context() must import HIGH_RISK_THRESHOLD
-# rather than hard-coding its own number.
+# Thresholds are shared: the memory server's filters import HIGH_RISK_THRESHOLD
+# rather than hard-coding their own number.
 # ---------------------------------------------------------------------------
 
 RiskLevel = Literal["safe", "suspicious", "high_risk"]
@@ -432,17 +432,18 @@ def risk_level_for_score(score: float) -> RiskLevel:
 
 def _llama_guard_score(text: str) -> Optional[float]:
     """
-    Placeholder for the model-based classifier (0-100, or None if unavailable).
+    Model-based adversarial-intent score (0-100), or None when no model is available.
 
-    TODO [T1 / Teammate 1]: implement with Llama Guard 3 (or similar) and return
-    its adversarial-intent score scaled to 0-100. Requirements:
-      - Return None (not 0) when the model is unavailable or errors, so the
-        heuristic score below still applies; log a warning when that happens.
-      - Keep it fast (~100-200 ms) or cache by hash of `text`; it runs on every
-        store_memory() call.
-    Until implemented, scoring is heuristic-only.
+    Implemented in harness/risk_model.py. By default the local chat model
+    (llama3.1:8b) is asked whether the text gives orders to the AI that will
+    read it; AMP_RISK_MODEL=llama-guard3:1b uses Llama Guard 3 instead and
+    AMP_RISK_MODEL=off turns the model off. None (not 0) when the model is off
+    or fails, so the heuristic score still applies; a failure is logged and the
+    model is skipped for a minute. Scores are cached by text, so scoring the
+    same payload twice (compactor node, then store_memory) costs one call.
     """
-    return None
+    from harness.risk_model import score    # lazy: keeps ollama off the schemas' import path
+    return score(text)
 
 
 def _classify_adversarial_ensemble(text: str, source: str) -> tuple[float, RiskLevel]:
@@ -457,7 +458,7 @@ def _classify_adversarial_ensemble(text: str, source: str) -> tuple[float, RiskL
       - Imperative-sentence density: up to 25 (cannot reach "suspicious" alone)
       - Phase 3 obfuscation: disguised pattern hit counts as a Layer 1 hit (40);
         fuzzy near-miss phrase 25 each, cap 50; high-entropy blob 10 each, cap 20
-    The final score is max(heuristic, Llama Guard score) once T1 wires the model in.
+    The final score is max(heuristic, model score); see _llama_guard_score().
     """
     if not text or not text.strip():
         return 0.0, "safe"
@@ -497,8 +498,8 @@ def score_payload(
     """
     Public entry point: score a compacted payload for the UnifiedMemory envelope.
 
-    Used by T4's compactor nodes at creation time. T1 should call the same
-    function in store_memory() so the stored score never relies on the caller.
+    Used by the compactor nodes when a memory is created, and again by the
+    memory server's store_memory(), so the stored score never relies on the caller.
     All model-readable text is scored, including code docstrings.
     """
     if isinstance(payload, TextMemorySchema):
@@ -1013,7 +1014,7 @@ class UnifiedMemory(BaseModel):
         default=0.0,
         ge=0.0,
         le=100.0,
-        description="Adversarial-intent score 0-100 (see score_payload). Set by T4 nodes; T1 re-scores on store.",
+        description="Adversarial-intent score 0-100 (see score_payload). Set by the compactor nodes; the memory server re-scores it on store.",
     )
     risk_level: RiskLevel = Field(
         default="safe",

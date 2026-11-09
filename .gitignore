@@ -12,3 +12,5 @@ __pycache__/
 *.pyc
 *.pyo
 storage/.amp_signing_key
+storage/.amp_admin_token
+storage/amp_audit.log
