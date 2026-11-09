@@ -745,6 +745,29 @@ Aman's own tests (Phases 1–4) used a scripted fake model; this is the first te
 - **No names from includes:** C/C++ `#include` imports no names, so calls to functions declared in headers are not linked.
 - **Other grammars:** the language pack has many more, but only these 5 are wired in and tested.
 
+## 5i. OWASP and the OWASP Top 10 for LLM apps (2026-11-10)
+
+**OWASP** stands for the **Open Worldwide Application Security Project**. It's a free, non-profit community that publishes security guides. It's best known for its **"Top 10" lists**, which rank the most common ways software gets hacked. Companies and universities use these lists as a checklist.
+
+**Why it's in your project:** OWASP has a separate **Top 10 for LLM apps** (the 2025 version), and Aman's docs folder is named `OWASP_vulnerabilities`. His main document covers **LLM01: Prompt Injection**, the #1 risk on that list. That's the attack where hidden text tricks the AI into following orders, and it's what his 4 security layers defend against.
+
+**The LLM list, and where AMP stands on each:**
+
+| # | Risk | In simple words | AMP |
+|---|---|---|---|
+| LLM01 | Prompt injection | Hidden text gives the AI orders | ✅ 4 layers + server guards; red team blocked all 11 attacks of this kind |
+| LLM02 | Sensitive info disclosure | The AI leaks secrets | ✅ secrets scrubbed, notes encrypted, admin token never shown |
+| LLM03 | Supply chain | A bad library or model | ⚪ not covered (local Ollama models) |
+| LLM04 | Data & model poisoning | Bad data planted in memory | ⚠️ partly: risky notes are hidden, but **fact poisoning still works** |
+| LLM05 | Improper output handling | AI output trusted blindly | ✅ web page escapes output; code runs in the sandbox |
+| LLM06 | Excessive agency | The AI can do too much | ✅ only 2 tools allowed; delete needs the admin password |
+| LLM07 | System prompt leakage | The AI reveals its instructions | ⚪ not tested |
+| LLM08 | Vector & embedding weaknesses | Attacks on the vector database | ✅ per-chat encryption and session filter; ⚠️ search vectors aren't encrypted |
+| LLM09 | Misinformation | The AI states false things | ⚠️ same as fact poisoning |
+| LLM10 | Unbounded consumption | Making the AI burn resources | ✅ size limits, sandbox time and memory limits |
+
+**For your BTP report:** you can say AMP was built against the OWASP LLM Top 10, with real red-team numbers for LLM01. LLM04 (fact poisoning) is the main known gap.
+
 ---
 
 ## 6. Decision log
