@@ -595,6 +595,23 @@ class CodeSymbol(BaseModel):
         le=1_000_000,  # Guard against absurdly large line numbers
         description="Line number in the original source file where this symbol begins.",
     )
+    calls: List[str] = Field(
+        default_factory=list,
+        max_length=50,
+        description=(
+            "The code graph: functions and classes this symbol calls that are defined in the same "
+            "file or imported by name, e.g. ['load_cart', 'Cart.total']. Empty for classes and variables."
+        ),
+    )
+
+    @field_validator("calls")
+    @classmethod
+    def calls_must_be_dotted_names(cls, v: List[str]) -> List[str]:
+        """Only dotted identifiers (load_cart, Cart.total), each at most 128 characters."""
+        for name in v:
+            if len(name) > 128 or not all(_IDENTIFIER_RE.match(part) for part in name.split(".")):
+                raise ValueError(f"calls entry '{name[:40]}' is not a dotted name.")
+        return v
 
     @field_validator("name")
     @classmethod

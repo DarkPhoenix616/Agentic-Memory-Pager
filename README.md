@@ -173,6 +173,7 @@ AMP Chat is a web app on top of the LangGraph harness. You chat with a local mod
 
 - **Token meter:** how full the context window is, with a line at the 80% trigger.
 - **Compactions:** each one is shown as it happens. Code blocks go to the **AST compactor**, and question-and-answer exchanges go to the **RLM summarizer**. The result is stored in the ChromaDB vault.
+- **Code keeps its code graph.** A compacted Python file also records which function calls which (calls to names the file defines or imports by name, with `self.f()` as `Class.f`), so the model can answer "what uses `total()`?" from memory.
 - **What you tell it about yourself is kept.** The summarizer is told to keep the facts you state about yourself or your project: names of people, pets and projects, codenames, places, dates, devices.
   - If a summary still loses a name you wrote, your sentence is added back word for word as `User said: "..."`. This is capped, and secrets are scrubbed first.
   - On 12 exchanges where small facts sit next to a long explanation, 17 of 25 facts survived before this change and 25 of 25 after.
