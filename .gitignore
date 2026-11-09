@@ -8,8 +8,6 @@ storage/chroma_db/
 .agents
 .pytest_cache
 .venv
-docs/
 __pycache__/
 *.pyc
 *.pyo
-storage/.amp_signing_key

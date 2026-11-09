@@ -4,6 +4,7 @@ langchain-core
 langgraph
 litellm
 chromadb
+streamlit
 langfuse
 pytest
 black
@@ -12,5 +13,3 @@ mcp<2
 fastmcp
 ollama
 python-dotenv
-starlette
-uvicorn

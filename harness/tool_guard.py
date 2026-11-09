@@ -5,8 +5,7 @@ Sits between the LLM's reply and tool execution. The LLM asks for a tool with a
 line like  TOOL: search_vault("query")  (see _build_secure_system_prompt). Before
 anything runs, every requested call is checked here:
 
-  1. Allowlist   Only search_vault and run_memory_code (read-only Python over
-                 the memories, in the sandbox) may be requested. Mutating tools
+  1. Allowlist   Only search_vault may be requested. Mutating tools
                  (delete_memory, store_memory) and unknown tools are rejected.
   2. Origin      The LLM cannot say which memory prompted a call, so the call
                  text is compared with the memories in its context. A memory
@@ -36,9 +35,7 @@ EXECUTION_LEVELS = ("READ_ONLY", "DATA_ONLY", "SEARCH_ONLY")
 
 # Tools the LLM may request, and the minimum execution_level of any memory that
 # influenced the request.
-TOOL_REQUIRED_LEVEL: Dict[str, str] = {"search_vault": "SEARCH_ONLY", "run_memory_code": "SEARCH_ONLY"}
-
-CODE_TOOL = "run_memory_code"
+TOOL_REQUIRED_LEVEL: Dict[str, str] = {"search_vault": "SEARCH_ONLY"}
 
 # Never callable from model output, whatever the context says.
 MUTATING_TOOLS = frozenset({"delete_memory", "store_memory"})
@@ -54,13 +51,10 @@ class ToolCall:
     name: str
     raw_args: str = ""
     query: Optional[str] = None   # first argument without quotes, when it is a quoted string
-    code: Optional[str] = None    # run_memory_code: the Python to run
 
     @property
     def text(self) -> str:
         """The text the call is judged on."""
-        if self.code is not None:
-            return self.code
         return self.query if self.query is not None else self.raw_args
 
 
@@ -82,31 +76,18 @@ _TOOL_LINE = re.compile(
     r"^[ \t]*TOOL:[ \t]*([A-Za-z_]\w*)[ \t]*(?:\((.*)\))?[ \t\r]*$", re.IGNORECASE | re.MULTILINE
 )
 _QUOTED_ARG = re.compile(r"""\s*(["'])(.*)\1\s*$""", re.DOTALL)
-# run_memory_code takes its program as a fenced block right after the TOOL line:
-#   TOOL: run_memory_code
-#   ```python
-#   print(len(memories))
-#   ```
-# (used with .match(text, pos), which anchors at pos; \A would mean the start of the whole text)
-_CODE_BLOCK = re.compile(r"[ \t]*\r?\n\s*```[\w+-]*[^\n]*\n(.*?)(?:```|\Z)", re.DOTALL)
 
 
 def parse_tool_calls(reply_text: str) -> List[ToolCall]:
     """Extract every TOOL: line from an LLM reply, in order."""
     calls: List[ToolCall] = []
-    text = reply_text or ""
-    for match in _TOOL_LINE.finditer(text):
+    for match in _TOOL_LINE.finditer(reply_text or ""):
         raw = (match.group(2) or "").strip()
         quoted = _QUOTED_ARG.match(raw)
-        code = None
-        if match.group(1).lower() == CODE_TOOL:
-            block = _CODE_BLOCK.match(text, match.end())
-            code = block.group(1) if block else (quoted.group(2) if quoted else raw)
         calls.append(ToolCall(
             name=match.group(1),
             raw_args=raw,
             query=quoted.group(2) if quoted else None,
-            code=code,
         ))
     return calls
 
@@ -122,19 +103,6 @@ _STOPWORDS = frozenset({
     "show", "find", "tell", "please", "search", "memory", "memories", "vault", "previous",
     "earlier", "recall", "remember", "stored", "information", "details", "also", "than",
     "then", "them", "these", "those", "some", "more", "most", "other", "should", "could",
-})
-
-
-# Words any program over the memories uses: Python keywords and builtins and the
-# memory record's field names. They are not evidence that a memory shaped the code.
-_CODE_WORDS = frozenset({
-    "print", "lambda", "return", "elif", "else", "while", "break", "continue", "pass", "import",
-    "from", "true", "false", "none", "sorted", "reverse", "lower", "upper", "strip", "split",
-    "join", "startswith", "endswith", "find", "replace", "count", "items", "keys", "values",
-    "append", "extend", "list", "dict", "tuple", "range", "enumerate", "zip", "filter", "isinstance",
-    "text", "time", "kind", "file", "decisions", "bugs", "constraints", "code", "latest", "result",
-    "results", "item", "found", "matches", "match", "total", "counter", "collections", "datetime",
-    "json", "math", "statistics", "itertools", "string", "fromisoformat", "group", "search",
 })
 
 
@@ -157,8 +125,6 @@ def _suspected_sources(call: ToolCall, context: Sequence[Dict[str, Any]], user_t
     a stored memory contains is treated as influenced by that memory.
     """
     novel = _content_tokens(call.text) - _content_tokens(user_text)
-    if call.name.lower() == CODE_TOOL:
-        novel -= _CODE_WORDS
     if not novel:
         return []
     suspects = []
