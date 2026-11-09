@@ -88,6 +88,7 @@ def _embedding_text(memory: UnifiedMemory) -> str:
     if code.summary:
         parts.append(code.summary)
     parts.extend(symbol.signature for symbol in code.symbols)
+    parts.extend(f"{s.name} calls {', '.join(s.calls)}" for s in code.symbols if s.calls)   # the code graph
     return "\n".join(parts)
 
 
@@ -527,6 +528,7 @@ def _sandbox_record(memory: UnifiedMemory) -> dict:
         "bugs": list(text.bugs_resolved) if text else [],
         "constraints": list(text.user_constraints) if text else [],
         "file": code.file_path if code else "",
+        "calls": {s.name: list(s.calls) for s in code.symbols if s.calls} if code else {},
     }
 
 
@@ -581,7 +583,9 @@ def run_memory_code(code: str, session_id: str = "", timeout: int = 5, session_k
             and print()s its answer.
             Each memory is a dict: id, time (ISO string), kind ("text" or
             "code"), text, decisions, bugs, constraints (lists of strings) and
-            file (code file path or ""). They are ordered oldest first.
+            file (code file path or ""), calls (for code: which function
+            calls which, e.g. {"checkout": ["load_cart", "total"]}). They are
+            ordered oldest first.
             Only json, re, math, statistics, collections, itertools, datetime
             and string can be imported; open, eval, exec and dunder names are
             blocked.

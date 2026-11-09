@@ -43,7 +43,7 @@ import re
 import textwrap
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from harness.guardrails import CodeMemorySchema, CodeSymbol, _scrub_secrets
 
@@ -243,6 +243,8 @@ class _Extracted:
     dependencies: List[str] = field(default_factory=list)
     symbols: List[CodeSymbol] = field(default_factory=list)
     skipped: int = 0            # symbols dropped because their name is not ASCII-safe
+    raw_calls: Dict[str, List[str]] = field(default_factory=dict)   # symbol -> names it calls, in source order
+    imported: set = field(default_factory=set)                      # names imported with "from x import y"
     module_doc: Optional[str] = None
 
 
@@ -277,6 +279,39 @@ def _variable_signature(name: str, node: ast.AST) -> str:
     return f"{name}{annotation} = {shown}"
 
 
+MAX_CALLS = 20
+
+
+def _called_names(func: ast.AST, class_name: str) -> List[str]:
+    """Names called inside a function body, in source order: f(), mod.f(),
+    and self.f() written as Class.f."""
+    found = []
+    for node in ast.walk(func):
+        if not isinstance(node, ast.Call):
+            continue
+        target, parts = node.func, []
+        while isinstance(target, ast.Attribute):
+            parts.append(target.attr)
+            target = target.value
+        if not isinstance(target, ast.Name):
+            continue
+        parts.append(class_name if target.id in ("self", "cls") and class_name else target.id)
+        found.append((node.lineno, node.col_offset, ".".join(reversed(parts))))
+    return [name for _, _, name in sorted(found)]
+
+
+def _link_calls(out: "_Extracted") -> None:
+    """Keep the calls to what this file defines or imports by name: the file's code graph."""
+    defined = {s.name for s in out.symbols if s.type != "variable"}
+    for symbol in out.symbols:
+        calls: List[str] = []
+        for name in out.raw_calls.get(symbol.name, []):
+            known = name in defined or name.split(".", 1)[0] in out.imported
+            if known and name != symbol.name and name not in calls and len(name) <= MAX_NAME:
+                calls.append(name)
+        symbol.calls = calls[:MAX_CALLS]
+
+
 class _Visitor:
     """Walks module-level and class-level statements. Function bodies are not
     entered: their contents are implementation detail, not structure."""
@@ -306,6 +341,7 @@ class _Visitor:
             modules = [alias.name for alias in node.names]
         else:
             modules = ["." * node.level + (node.module or "")]
+            self.out.imported.update(alias.asname or alias.name for alias in node.names if alias.name != "*")
         for module in modules:
             module = _clip(module, MAX_DEPENDENCY_LEN)
             if module and module not in self.out.dependencies:
@@ -318,6 +354,7 @@ class _Visitor:
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 self.add_symbol(prefix + node.name, "method" if in_class else "function",
                                 _header(node), ast.get_docstring(node), node.lineno)
+                self.out.raw_calls[prefix + node.name] = _called_names(node, prefix.rstrip(".") if in_class else "")
             elif isinstance(node, ast.ClassDef):
                 self.add_symbol(prefix + node.name, "class", _header(node),
                                 ast.get_docstring(node), node.lineno)
@@ -455,6 +492,7 @@ def compact_code(
             strategy += " + line scan of the rest"
         out = visitor.out
 
+    _link_calls(out)
     out.symbols.sort(key=lambda s: s.start_line)
     total_symbols = len(out.symbols)
     out.symbols = out.symbols[:MAX_SYMBOLS]
