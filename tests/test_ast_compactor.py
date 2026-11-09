@@ -311,3 +311,68 @@ def test_compression_report():
     print(f"{'TOTAL':30} {totals['orig']:7} {full_ratio:9.1%} {short_ratio:9.1%}")
     assert full_ratio < 0.5
     assert short_ratio < 0.3
+
+
+# ---------------------------------------------------------------------------
+# The code graph: which function calls which
+# ---------------------------------------------------------------------------
+
+SHOP = '''from payments import pay
+import json
+
+class Cart:
+    def total(self):
+        return sum(self.prices())
+
+    def prices(self):
+        return [1, 2]
+
+def load_cart(user):
+    return Cart()
+
+def checkout(user):
+    cart = load_cart(user)
+    print(json.dumps({}))
+    return pay(cart.total())
+'''
+
+
+def test_the_code_graph_links_calls_to_what_the_file_defines_or_imports():
+    calls = {s.name: s.calls for s in compact_code(SHOP, file_path="shop.py").symbols}
+    assert calls["checkout"] == ["load_cart", "pay"]       # pay is imported by name; print and json.dumps are not
+    assert calls["Cart.total"] == ["Cart.prices"]          # self.prices() is written as Cart.prices
+    assert calls["load_cart"] == ["Cart"] and calls["Cart"] == [] and calls["Cart.prices"] == []
+
+
+def test_calls_must_be_dotted_names():
+    from harness.guardrails import CodeSymbol
+    import pydantic
+    CodeSymbol(name="f", type="function", signature="def f():", start_line=1, calls=["Cart.total", "load"])
+    with pytest.raises(pydantic.ValidationError):
+        CodeSymbol(name="f", type="function", signature="def f():", start_line=1, calls=["rm -rf /"])
+
+
+def test_old_seals_still_verify_and_new_calls_are_sealed(monkeypatch):
+    from harness import signing
+    from harness.guardrails import UnifiedMemory
+    monkeypatch.setenv(signing.SIGNING_KEY_ENV, "graph-test-key")
+    schema = compact_code(SHOP, file_path="shop.py")
+    memory = UnifiedMemory(session_id="g", memory_type="code", compaction_source="ast", raw_token_count=50,
+                           code_payload=schema)
+    without = memory.model_copy(deep=True)
+    for symbol in without.code_payload.symbols:
+        symbol.calls = []
+    assert b'"calls"' not in signing._canonical_bytes(without)    # same bytes as before the code graph existed
+    memory.signature = signing.sign_memory(memory)
+    assert signing.verify_memory(memory)
+    memory.code_payload.symbols[-1].calls = ["load_cart", "delete_everything"]
+    assert not signing.verify_memory(memory)                      # the graph is covered by the seal
+
+
+def test_the_code_graph_is_searchable():
+    import server.amp_memory_server as server
+    from harness.guardrails import UnifiedMemory
+    memory = UnifiedMemory(session_id="g", memory_type="code", compaction_source="ast", raw_token_count=50,
+                           code_payload=compact_code(SHOP, file_path="shop.py"))
+    assert "checkout calls load_cart, pay" in server._embedding_text(memory)
+    assert server._sandbox_record(memory)["calls"]["checkout"] == ["load_cart", "pay"]

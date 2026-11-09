@@ -51,9 +51,19 @@ def _canonical_bytes(memory: UnifiedMemory) -> bytes:
         "compaction_source": memory.compaction_source,
         "provenance": memory.provenance,
         "risk_score": memory.risk_score,
-        "payload": payload.model_dump(mode="json") if payload is not None else None,
+        "payload": _payload_dict(payload) if payload is not None else None,
     }
     return json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
+
+
+def _payload_dict(payload) -> dict:
+    """The payload as signed. An empty "calls" list (the code graph, added
+    later) is left out, so memories signed before it existed still verify."""
+    data = payload.model_dump(mode="json")
+    for symbol in data.get("symbols") or []:
+        if not symbol.get("calls"):
+            symbol.pop("calls", None)
+    return data
 
 
 def sign_memory(memory: UnifiedMemory) -> Optional[str]:
