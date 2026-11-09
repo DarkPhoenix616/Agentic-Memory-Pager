@@ -1193,6 +1193,21 @@ class MemoryInfo(BaseModel):
     encrypted: bool = Field(..., description="False only for an old row not yet encrypted (python -m server.backfill).")
 
 
+class SessionInfo(BaseModel):
+    """
+    One chat session in the vault, as the admin tool list_sessions shows it:
+    how many memories it has and when it was used, never what they say.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: str = Field(..., max_length=64)
+    memories: int = Field(..., ge=0, description="How many memories the session has in the vault.")
+    first_time: str = Field(default="", max_length=64, description="Time of its oldest memory (ISO 8601).")
+    last_time: str = Field(default="", max_length=64, description="Time of its newest memory (ISO 8601).")
+    encrypted: bool = Field(..., description="False if any of its memories is an old row not yet encrypted.")
+
+
 # ---------------------------------------------------------------------------
 # Model 5: TokenState
 # ---------------------------------------------------------------------------

@@ -23,6 +23,7 @@
   <main class="layout">
     <section class="chat" aria-label="Chat">
       <div id="messages" class="messages" aria-live="polite">
+        <div id="resume" class="resume" hidden></div>
         <div id="empty" class="empty">
           <h2>A local chatbot that pages its memory</h2>
           <p>The context window works like RAM. When it fills past the trigger, the oldest messages
@@ -31,6 +32,7 @@
           <p class="hint">Try: tell it a fact, ask a few long questions, then ask about the fact again.</p>
         </div>
       </div>
+      <div id="notice" class="notice" role="status" hidden></div>
       <div id="error" class="error" role="alert" hidden></div>
       <form id="composer" class="composer">
         <textarea id="input" rows="1" placeholder="Message the local model…   Enter to send · Shift+Enter for a new line"></textarea>
@@ -39,6 +41,13 @@
     </section>
 
     <aside class="panel" aria-label="Behind the scenes">
+      <details class="card chats-card" open>
+        <summary>Your chats</summary>
+        <div id="chats" class="list-box"></div>
+        <p class="note">A chat is saved to the vault when you leave it, encrypted with its own key.
+          Open one to carry on where it left off.</p>
+      </details>
+
       <h2>Behind the scenes</h2>
 
       <div class="card">

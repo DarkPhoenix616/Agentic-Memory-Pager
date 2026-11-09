@@ -193,6 +193,21 @@ def test_the_admin_can_see_and_delete_but_not_read(server):
     assert server.delete_memory(stored.vector_embedding_id, admin_token=TOKEN) == f"Deleted {stored.vector_embedding_id}"
 
 
+def test_the_admin_can_list_sessions_but_not_read_them(server):
+    store(server, text_memory("keys-s1", SECRET))
+    store(server, text_memory("keys-s1", "A second note."))
+    store(server, text_memory("keys-s2", "Only one note here."))
+    with pytest.raises(PermissionError):
+        server.list_sessions()
+    assert audit_lines()[-1]["action"] == "list_sessions"
+    infos = server.list_sessions(admin_token=TOKEN)
+    mine = {i.session_id: i for i in infos}
+    assert mine["keys-s1"].memories == 2 and mine["keys-s2"].memories == 1
+    assert mine["keys-s1"].first_time <= mine["keys-s1"].last_time and mine["keys-s1"].encrypted
+    assert [i.last_time for i in infos] == sorted((i.last_time for i in infos), reverse=True)   # newest first
+    assert "BLUEHERON" not in json.dumps([i.model_dump() for i in infos])
+
+
 def test_the_memory_audit_works_on_its_own_session(server):
     pytest.importorskip("langgraph", reason="harness.graph needs langgraph")
     from harness import graph

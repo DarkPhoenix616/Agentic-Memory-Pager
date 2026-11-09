@@ -1,9 +1,10 @@
 // AMP Chat front end: plain JavaScript, no build step, no external libraries.
-// Talks to app/server.py: GET /api/state, POST /api/chat (streamed), /api/settings, /api/new.
+// Talks to app/server.py: GET /api/state, POST /api/chat (streamed), /api/settings, /api/new,
+// GET /api/sessions and POST /api/open (the chats that can be reopened).
 "use strict";
 
 const $ = (id) => document.getElementById(id);
-const ICONS = { monitor: "📊", dispatch: "🔀", compaction: "🗜️", search: "🔎", code: "🐍", page_in: "📥", reply: "💬", error: "⚠️" };
+const ICONS = { monitor: "📊", dispatch: "🔀", compaction: "🗜️", search: "🔎", code: "🐍", page_in: "📥", reply: "💬", error: "⚠️", resume: "📂" };
 const fmt = (n) => Number(n).toLocaleString("en-US");
 let state = null;
 let busy = false;
@@ -114,10 +115,25 @@ function messageNode(role, content, status) {
   return node;
 }
 
+function renderResume() {
+  const box = $("resume");
+  const notes = state.resumed || [];
+  box.hidden = notes.length === 0;
+  if (box.hidden) return;
+  box.innerHTML = `<div class="resume-head">📂 Reopened this chat. Where it left off ` +
+    `(latest ${notes.length} ${notes.length === 1 ? "memory" : "memories"}, newest first):</div>`;
+  notes.forEach((m) => box.appendChild(memoryCard(m)));
+  const tail = document.createElement("div");
+  tail.className = "note";
+  tail.textContent = "Ask about anything from before: the relevant memories are paged back in.";
+  box.appendChild(tail);
+}
+
 function renderMessages() {
   const box = $("messages");
   box.querySelectorAll(".msg").forEach((n) => n.remove());
-  $("empty").hidden = state.transcript.length > 0;
+  renderResume();
+  $("empty").hidden = state.transcript.length > 0 || (state.resumed || []).length > 0;
   for (const m of state.transcript) box.appendChild(messageNode(m.role, m.content, m.status));
   box.scrollTop = box.scrollHeight;
 }
@@ -233,6 +249,66 @@ function setComposer() {
   $("send").disabled = busy || !ready;
   $("input").disabled = !ready;
   $("new-chat").disabled = busy;
+  document.querySelectorAll("#chats button").forEach((b) => { b.disabled = busy || b.classList.contains("current"); });
+}
+
+function showNotice(message) {
+  $("notice").textContent = message || "";
+  $("notice").hidden = !message;
+}
+
+// ---------------------------------------------------------------------------
+// Chats that can be reopened
+// ---------------------------------------------------------------------------
+
+function when(iso) {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+function chatNode(chat) {
+  const node = document.createElement("button");
+  node.type = "button";
+  node.className = `chat-item${chat.current ? " current" : ""}`;
+  node.innerHTML = `<span class="chat-title">${escapeHtml(chat.title || chat.session_id)}</span>` +
+    `<span class="chat-meta">${fmt(chat.memories)} ${chat.memories === 1 ? "memory" : "memories"}` +
+    (chat.last_time ? ` · ${escapeHtml(when(chat.last_time))}` : "") +
+    (chat.current ? " · this chat" : "") + `</span>`;
+  node.disabled = busy || chat.current;
+  node.addEventListener("click", () => openChat(chat.session_id));
+  return node;
+}
+
+async function loadChats() {
+  try {
+    const data = await api("/api/sessions");
+    fillList("chats", data.chats, "No saved chats yet. A chat is saved when you leave it.", chatNode);
+  } catch (err) {
+    fillList("chats", [], `Cannot list the chats: ${err.message}`, chatNode);
+  }
+}
+
+async function leave(path, body, message) {
+  if (busy) return;
+  busy = true;
+  setComposer();
+  $("error").hidden = true;
+  showNotice(message);
+  try {
+    state = await api(path, body);
+    render();
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    busy = false;
+    showNotice("");
+    setComposer();
+    loadChats();
+  }
+}
+
+function openChat(sessionId) {
+  return leave("/api/open", { session_id: sessionId }, "Saving this chat to the vault, then opening the other one…");
 }
 
 function showError(message) {
@@ -300,6 +376,7 @@ async function send(text) {
     busy = false;
     await refresh();
     setComposer();
+    loadChats();
     $("input").focus();
   }
 }
@@ -331,16 +408,7 @@ $("input").addEventListener("keydown", (event) => {
 });
 $("input").addEventListener("input", autoSize);
 
-$("new-chat").addEventListener("click", async () => {
-  if (busy) return;
-  try {
-    state = await api("/api/new", {});
-    $("error").hidden = true;
-    render();
-  } catch (err) {
-    showError(err.message);
-  }
-});
+$("new-chat").addEventListener("click", () => leave("/api/new", {}, "Saving this chat to the vault…"));
 
 let settingsTimer = null;
 function saveSettings() {
@@ -365,3 +433,4 @@ $("background").addEventListener("change", saveSettings);
 
 checkModel();
 refresh();
+loadChats();
