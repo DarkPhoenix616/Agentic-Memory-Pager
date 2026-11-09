@@ -24,6 +24,7 @@ in `BTP/report_eval/`, test venv `AgenticMemoryPager/.venv` (git-ignored).
 
 | Part | Branch | State |
 |---|---|---|
+| Step 5: Tree-sitter for JavaScript, TypeScript, Java, C and C++ | `feature/tree-sitter` (merged, then deleted) | **Done.** Real syntax trees and the code graph for 5 more languages; line scan stays as the fallback. 409 tests pass. Section 5h. |
 | Step 4: code graph in the AST compactor | `feature/code-graph` (merged, then deleted) | **Done.** Each function records what it calls; 453 links in this repo; old seals still verify. Section 5g. |
 | Step 3: red-team test against the real model (Aman's Phase 5) | none (test script only) | **Done.** 12 of 13 attacks blocked with llama3.1:8b; fact poisoning got through. Section 5f. |
 | Step 2: saving chats and reopening them | `feature/chat-history` (merged, then deleted) | **Done.** Chats are saved when left; the web page lists and reopens them. Live test recalled both facts after reopening. Section 5e. |
@@ -75,8 +76,8 @@ Next steps:
    2. **Old-chat list + reopening a chat.** Done, see section 5e. Also fixed on the way: the summary lost facts the user stated (section 5d).
    3. **Red-team test against the real model** (Aman's Phase 5). Done, see section 5f.
    4. **Code graph** in the AST compactor (which function calls which). Done, see section 5g.
-   5. **Tree-sitter**, so JavaScript/TypeScript, Java and C/C++ can be compacted too. Next.
-   6. Optional, to agree with Aman: Phi-3 comparison, Instructor, LiteLLM, Langfuse, SQLite.
+   5. **Tree-sitter**, so JavaScript/TypeScript, Java and C/C++ can be compacted too. Done, see section 5h.
+   6. Optional, to agree with Aman: Phi-3 comparison, Instructor, LiteLLM, Langfuse, SQLite. Not started.
    - How each step is done: a branch from `akshaybranch`, build, test, live check with the real model, merge into `akshaybranch`, delete the branch, push, and update this report.
 
 ---
@@ -710,6 +711,39 @@ Aman's own tests (Phases 1–4) used a scripted fake model; this is the first te
 - **Cost:** the searchable text of code memories grows by 33% (8,023 → 10,677 tokens over the repo), so a code memory uses more of the 1,000-token paging budget.
 - **Unresolved calls:** a call on a local variable (`cart.total()`) is not linked, because the type of `cart` isn't known without running the code.
 - **Python only:** other languages come with Tree-sitter (step 5).
+
+## 5h. Step 5: Tree-sitter for other languages (2026-11-10)
+
+**What:** Aman's plan named Tree-sitter for code parsing ("supports 40+ languages; Python's ast is a fallback"). Until now only Python had a real parser; every other language got a line scan.
+
+**How it works:**
+- **New module:** `compactor/ast_code/ts_parser.py` uses `tree-sitter` and `tree-sitter-language-pack`. The two wheels are about 3 MB together and are added to `requirements.txt`.
+- **Languages:** JavaScript, TypeScript (and `.tsx`), Java, C and C++.
+- **What it records**, the same as for Python:
+  - imports and their modules (`import … from`, Java `import`, `#include`);
+  - classes, interfaces, structs, enums, functions, methods, and arrow functions assigned to a `const`;
+  - signatures (the header up to the body);
+  - the comment right above a definition, as its docstring;
+  - line numbers;
+  - the code graph (`this.f()` and implicit method calls become `Class.f`).
+- **Same checks as Python.** Everything goes through the same `add_symbol`: name checks, secret scrubbing and size limits.
+- **Fallback.** If Tree-sitter is missing or fails on a file, the old line scan is used.
+- **Language detection.** The language now comes from the file extension when none is given (`compact_code` defaulted to `"python"`), and "C++"/"js"/"ts" are understood.
+
+**Results:**
+- **Tests:** 409 passed. 3 new:
+  - JavaScript: imports, an arrow function's calls, `this.count()` → `Cart.count`, the docstring and the signature;
+  - Java, C, C++ and TypeScript;
+  - the line-scan fallback.
+- **This repo's `app/static/app.js`** (4,106 tokens):
+  - line scan: 28 symbols, no call links, 190 tokens;
+  - Tree-sitter: 29 symbols, 51 call links, 394 tokens (9.6% of the file).
+  - The gain is accurate signatures, comments and the code graph, at about twice the size.
+
+**Limits:**
+- **Not counted as calls:** `new Cart()` in JavaScript, and calls through a local variable (`c.total()`).
+- **No names from includes:** C/C++ `#include` imports no names, so calls to functions declared in headers are not linked.
+- **Other grammars:** the language pack has many more, but only these 5 are wired in and tested.
 
 ---
 
