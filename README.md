@@ -182,6 +182,11 @@ Paging works like an operating system reclaiming memory:
 - **Direct reclaim:** if a new message still pushes the window past 80%, the graph compacts inside the turn.
 - **Working set:** the latest exchange is never paged out in the background.
 
+**Your chats.** When you leave a chat (*New chat*, or opening another one), whatever is still in its context window is saved to the vault first, so nothing you said is lost. If that fails, for example because the model is not running, you stay in the chat.
+- The side panel lists your saved chats, newest first: each one's title (the start of its first memory), how many memories it has, and when it was last used.
+- Click one to reopen it. Its latest memories are shown as *where it left off*, and anything older is paged back in when you ask about it.
+- Only chats whose key is in this computer's keyring are listed, since their memories are encrypted with it.
+
 ```bash
 ollama pull llama3.1:8b              # the chat model and the summarizer share it
 pip install -r requirements.txt
@@ -195,7 +200,9 @@ It is plain HTML, CSS and JavaScript (`app/static/`), with no build step and no 
 | `POST /api/chat` | Send a message. The reply is a stream of the behind-the-scenes steps as they happen, then the answer. |
 | `GET /api/state` | The chat, context meter, activity and vault. |
 | `POST /api/settings` | Change the context window, the trigger and background compaction. |
-| `POST /api/new` | Start a new chat. |
+| `POST /api/new` | Save the current chat to the vault and start a new one. |
+| `GET /api/sessions` | The chats that can be reopened (their key is in the local keyring). |
+| `POST /api/open` | Save the current chat, then reopen another one: `{"session_id": "..."}`. |
 
 The server only listens on `127.0.0.1` and only accepts same-origin JSON, so other websites cannot use it.
 
@@ -203,7 +210,7 @@ The server only listens on `127.0.0.1` and only accepts same-origin JSON, so oth
 
 The vault is the memory server in `server/amp_memory_server.py`. Its tools:
 - **Session tools, which need the session's key:** `store_memory`, `search_vault`, `page_context`, `list_session_memories` and `run_memory_code`.
-- **Admin tools, which need the admin token:** `list_all_memories` and `delete_memory`.
+- **Admin tools, which need the admin token:** `list_all_memories`, `list_sessions` and `delete_memory`.
 
 The chat app can reach it in two ways:
 
@@ -229,7 +236,7 @@ Over MCP, the chat app is not the only client. Anything that can reach the serve
 | `store_memory` | Scores the payload again (word rules plus the risk model) and keeps the higher of the caller's score and its own. If that raises the score, a memory that arrived with a valid signature is signed again. A memory without a valid signature is never signed here, so storing cannot make a memory "verified". |
 | `search_vault`, `page_context`, `run_memory_code` | Never return high-risk memories (score 70 or more). `page_context` drops them before the token budget, so they use none of it. |
 | Every session tool | Needs that session's key; a missing or wrong key is refused and logged. |
-| `delete_memory`, `list_all_memories` | Need the admin token. `list_all_memories` shows what exists (ID, session, time, risk score), never what it says. Every deletion and every refused call is written to `storage/amp_audit.log` with the time, the memory and session ID and the caller. |
+| `delete_memory`, `list_all_memories`, `list_sessions` | Need the admin token. `list_all_memories` and `list_sessions` show what exists (IDs, sessions, times, risk scores, counts), never what it says. Every deletion and every refused call is written to `storage/amp_audit.log` with the time, the memory and session ID and the caller. |
 
 **The local secrets** (`harness/local_keys.py`). They come from the environment, or else from private files (0600) that are created once:
 
