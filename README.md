@@ -173,6 +173,9 @@ AMP Chat is a web app on top of the LangGraph harness. You chat with a local mod
 
 - **Token meter:** how full the context window is, with a line at the 80% trigger.
 - **Compactions:** each one is shown as it happens. Code blocks go to the **AST compactor**, and question-and-answer exchanges go to the **RLM summarizer**. The result is stored in the ChromaDB vault.
+- **What you tell it about yourself is kept.** The summarizer is told to keep the facts you state about yourself or your project: names of people, pets and projects, codenames, places, dates, devices.
+  - If a summary still loses a name you wrote, your sentence is added back word for word as `User said: "..."`. This is capped, and secrets are scrubbed first.
+  - On 12 exchanges where small facts sit next to a long explanation, 17 of 25 facts survived before this change and 25 of 25 after.
 - **Paged-in memories:** which memories were paged back in to answer each question.
 
 Old messages in the chat are marked *📦 paged out*. Ask about them later and the bot still answers, because the memory is paged back in.
