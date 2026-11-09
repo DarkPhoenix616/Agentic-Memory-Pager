@@ -55,10 +55,11 @@ from harness.guardrails import (
     PageContextResult,
     HIGH_RISK_THRESHOLD,
     SandboxResult,
+    MemoryInfo,
     score_payload,
 )
 from harness.signing import sign_memory, verify_memory
-from harness.local_keys import admin_token
+from harness.local_keys import admin_token, session_key
 from harness.mcp_client import memory_server
 from harness.tool_guard import (
     EXECUTION_LEVELS,
@@ -128,23 +129,34 @@ class AMPState(TypedDict):
 # See harness/mcp_client.py. Tests replace these helpers with fakes.
 # ---------------------------------------------------------------------------
 
+# Every session tool sends the session's key from the local keyring
+# (harness/local_keys.py); the server encrypts and decrypts with it.
+
 def _mcp_store_memory(memory: UnifiedMemory) -> UnifiedMemory:
-    """Persist a memory to ChromaDB."""
-    return memory_server().store_memory(memory)
+    """Persist a memory to ChromaDB, encrypted with its session's key."""
+    return memory_server().store_memory(memory, session_key=session_key(memory.session_id))
 
 
 def _mcp_page_context(query: str, total_budget: int, session_id: str) -> PageContextResult:
     """Retrieve relevant memories within a token budget."""
-    return memory_server().page_context(query=query, total_budget=total_budget, session_id=session_id)
+    return memory_server().page_context(query=query, total_budget=total_budget, session_id=session_id,
+                                        session_key=session_key(session_id))
 
 
 def _mcp_search_vault(query: str, top_k: int, session_id: str) -> List[RetrievedMemory]:
-    """Semantic search across the vault."""
-    return memory_server().search_vault(query=query, top_k=top_k, session_id=session_id)
+    """Semantic search in this session's memories."""
+    return memory_server().search_vault(query=query, top_k=top_k, session_id=session_id,
+                                        session_key=session_key(session_id))
 
 
-def _mcp_list_all_memories() -> List[UnifiedMemory]:
-    """Fetch all memory records (admin tool: sends the admin token)."""
+def _mcp_list_session_memories(session_id: str) -> List[UnifiedMemory]:
+    """All of one session's memories, newest first, high-risk ones included (vault view, audit)."""
+    return memory_server().list_session_memories(session_id=session_id, session_key=session_key(session_id),
+                                                 include_high_risk=True)
+
+
+def _mcp_list_all_memories() -> List[MemoryInfo]:
+    """What is stored in every session, without content (admin tool: sends the admin token)."""
     return memory_server().list_all_memories(admin_token=admin_token())
 
 
@@ -155,7 +167,7 @@ def _mcp_delete_memory(memory_id: str) -> str:
 
 def _mcp_run_memory_code(code: str, session_id: str) -> SandboxResult:
     """Run Python over the session's memories in the sandbox."""
-    return memory_server().run_memory_code(code=code, session_id=session_id)
+    return memory_server().run_memory_code(code=code, session_id=session_id, session_key=session_key(session_id))
 
 
 # ---------------------------------------------------------------------------
@@ -828,11 +840,14 @@ def memory_code_node(state: AMPState) -> Dict[str, Any]:
 
 def memory_audit_node(state: AMPState) -> Dict[str, Any]:
     """
-    Validate all stored memories, delete schema-invalid records,
+    Validate this session's stored memories, delete schema-invalid records,
     and prune duplicate code memories (keep newest per file path).
+    Only this session: other sessions' memories are encrypted with keys this
+    session does not use.
     """
     logger.info("[MemoryAudit] Starting audit...")
-    all_memories: List[UnifiedMemory] = _mcp_list_all_memories()
+    all_memories: List[UnifiedMemory] = sorted(_mcp_list_session_memories(state["session_id"]),
+                                               key=lambda m: m.timestamp)     # oldest first: newest wins below
     deleted = 0
     seen_file_paths: Dict[str, str] = {}  # file_path → memory_id
 

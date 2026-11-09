@@ -89,7 +89,8 @@ def fake_rlm(system, user, schema):
 def vault(monkeypatch):
     vault = FakeVault()
     monkeypatch.setattr(amp, "_mcp_store_memory", vault.store)
-    monkeypatch.setattr(amp, "_mcp_list_all_memories", lambda: list(vault.memories))
+    monkeypatch.setattr(amp, "_mcp_list_session_memories", lambda session_id: sorted(
+        (m for m in vault.memories if m.session_id == session_id), key=lambda m: m.timestamp, reverse=True))
     monkeypatch.setattr(amp, "_mcp_page_context",
                         lambda query, total_budget, session_id: vault.page(query, total_budget, session_id))
     monkeypatch.setattr(amp, "_mcp_search_vault",

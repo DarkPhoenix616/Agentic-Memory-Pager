@@ -24,6 +24,7 @@ os.environ.pop("AMP_MCP_URL", None)     # tests choose the transport themselves
 os.environ["AMP_RISK_MODEL"] = "off"    # heuristic-only scores, as the existing tests expect
 os.environ["AMP_ADMIN_TOKEN"] = "test-admin-token"
 os.environ["AMP_AUDIT_LOG"] = os.path.join(tempfile.mkdtemp(prefix="amp-test-audit-"), "amp_audit.log")
+os.environ["AMP_SESSION_KEYS_FILE"] = os.path.join(tempfile.mkdtemp(prefix="amp-test-keys-"), ".amp_session_keys")
 
 
 class _StubChatClient:

@@ -1,22 +1,33 @@
 """
-harness/local_keys.py: the two local secrets shared by AMP Chat and the memory server
-====================================================================================
+harness/local_keys.py: the local secrets of AMP Chat and the memory server
+==========================================================================
     AMP_SIGNING_KEY   HMAC key that seals every memory (harness/signing.py)
     AMP_ADMIN_TOKEN   password for the admin-only vault tools
                       (delete_memory, list_all_memories)
+    session keys      one key per chat session; it encrypts that session's
+                      memories (server/session_crypto.py)
 
-Each one comes from its environment variable when that is set. Otherwise it is
-read from a private file under storage/, which is created once (owner-only,
-0600) the first time it is needed. Because the chat app and the memory server
-read the same files, they always agree on both values, also when the memory
-server runs as its own process (AMP_MCP_URL).
+The first two come from their environment variable when that is set. Otherwise
+they are read from a private file under storage/, which is created once
+(owner-only, 0600) the first time it is needed. Because the chat app and the
+memory server read the same files, they always agree on both values, also when
+the memory server runs as its own process (AMP_MCP_URL).
+
+Session keys live in the client's keyring, storage/.amp_session_keys (JSON,
+0600; AMP_SESSION_KEYS_FILE overrides the path). The memory server never reads
+it: a client sends the key of the session it works on with each call, and the
+server only keeps a fingerprint of it. Whoever does not hold a session's key
+cannot read or add to that session.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import secrets
-from typing import Tuple
+import tempfile
+import threading
+from typing import Dict, Tuple
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STORAGE_DIR = os.path.join(ROOT, "storage")
@@ -25,6 +36,9 @@ SIGNING_KEY_ENV = "AMP_SIGNING_KEY"
 SIGNING_KEY_FILE = os.path.join(STORAGE_DIR, ".amp_signing_key")
 ADMIN_TOKEN_ENV = "AMP_ADMIN_TOKEN"
 ADMIN_TOKEN_FILE = os.path.join(STORAGE_DIR, ".amp_admin_token")
+SESSION_KEYS_ENV = "AMP_SESSION_KEYS_FILE"
+SESSION_KEYS_FILE = os.path.join(STORAGE_DIR, ".amp_session_keys")
+_keyring_lock = threading.Lock()
 
 
 def _load_or_create(env_name: str, path: str) -> Tuple[str, str]:
@@ -75,3 +89,59 @@ def ensure_admin_token(path: str = ADMIN_TOKEN_FILE) -> str:
 def is_admin(token: str) -> bool:
     """True only for the right admin token (constant-time comparison)."""
     return bool(token) and secrets.compare_digest(str(token).encode("utf-8"), admin_token().encode("utf-8"))
+
+
+# ---------------------------------------------------------------------------
+# Session keyring
+# ---------------------------------------------------------------------------
+
+def keyring_path() -> str:
+    return os.environ.get(SESSION_KEYS_ENV) or SESSION_KEYS_FILE
+
+
+def _read_keyring(path: str) -> Dict[str, str]:
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except FileNotFoundError:
+        return {}
+    if not isinstance(data, dict):
+        raise RuntimeError(f"{path} is not a session keyring.")
+    return {str(k): str(v) for k, v in data.items()}
+
+
+def _write_keyring(path: str, keys: Dict[str, str]) -> None:
+    """Write the whole keyring atomically, owner-only."""
+    folder = os.path.dirname(path) or "."
+    os.makedirs(folder, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=".amp_session_keys.", dir=folder)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(keys, handle, indent=1, sort_keys=True)
+        os.replace(tmp, path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+
+
+def session_key(session_id: str, create: bool = True) -> str:
+    """This session's key from the keyring; a new random one is added if missing
+    (unless create=False, then "" is returned)."""
+    path = keyring_path()
+    with _keyring_lock:
+        keys = _read_keyring(path)
+        if session_id in keys:
+            return keys[session_id]
+        if not create:
+            return ""
+        keys[session_id] = secrets.token_hex(32)
+        _write_keyring(path, keys)
+        return keys[session_id]
+
+
+def known_sessions() -> Dict[str, str]:
+    """Every session ID in the keyring, with its key."""
+    with _keyring_lock:
+        return _read_keyring(keyring_path())

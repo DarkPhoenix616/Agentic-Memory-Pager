@@ -4,6 +4,7 @@ langchain-core
 langgraph
 litellm
 chromadb
+cryptography
 langfuse
 pytest
 black
