@@ -112,23 +112,29 @@ Modern AI coding agents (Claude Code, Cursor, Aider) suffer from **Context Rot**
 
 ```text
 agentic-memory-pager/
-├── docs/                   # Architecture diagrams and specifications
-├── server/                 # [Teammate 1] FastMCP Server & REPL Sandbox
-│   ├── mcp_server.py
-│   └── sandbox.py
+├── server/                     # The memory server (MCP) and the sandbox
+│   ├── amp_memory_server.py    # six MCP tools over ChromaDB, with server-side guards
+│   ├── backfill.py             # re-score / re-sign memories already in the vault
+│   ├── sandbox.py              # run_memory_code's checks and limits
+│   └── sandbox_runner.py       # the child process that runs the code
 ├── compactor/
-│   ├── ast_code/           # [Teammate 2] Tree-sitter / AST Code Extraction
-│   │   └── code_parser.py
-│   └── rlm_text/           # [Teammate 3] Recursive Language Model Pipeline
-│       └── recursive_summarizer.py
-├── harness/                # [Teammate 4] LangGraph State Machine & Guardrails
-│   ├── agent_loop.py
-│   ├── guardrails.py
-│   └── token_monitor.py
-├── storage/                # ChromaDB & SQLite database handlers
-│   └── memory_vault.py
-├── app/                    # AMP Chat: web UI (static/) + server.py
-│   └── app.py
+│   ├── ast_code/
+│   │   └── code_parser.py      # Python source -> structural skeleton (AST)
+│   └── rlm_text/
+│       └── recursive_summarizer.py   # long text -> fact map (split, map, merge)
+├── harness/
+│   ├── graph.py                # LangGraph state machine: 80% trigger, compaction, retrieval
+│   ├── guardrails.py           # schemas, Layer 1 screening, Layer 2 risk scoring
+│   ├── risk_model.py           # the model half of the risk score
+│   ├── signing.py              # HMAC signatures on memories
+│   ├── tool_guard.py           # Layer 4: tool-call allowlist and origin check
+│   ├── local_keys.py           # signing key and admin token, shared with the server
+│   ├── mcp_client.py           # reach the memory server in-process or over MCP
+│   ├── chat_model.py           # local Ollama chat model
+│   └── chat_session.py         # one chat, run through the graph
+├── app/                        # AMP Chat: web server + static UI
+├── tests/
+├── storage/                    # vault and local secrets (not in git)
 ├── requirements.txt
 └── README.md
 ```
@@ -194,7 +200,7 @@ The server only listens on `127.0.0.1` and only accepts same-origin JSON, so oth
 
 ### Memory over MCP
 
-The vault is the memory server in `server/amp_memory_server.py`. It has five tools: `store_memory`, `search_vault`, `page_context`, `list_all_memories` and `delete_memory`. The chat app can reach it in two ways:
+The vault is the memory server in `server/amp_memory_server.py`. It has six tools: `store_memory`, `search_vault`, `page_context`, `run_memory_code`, and the admin-only `list_all_memories` and `delete_memory`. The chat app can reach it in two ways:
 
 | Mode | How | When |
 |---|---|---|
@@ -207,6 +213,43 @@ Because the vault is a standard MCP server, other MCP clients can use the same m
 `claude mcp add --transport http amp-memory http://localhost:8001/mcp`
 
 The switch lives in `harness/mcp_client.py`. The graph's `_mcp_*` helpers call `memory_server()`, which returns the MCP client when `AMP_MCP_URL` is set, and the server module otherwise.
+
+### The server guards the vault by itself
+
+Over MCP, the chat app is not the only client. Anything that can reach the server could store or read memories, so the server checks everything itself and does not rely on the caller:
+
+| Tool | What the server does |
+|---|---|
+| `store_memory` | Scores the payload again (word rules plus the risk model) and keeps the higher of the caller's score and its own. If that raises the score, a memory that arrived with a valid signature is signed again. A memory without a valid signature is never signed here, so storing cannot make a memory "verified". |
+| `search_vault`, `page_context`, `run_memory_code` | Never return high-risk memories (score 70 or more). `page_context` drops them before the token budget, so they use none of it. |
+| `delete_memory`, `list_all_memories` | Need the admin token. Every deletion and every refused admin call is written to `storage/amp_audit.log` with the time, the memory and session ID and the caller. |
+
+**The two local secrets.** The chat app and the memory server read the same two values (`harness/local_keys.py`), from the environment or else from private files that are created once:
+
+| Secret | Env variable | File | Used for |
+|---|---|---|---|
+| Signing key | `AMP_SIGNING_KEY` | `storage/.amp_signing_key` | Sealing every memory (HMAC-SHA256). The server needs the same key to check and re-sign seals. |
+| Admin token | `AMP_ADMIN_TOKEN` | `storage/.amp_admin_token` | `delete_memory` and `list_all_memories`. The chat app's memory audit and vault view send it; the chat model never can. |
+
+Both files are in `.gitignore`. Changing the signing key makes existing memories unverified (READ_ONLY) until they are signed again.
+
+**The risk model** (`harness/risk_model.py`). By default the chat model is asked whether a memory gives orders to the AI that will read it, and P(yes) becomes a 0–100 score. Set `AMP_RISK_MODEL=llama-guard3:1b` to use Llama Guard 3 instead, or `AMP_RISK_MODEL=off` for word rules only. On 15 attacks and 111 normal memories (real summaries, code skeletons of this repo, the real vault), counting a memory as hidden at a score of 70 or more:
+
+| Scoring | Attacks hidden | Normal memories hidden |
+|---|---|---|
+| Word rules only | 2 / 15 | 2 / 111 |
+| + Llama Guard 3 (1B) | 10 / 15 | 15 / 111 |
+| + chat model (llama3.1:8b), the default | 12 / 15 | 2 / 111 |
+
+The 2 normal memories hidden in every row are skeletons of this repo's `graph.py` and `guardrails.py`, whose docstrings quote attack phrases; the word rules flag them, and the chat model adds no false alarm of its own. Llama Guard is trained for harmful content, and even with prompt-injection categories it flags plain design decisions ("Use FAISS for the vault because …") as attacks. The chat model is already loaded, so it needs no extra GPU memory; one check takes about 0.1–0.4 s and is cached.
+
+**Memories stored before risk scoring** have no score. The server scores them when they are read, so the filters apply to them too. To write the scores into the vault (and optionally sign unsigned memories), stop the app and the server, then:
+
+```bash
+python -m server.backfill                          # dry run: shows what would change
+python -m server.backfill --apply                  # write the scores
+python -m server.backfill --apply --sign-unsigned  # also sign memories that have no signature
+```
 
 ### Python over the memories (`run_memory_code`, the sixth tool)
 
@@ -246,6 +289,9 @@ The context window is small by default (3,072 tokens), so you can see paging aft
 | `AMP_MCP_URL` | not set (in-process) | Reach the memory server over MCP, e.g. `http://localhost:8001/mcp` |
 | `AMP_MCP_PORT` | `8001` | Port of the MCP memory server |
 | `AMP_CHROMA_PATH` | `storage/chroma_db` | Folder of the ChromaDB vault (tests use a temporary one) |
-| `AMP_SIGNING_KEY` | AMP Chat creates `storage/.amp_signing_key` | HMAC key for memory signing. Without one, memories are unverified (READ_ONLY) and Layer 4 blocks memory-shaped tool calls. |
+| `AMP_SIGNING_KEY` | `storage/.amp_signing_key` (created once) | HMAC key for memory signing, shared by the app and the memory server. Without one, memories are unverified (READ_ONLY) and Layer 4 blocks memory-shaped tool calls. |
+| `AMP_ADMIN_TOKEN` | `storage/.amp_admin_token` (created once) | Admin token for `delete_memory` and `list_all_memories` |
+| `AMP_RISK_MODEL` | the chat model | Model that scores memories for attacks: a model name, `llama-guard3:1b`, or `off` |
+| `AMP_AUDIT_LOG` | `storage/amp_audit.log` | Where deletions and refused admin calls are logged |
 
 The core is `harness/chat_session.py` (`ChatSession.ask()`). It has no UI code, so it can also be used from scripts and tests.
