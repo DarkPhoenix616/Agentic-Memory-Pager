@@ -1173,6 +1173,26 @@ class SandboxResult(BaseModel):
     memories_loaded: int = Field(default=0, ge=0, description="How many memories the code could see.")
 
 
+class MemoryInfo(BaseModel):
+    """
+    What the admin listing (MCP tool list_all_memories) shows about one stored
+    memory: that it exists, where it belongs and how risky it is, but not what
+    it says. Memory content is encrypted with its session's key, and only a
+    client holding that key can read it.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    memory_id: str = Field(..., max_length=64, description="The ChromaDB ID, e.g. mem_1a2b3c4d.")
+    session_id: str = Field(..., max_length=64)
+    memory_type: Literal["code", "text"]
+    compaction_source: Literal["ast", "rlm"]
+    timestamp: str = Field(..., max_length=64, description="When the memory was created (ISO 8601).")
+    risk_score: Optional[float] = Field(default=None, ge=0.0, le=100.0,
+                                        description="None for a row stored before risk scoring.")
+    encrypted: bool = Field(..., description="False only for an old row not yet encrypted (python -m server.backfill).")
+
+
 # ---------------------------------------------------------------------------
 # Model 5: TokenState
 # ---------------------------------------------------------------------------

@@ -114,7 +114,8 @@ Modern AI coding agents (Claude Code, Cursor, Aider) suffer from **Context Rot**
 agentic-memory-pager/
 ├── server/                     # The memory server (MCP) and the sandbox
 │   ├── amp_memory_server.py    # six MCP tools over ChromaDB, with server-side guards
-│   ├── backfill.py             # re-score / re-sign memories already in the vault
+│   ├── session_crypto.py       # per-session encryption of stored memories
+│   ├── backfill.py             # encrypt / re-score / re-sign memories already in the vault
 │   ├── sandbox.py              # run_memory_code's checks and limits
 │   └── sandbox_runner.py       # the child process that runs the code
 ├── compactor/
@@ -128,7 +129,7 @@ agentic-memory-pager/
 │   ├── risk_model.py           # the model half of the risk score
 │   ├── signing.py              # HMAC signatures on memories
 │   ├── tool_guard.py           # Layer 4: tool-call allowlist and origin check
-│   ├── local_keys.py           # signing key and admin token, shared with the server
+│   ├── local_keys.py           # signing key, admin token, session keyring
 │   ├── mcp_client.py           # reach the memory server in-process or over MCP
 │   ├── chat_model.py           # local Ollama chat model
 │   └── chat_session.py         # one chat, run through the graph
@@ -200,7 +201,11 @@ The server only listens on `127.0.0.1` and only accepts same-origin JSON, so oth
 
 ### Memory over MCP
 
-The vault is the memory server in `server/amp_memory_server.py`. It has six tools: `store_memory`, `search_vault`, `page_context`, `run_memory_code`, and the admin-only `list_all_memories` and `delete_memory`. The chat app can reach it in two ways:
+The vault is the memory server in `server/amp_memory_server.py`. Its tools:
+- **Session tools, which need the session's key:** `store_memory`, `search_vault`, `page_context`, `list_session_memories` and `run_memory_code`.
+- **Admin tools, which need the admin token:** `list_all_memories` and `delete_memory`.
+
+The chat app can reach it in two ways:
 
 | Mode | How | When |
 |---|---|---|
@@ -211,6 +216,7 @@ The page header shows which mode is active (*Memory: over MCP* or *Memory: in-pr
 
 Because the vault is a standard MCP server, other MCP clients can use the same memory. For example, Claude Code:
 `claude mcp add --transport http amp-memory http://localhost:8001/mcp`
+Such a client works on a session only with that session's key (see *Session keys and encryption* below).
 
 The switch lives in `harness/mcp_client.py`. The graph's `_mcp_*` helpers call `memory_server()`, which returns the MCP client when `AMP_MCP_URL` is set, and the server module otherwise.
 
@@ -222,16 +228,28 @@ Over MCP, the chat app is not the only client. Anything that can reach the serve
 |---|---|
 | `store_memory` | Scores the payload again (word rules plus the risk model) and keeps the higher of the caller's score and its own. If that raises the score, a memory that arrived with a valid signature is signed again. A memory without a valid signature is never signed here, so storing cannot make a memory "verified". |
 | `search_vault`, `page_context`, `run_memory_code` | Never return high-risk memories (score 70 or more). `page_context` drops them before the token budget, so they use none of it. |
-| `delete_memory`, `list_all_memories` | Need the admin token. Every deletion and every refused admin call is written to `storage/amp_audit.log` with the time, the memory and session ID and the caller. |
+| Every session tool | Needs that session's key; a missing or wrong key is refused and logged. |
+| `delete_memory`, `list_all_memories` | Need the admin token. `list_all_memories` shows what exists (ID, session, time, risk score), never what it says. Every deletion and every refused call is written to `storage/amp_audit.log` with the time, the memory and session ID and the caller. |
 
-**The two local secrets.** The chat app and the memory server read the same two values (`harness/local_keys.py`), from the environment or else from private files that are created once:
+**The local secrets** (`harness/local_keys.py`). They come from the environment, or else from private files (0600) that are created once:
 
 | Secret | Env variable | File | Used for |
 |---|---|---|---|
-| Signing key | `AMP_SIGNING_KEY` | `storage/.amp_signing_key` | Sealing every memory (HMAC-SHA256). The server needs the same key to check and re-sign seals. |
-| Admin token | `AMP_ADMIN_TOKEN` | `storage/.amp_admin_token` | `delete_memory` and `list_all_memories`. The chat app's memory audit and vault view send it; the chat model never can. |
+| Signing key | `AMP_SIGNING_KEY` | `storage/.amp_signing_key` | Sealing every memory (HMAC-SHA256). The app and the server read the same key, so the server can check and re-sign seals. |
+| Admin token | `AMP_ADMIN_TOKEN` | `storage/.amp_admin_token` | `delete_memory` and `list_all_memories`. The chat app's memory audit sends it; the chat model never can. |
+| Session keys | (`AMP_SESSION_KEYS_FILE` moves the file) | `storage/.amp_session_keys` | One key per chat session, kept by the client. The server never stores them. |
 
-Both files are in `.gitignore`. Changing the signing key makes existing memories unverified (READ_ONLY) until they are signed again.
+All three files are in `.gitignore`. Changing the signing key makes existing memories unverified (READ_ONLY) until they are signed again.
+
+### Session keys and encryption
+
+Every chat session's memories are encrypted with that session's own key, so one project can never read another's (`server/session_crypto.py`):
+
+- **The key.** Each session's key is 64 random hex characters, made by the chat app the first time the session stores a memory and kept in its keyring. Every session tool call sends it.
+- **Encryption.** From the key, HKDF-SHA256 derives an AES-256-GCM data key. Each memory's full JSON is encrypted with it, using a fresh nonce. The session ID and memory ID are bound in, so an encrypted memory copied to another row or session does not open.
+- **What the vault holds.** The search vector, the session ID, type, time, risk score, and a fingerprint of the key. The readable text is never stored: the server embeds it and keeps only the vector.
+- **Who can read.** Only a caller with the session's key. The first memory stored in a session fixes its key, and after that a wrong key is refused. The admin token can list and delete memories but cannot read them.
+- **Limits.** Search vectors are not encrypted (search needs them), so they hint at a memory's topic without holding its text. Whoever can read the keyring file can read its sessions.
 
 **The risk model** (`harness/risk_model.py`). By default the chat model is asked whether a memory gives orders to the AI that will read it, and P(yes) becomes a 0–100 score. Set `AMP_RISK_MODEL=llama-guard3:1b` to use Llama Guard 3 instead, or `AMP_RISK_MODEL=off` for word rules only. On 15 attacks and 111 normal memories (real summaries, code skeletons of this repo, the real vault), counting a memory as hidden at a score of 70 or more:
 
@@ -243,15 +261,20 @@ Both files are in `.gitignore`. Changing the signing key makes existing memories
 
 The 2 normal memories hidden in every row are skeletons of this repo's `graph.py` and `guardrails.py`, whose docstrings quote attack phrases; the word rules flag them, and the chat model adds no false alarm of its own. Llama Guard is trained for harmful content, and even with prompt-injection categories it flags plain design decisions ("Use FAISS for the vault because …") as attacks. The chat model is already loaded, so it needs no extra GPU memory; one check takes about 0.1–0.4 s and is cached.
 
-**Memories stored before risk scoring** have no score. The server scores them when they are read, so the filters apply to them too. To write the scores into the vault (and optionally sign unsigned memories), stop the app and the server, then:
+**Memories stored before encryption or risk scoring.** The server does not serve rows stored before encryption. `server/backfill.py` updates them:
+- it encrypts them with their session's key from the keyring, making a new key for a session that has none;
+- it scores them;
+- with `--sign-unsigned`, it also signs memories that have no signature.
+
+Stop the app and the server, then:
 
 ```bash
 python -m server.backfill                          # dry run: shows what would change
-python -m server.backfill --apply                  # write the scores
+python -m server.backfill --apply                  # encrypt plain rows and write the scores
 python -m server.backfill --apply --sign-unsigned  # also sign memories that have no signature
 ```
 
-### Python over the memories (`run_memory_code`, the sixth tool)
+### Python over the memories (`run_memory_code`)
 
 Some questions are easier to compute than to read: *the latest decision about the database*, *how many bugs were fixed*, *every constraint the user gave*. For these, the model can write a short program over all of the session's memories:
 
@@ -292,6 +315,7 @@ The context window is small by default (3,072 tokens), so you can see paging aft
 | `AMP_SIGNING_KEY` | `storage/.amp_signing_key` (created once) | HMAC key for memory signing, shared by the app and the memory server. Without one, memories are unverified (READ_ONLY) and Layer 4 blocks memory-shaped tool calls. |
 | `AMP_ADMIN_TOKEN` | `storage/.amp_admin_token` (created once) | Admin token for `delete_memory` and `list_all_memories` |
 | `AMP_RISK_MODEL` | the chat model | Model that scores memories for attacks: a model name, `llama-guard3:1b`, or `off` |
-| `AMP_AUDIT_LOG` | `storage/amp_audit.log` | Where deletions and refused admin calls are logged |
+| `AMP_AUDIT_LOG` | `storage/amp_audit.log` | Where deletions and refused calls are logged |
+| `AMP_SESSION_KEYS_FILE` | `storage/.amp_session_keys` | The chat app's keyring of session keys |
 
 The core is `harness/chat_session.py` (`ChatSession.ask()`). It has no UI code, so it can also be used from scripts and tests.
