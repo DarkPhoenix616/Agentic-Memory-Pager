@@ -56,6 +56,7 @@ from harness.guardrails import (
     HIGH_RISK_THRESHOLD,
     SandboxResult,
     MemoryInfo,
+    SessionInfo,
     score_payload,
 )
 from harness.signing import sign_memory, verify_memory
@@ -158,6 +159,11 @@ def _mcp_list_session_memories(session_id: str) -> List[UnifiedMemory]:
 def _mcp_list_all_memories() -> List[MemoryInfo]:
     """What is stored in every session, without content (admin tool: sends the admin token)."""
     return memory_server().list_all_memories(admin_token=admin_token())
+
+
+def _mcp_list_sessions() -> List[SessionInfo]:
+    """Every session in the vault, newest first, without content (admin tool: sends the admin token)."""
+    return memory_server().list_sessions(admin_token=admin_token())
 
 
 def _mcp_delete_memory(memory_id: str) -> str:

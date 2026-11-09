@@ -24,7 +24,7 @@ from harness.chat_model import ChatModelError, build_messages  # noqa: E402
 from harness.chat_session import (  # noqa: E402
     ChatSession, MessageTooLong, split_message, turn_to_chunks,
 )
-from harness.guardrails import PageContextResult, RetrievedMemory  # noqa: E402
+from harness.guardrails import PageContextResult, RetrievedMemory, SessionInfo  # noqa: E402
 
 LONG_REPLY = " ".join(f"word{i}" for i in range(220))
 
@@ -60,6 +60,18 @@ class FakeVault:
         self.memories = [m for m in self.memories if m.vector_embedding_id != memory_id]
         return f"Deleted {memory_id}"
 
+    def session_memories(self, session_id):
+        return sorted((m for m in self.memories if m.session_id == session_id),
+                      key=lambda m: m.timestamp, reverse=True)
+
+    def sessions(self):
+        by_id = {}
+        for m in self.memories:
+            by_id.setdefault(m.session_id, []).append(m.timestamp.isoformat())
+        infos = [SessionInfo(session_id=sid, memories=len(times), first_time=min(times), last_time=max(times),
+                             encrypted=True) for sid, times in by_id.items()]
+        return sorted(infos, key=lambda info: info.last_time, reverse=True)
+
 
 class FakeClient:
     """Stand-in for ollama.Client: records every chat call."""
@@ -89,8 +101,8 @@ def fake_rlm(system, user, schema):
 def vault(monkeypatch):
     vault = FakeVault()
     monkeypatch.setattr(amp, "_mcp_store_memory", vault.store)
-    monkeypatch.setattr(amp, "_mcp_list_session_memories", lambda session_id: sorted(
-        (m for m in vault.memories if m.session_id == session_id), key=lambda m: m.timestamp, reverse=True))
+    monkeypatch.setattr(amp, "_mcp_list_session_memories", vault.session_memories)
+    monkeypatch.setattr(amp, "_mcp_list_sessions", vault.sessions)
     monkeypatch.setattr(amp, "_mcp_page_context",
                         lambda query, total_budget, session_id: vault.page(query, total_budget, session_id))
     monkeypatch.setattr(amp, "_mcp_search_vault",
@@ -288,3 +300,69 @@ def test_model_status_reports_what_is_missing(client, monkeypatch):
     monkeypatch.setattr(chat_model, "_client", unreachable)
     ready, message = chat_model.model_status()
     assert not ready and "ollama serve" in message
+
+
+# ---------------------------------------------------------------------------
+# Leaving a chat and reopening it
+# ---------------------------------------------------------------------------
+
+def test_leaving_a_chat_saves_everything_still_in_its_window(vault, client):
+    chat = session(token_limit=4000)                  # big window: nothing is compacted while chatting
+    chat.ask("My cat is called Pixel.")
+    chat.ask("And my codename is ZEBRAFISH.")
+    assert chat.compactions == 0 and chat.chunks
+    assert chat.save_all() is True
+    assert chat.chunks == [] and chat.compactions == 2 and len(vault.memories) == 2
+    assert all(chat.message_status(e["id"]) == "paged out" for e in chat.transcript)
+    titles = [e.title for e in chat.events if e.kind == "compaction"]
+    assert len(titles) == 2 and all("before leaving the chat" in t for t in titles)
+
+
+def test_a_failed_save_keeps_the_chat_in_the_window(vault, client, monkeypatch):
+    chat = session(token_limit=4000)
+    chat.ask("My cat is called Pixel.")
+
+    def broken(state):
+        raise ConnectionError("Ollama is not running")
+    monkeypatch.setattr(amp, "rlm_summarizer_node", broken)
+    assert chat.save_all() is False
+    assert chat.chunks and vault.memories == []
+    assert any(e.kind == "error" and "before leaving the chat" in e.title for e in chat.events)
+
+
+def test_a_reopened_chat_shows_where_it_left_off(vault, client):
+    first = session(session_id="chat-old", token_limit=4000)
+    for n in range(7):
+        first.ask(f"Fact number {n}: remember topic {n}.")
+    first.save_all()
+
+    again = ChatSession(session_id="chat-old")
+    notes = again.resume(limit=5)
+    assert len(notes) == 5 and again.resumed == notes
+    assert "Fact number 6" in notes[0]["text"] and "Fact number 2" in notes[-1]["text"]   # newest first
+    assert len(again.vault()) == 7 and again.transcript == []
+    assert again.events[-1].kind == "resume" and "7 memories" in again.events[-1].title
+    again.ask("What was fact number 1?")
+    assert "Fact number" in client.calls[-1][0]["content"]          # its memories are paged in again
+
+
+def test_only_chats_with_a_key_on_this_computer_are_listed(vault, client):
+    from harness.chat_session import list_chats
+    from harness.local_keys import session_key
+    for sid in ("chat-mine", "chat-theirs"):
+        chat = session(session_id=sid, token_limit=4000)
+        chat.ask(f"User: Hello from {sid}, my dog is Bruno.")
+        chat.save_all()
+    session_key("chat-mine")                         # only this chat's key is in the local keyring
+    chats = list_chats(current_id="chat-mine")
+    assert [c["session_id"] for c in chats] == ["chat-mine"]
+    assert chats[0]["current"] and chats[0]["memories"] == 1
+    assert "Hello from chat-mine" in chats[0]["title"]
+
+
+def test_a_chat_title_is_the_start_of_its_oldest_memory():
+    from harness.chat_session import TITLE_CHARS, _title
+    assert _title({"text": "User: Hi, my name is Akshay.\n\nAssistant: Nice to meet you."}) == \
+        "Hi, my name is Akshay. Assistant: Nice to meet you."
+    long = _title({"text": "The user asked " + "about many things " * 20})
+    assert len(long) <= TITLE_CHARS and long.endswith("…")

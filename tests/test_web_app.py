@@ -153,6 +153,57 @@ def test_new_chat_starts_empty_with_the_same_settings(web):
 
 
 # ---------------------------------------------------------------------------
+# Old chats: saved when left, listed, reopened
+# ---------------------------------------------------------------------------
+
+def test_a_chat_is_saved_when_left_and_can_be_reopened(web):
+    from harness.local_keys import session_key
+    chat(web, "My cat is called Pixel.")
+    old_id = web.get("/api/state").json()["session_id"]
+    session_key(old_id)                                   # (the fake vault does not make keys itself)
+    state = web.post("/api/new", json={}).json()
+    assert state["session_id"] != old_id
+
+    chats = web.get("/api/sessions").json()["chats"]
+    saved = next(c for c in chats if c["session_id"] == old_id)
+    assert saved["memories"] == 1 and not saved["current"] and "Pixel" in saved["title"]
+
+    state = web.post("/api/open", json={"session_id": old_id}).json()
+    assert state["session_id"] == old_id and state["transcript"] == []
+    assert state["resumed"] and "Pixel" in state["resumed"][0]["text"]
+    assert next(c for c in web.get("/api/sessions").json()["chats"] if c["session_id"] == old_id)["current"]
+
+
+def test_only_known_chats_can_be_opened(web):
+    assert web.post("/api/open", json={"session_id": "chat-nobody"}).status_code == 404
+    assert web.post("/api/open", json={"session_id": "../etc/passwd"}).status_code == 400
+    assert web.post("/api/open", json={"session_id": "x"}, headers={"origin": "https://evil.example"}).status_code == 403
+
+
+def test_no_switching_during_an_answer(web):
+    assert web.amp.turn_lock.acquire()
+    try:
+        assert web.post("/api/open", json={"session_id": "chat-a"}).status_code == 409
+        assert web.post("/api/new", json={}).status_code == 409
+    finally:
+        web.amp.turn_lock.release()
+
+
+def test_a_chat_that_cannot_be_saved_stays_open(web, monkeypatch):
+    from harness import graph as amp
+    chat(web, "My cat is called Pixel.")
+    before = web.get("/api/state").json()
+
+    def broken(state):
+        raise ConnectionError("Ollama is not running")
+    monkeypatch.setattr(amp, "rlm_summarizer_node", broken)
+    response = web.post("/api/new", json={})
+    assert response.status_code == 503 and "stays open" in response.json()["error"]
+    after = web.get("/api/state").json()
+    assert after["session_id"] == before["session_id"] and after["context"]["chunks"] == before["context"]["chunks"]
+
+
+# ---------------------------------------------------------------------------
 # Local-only protections
 # ---------------------------------------------------------------------------
 

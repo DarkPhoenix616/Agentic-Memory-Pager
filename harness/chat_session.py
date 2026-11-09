@@ -15,6 +15,13 @@ Paging out works like an operating system reclaiming memory:
     direct reclaim      if a new message still pushes the context past the
                         trigger, the graph compacts inside the turn.
 
+Leaving a chat (a new chat, or opening another one) first saves what is still
+in the context window: save_all() pages every chunk out to the vault, so the
+chat can be reopened later. ChatSession(session_id=...).resume() reopens a
+chat: its vault is there again, and the latest memories are shown as where
+the chat left off. Only chats whose key is in the local keyring can be
+reopened (their memories are encrypted with it); list_chats() lists them.
+
 Between turns it keeps:
     chunks      the active context (the "RAM"): recent messages, one chunk per
                 prose part or code block, oldest first
@@ -39,10 +46,13 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 from harness import graph as amp
 from harness.chat_model import chat_model_name
+from harness.local_keys import known_sessions
 
 DEFAULT_TOKEN_LIMIT = 3072      # small on purpose, so compaction is visible after a few turns
 MAX_TOKEN_LIMIT = 6144          # the chat model runs with an 8,192-token window
 DEFAULT_THRESHOLD = 0.80
+RESUME_NOTES = 5                # memories shown as "where we left off" when a chat is reopened
+TITLE_CHARS = 70
 PAGE_BUDGET = 1000              # same budget llm_reasoning_node uses
 RECURSION_LIMIT = 200           # each compaction is 4 graph steps
 RECLAIM_MARGIN = 0.10           # background compaction stops 10% of the window below the trigger
@@ -186,6 +196,7 @@ class ChatSession:
         self.tokens_evicted = 0
         self.tokens_stored = 0
         self.last_paged: List[Dict[str, Any]] = []
+        self.resumed: List[Dict[str, Any]] = []      # the latest memories, when this is a reopened chat
         self.background = True          # compact after the reply instead of before the next one
         self._reclaimer: Optional[threading.Thread] = None
         self._latest_ids: set = set()   # the last turn's messages: never paged out in the background
@@ -323,20 +334,44 @@ class ChatSession:
         while self.chunks and self.context_tokens > self.reclaim_target:
             if self._latest_ids & set(self.chunks[0].get("msg_ids", ())):
                 break
-            state = self._state("")
-            state["messages"] = []
-            evicted = self.chunks[0]
-            node = amp.ast_compactor_node if evicted.get("type") == "code" else amp.rlm_summarizer_node
-            started = time.monotonic()
-            try:
-                update = node(state)
-            except Exception as exc:
-                emit(Event(turn, "error", "Background compaction failed", str(exc)))
+            if not self._compact_oldest(turn, emit, "in the background"):
                 return
-            if "context_chunks" not in update:
-                return
-            self.chunks = list(update["context_chunks"])
-            self._record_compaction(turn, evicted, time.monotonic() - started, emit, background=True)
+
+    def _compact_oldest(self, turn: int, emit, when: str) -> bool:
+        """Page the oldest chunk out to the vault; False if that failed."""
+        state = self._state("")
+        state["messages"] = []
+        evicted = self.chunks[0]
+        node = amp.ast_compactor_node if evicted.get("type") == "code" else amp.rlm_summarizer_node
+        started = time.monotonic()
+        try:
+            update = node(state)
+        except Exception as exc:
+            emit(Event(turn, "error", f"Compaction {when} failed", str(exc)))
+            return False
+        if "context_chunks" not in update:
+            return False
+        self.chunks = list(update["context_chunks"])
+        self._record_compaction(turn, evicted, time.monotonic() - started, emit, when=when)
+        return True
+
+    def save_all(self, on_event: Optional[Callable[[Event], None]] = None) -> bool:
+        """Page every chunk still in the context window out to the vault, so
+        nothing is lost when the user leaves this chat. True if all were saved."""
+        self.wait_for_reclaim()
+        emit = self._emitter(on_event)
+        while self.chunks:
+            if not self._compact_oldest(self.turn, emit, "before leaving the chat"):
+                return False
+        return True
+
+    def resume(self, limit: int = RESUME_NOTES) -> List[Dict[str, Any]]:
+        """Reopen this chat: keep its latest memories as "where we left off"."""
+        memories = amp._mcp_list_session_memories(self.session_id)       # newest first
+        self.resumed = [_memory_view(m) for m in memories[:limit]]
+        self.events.append(Event(0, "resume", f"Reopened this chat: {len(memories)} "
+                                 f"memor{'y' if len(memories) == 1 else 'ies'} in its vault", ""))
+        return self.resumed
 
     # -- behind the scenes ----------------------------------------------------
 
@@ -360,7 +395,7 @@ class ChatSession:
             engine = "AST code compactor" if kind == "code" else "RLM text summarizer"
             emit(Event(self.turn, "dispatch", f"Oldest chunk is {kind} → {engine}", "", seconds))
         elif node in ("ast_compactor_node", "rlm_summarizer_node") and "context_chunks" in update:
-            self._record_compaction(self.turn, live[0] if live else {}, seconds, emit, background=False)
+            self._record_compaction(self.turn, live[0] if live else {}, seconds, emit, when="before answering")
             return list(update["context_chunks"])
         elif node == "llm_reasoning_node":
             if update.get("code_request"):
@@ -378,7 +413,7 @@ class ChatSession:
             emit(Event(self.turn, "search", "Vault search results", str(update["messages"][-1].content), seconds))
         return live
 
-    def _record_compaction(self, turn: int, evicted: dict, seconds: float, emit, background: bool) -> None:
+    def _record_compaction(self, turn: int, evicted: dict, seconds: float, emit, when: str) -> None:
         raw = amp._count_tokens(evicted.get("content", ""))
         stored = self.vault()
         view = stored[0] if stored else {"engine": "?", "text": "", "tokens": 0, "label": ""}
@@ -391,10 +426,10 @@ class ChatSession:
             what = f"a {evicted.get('language') or ''} code block from the {evicted.get('role', 'user')}"
         else:
             what = "a text chunk"
-        when = "in the background" if background else "before answering"
         emit(Event(turn, "compaction",
                    f"{view['engine']}: paged out {what} {when}, {raw:,} → {view['tokens']:,} tokens",
-                   view["text"], seconds, {"memory": view, "evicted": evicted, "background": background}))
+                   view["text"], seconds, {"memory": view, "evicted": evicted,
+                                           "background": when == "in the background"}))
 
     def _record_page_in(self, text: str, emit) -> None:
         """Show which memories llm_reasoning_node paged in for this turn (same query and budget)."""
@@ -409,3 +444,30 @@ class ChatSession:
                        f"Paged in {len(self.last_paged)} memor{'y' if len(self.last_paged) == 1 else 'ies'} "
                        f"({paged.tokens_used:,} tokens) for this answer", "", 0.0,
                        {"memories": self.last_paged}))
+
+
+# ---------------------------------------------------------------------------
+# Chats that can be reopened
+# ---------------------------------------------------------------------------
+
+def _title(view: Dict[str, Any]) -> str:
+    """A short title for a chat: the start of its oldest memory."""
+    text = re.sub(r"^\s*(user|human)\s*:\s*", "", view.get("text", ""), flags=re.IGNORECASE)
+    text = " ".join(text.split())
+    return text if len(text) <= TITLE_CHARS else text[:TITLE_CHARS - 1].rstrip() + "…"
+
+
+def list_chats(current_id: str = "") -> List[Dict[str, Any]]:
+    """The chats this computer can reopen, most recently used first: every
+    session in the vault whose key is in the local keyring. Each has its ID, a
+    title, how many memories it has and when it was last used."""
+    keys = known_sessions()
+    chats = []
+    for info in amp._mcp_list_sessions():
+        if info.session_id not in keys:
+            continue                                   # another client's chat: cannot be read here
+        memories = amp._mcp_list_session_memories(info.session_id)     # newest first
+        chats.append({"session_id": info.session_id, "memories": info.memories,
+                      "last_time": info.last_time, "current": info.session_id == current_id,
+                      "title": _title(_memory_view(memories[-1])) if memories else ""})
+    return chats
