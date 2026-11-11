@@ -2,12 +2,16 @@
 harness/mcp_client.py - The memory server, in-process or over MCP
 =================================================================
     memory_server() -> an object with the memory server's six tools:
-        store_memory(memory)                          -> UnifiedMemory
-        search_vault(query, top_k, session_id)        -> List[RetrievedMemory]
-        page_context(query, total_budget, session_id) -> PageContextResult
-        list_all_memories()                           -> List[UnifiedMemory]
-        delete_memory(memory_id)                      -> str
-        run_memory_code(code, session_id, timeout)    -> SandboxResult
+        store_memory(memory, session_key)                           -> UnifiedMemory
+        search_vault(query, top_k, session_id, session_key)         -> List[RetrievedMemory]
+        page_context(query, total_budget, session_id, session_key)  -> PageContextResult
+        list_session_memories(session_id, session_key, ...)         -> List[UnifiedMemory]
+        run_memory_code(code, session_id, timeout, session_key)     -> SandboxResult
+        list_all_memories(admin_token)                              -> List[MemoryInfo]   (admin only)
+        list_sessions(admin_token)                                  -> List[SessionInfo]  (admin only)
+        delete_memory(memory_id, admin_token)                       -> str                (admin only)
+
+Every session tool needs that session's key; memories are stored encrypted with it.
 
 Two ways to reach the server:
 
@@ -29,7 +33,7 @@ import os
 import threading
 from typing import Any, Dict, List, Optional
 
-from harness.guardrails import PageContextResult, RetrievedMemory, SandboxResult, UnifiedMemory
+from harness.guardrails import MemoryInfo, PageContextResult, RetrievedMemory, SandboxResult, SessionInfo, UnifiedMemory
 
 MCP_URL_ENV = "AMP_MCP_URL"
 CALL_TIMEOUT = 60.0
@@ -62,26 +66,44 @@ class MCPMemoryClient:
 
     # -- the six tools ---------------------------------------------------------
 
-    def store_memory(self, memory: UnifiedMemory) -> UnifiedMemory:
-        return UnifiedMemory.model_validate(self._call("store_memory", {"memory": memory.model_dump(mode="json")}))
+    def store_memory(self, memory: UnifiedMemory, session_key: str = "") -> UnifiedMemory:
+        return UnifiedMemory.model_validate(self._call(
+            "store_memory", {"memory": memory.model_dump(mode="json"), "session_key": session_key}))
 
-    def search_vault(self, query: str, top_k: int = 5, session_id: str = "") -> List[RetrievedMemory]:
-        data = self._call("search_vault", {"query": query, "top_k": top_k, "session_id": session_id})
+    def search_vault(self, query: str, top_k: int = 5, session_id: str = "",
+                     session_key: str = "") -> List[RetrievedMemory]:
+        data = self._call("search_vault", {"query": query, "top_k": top_k, "session_id": session_id,
+                                           "session_key": session_key})
         return [RetrievedMemory.model_validate(item) for item in data.get("result", [])]
 
-    def page_context(self, query: str, total_budget: int = 1000, session_id: str = "") -> PageContextResult:
+    def page_context(self, query: str, total_budget: int = 1000, session_id: str = "",
+                     session_key: str = "") -> PageContextResult:
         return PageContextResult.model_validate(self._call(
-            "page_context", {"query": query, "total_budget": total_budget, "session_id": session_id}))
+            "page_context", {"query": query, "total_budget": total_budget, "session_id": session_id,
+                             "session_key": session_key}))
 
-    def list_all_memories(self) -> List[UnifiedMemory]:
-        return [UnifiedMemory.model_validate(item) for item in self._call("list_all_memories", {}).get("result", [])]
+    def list_session_memories(self, session_id: str, session_key: str = "", limit: int = 0,
+                              include_high_risk: bool = False) -> List[UnifiedMemory]:
+        data = self._call("list_session_memories", {"session_id": session_id, "session_key": session_key,
+                                                    "limit": limit, "include_high_risk": include_high_risk})
+        return [UnifiedMemory.model_validate(item) for item in data.get("result", [])]
 
-    def delete_memory(self, memory_id: str) -> str:
-        return str(self._call("delete_memory", {"memory_id": memory_id}).get("result", ""))
+    def list_all_memories(self, admin_token: str = "") -> List[MemoryInfo]:
+        data = self._call("list_all_memories", {"admin_token": admin_token})
+        return [MemoryInfo.model_validate(item) for item in data.get("result", [])]
 
-    def run_memory_code(self, code: str, session_id: str = "", timeout: int = 5) -> SandboxResult:
+    def list_sessions(self, admin_token: str = "") -> List[SessionInfo]:
+        data = self._call("list_sessions", {"admin_token": admin_token})
+        return [SessionInfo.model_validate(item) for item in data.get("result", [])]
+
+    def delete_memory(self, memory_id: str, admin_token: str = "") -> str:
+        return str(self._call("delete_memory", {"memory_id": memory_id, "admin_token": admin_token}).get("result", ""))
+
+    def run_memory_code(self, code: str, session_id: str = "", timeout: int = 5,
+                        session_key: str = "") -> SandboxResult:
         return SandboxResult.model_validate(self._call(
-            "run_memory_code", {"code": code, "session_id": session_id, "timeout": timeout}))
+            "run_memory_code", {"code": code, "session_id": session_id, "timeout": timeout,
+                                "session_key": session_key}))
 
     def ping(self) -> None:
         """Raise MCPError if the server cannot be reached."""

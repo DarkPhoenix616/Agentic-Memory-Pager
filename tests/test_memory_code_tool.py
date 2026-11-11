@@ -20,6 +20,7 @@ from langchain_core.messages import AIMessage, HumanMessage  # noqa: E402
 from harness import chat_model  # noqa: E402
 from harness import graph  # noqa: E402
 from harness.guardrails import PageContextResult, SandboxResult, TextMemorySchema, UnifiedMemory  # noqa: E402
+from harness.local_keys import session_key  # noqa: E402
 from harness.tool_guard import parse_tool_calls, validate_tool_call_origin  # noqa: E402
 
 CODE_REPLY = ("Let me check the vault.\nTOOL: run_memory_code\n```python\n"
@@ -61,7 +62,7 @@ def test_code_shaped_by_an_untrusted_memory_is_rejected():
 # ---------------------------------------------------------------------------
 
 def store(server, session, summary):
-    server.store_memory(UnifiedMemory(
+    server.store_memory(session_key=session_key(session), memory=UnifiedMemory(
         session_id=session, memory_type="text", compaction_source="rlm", raw_token_count=6,
         text_payload=TextMemorySchema(chunk_index=0, total_chunks=1, timeframe="1 message",
                                       factual_summary=summary, original_token_count=6,
@@ -74,25 +75,27 @@ def test_the_server_tool_runs_code_over_one_sessions_memories():
     store(server, "code-a", "Switched the database to MongoDB.")
     store(server, "code-b", "Session b uses Redis as its database.")
 
-    result = server.run_memory_code(
-        "db = [m for m in memories if 'database' in m['text'].lower()]\n"
-        "print(len(memories), max(db, key=lambda m: m['time'])['text'])\n"
-        "print(memories[0]['decisions'])", session_id="code-a")
+    def run(code, **kw):
+        return server.run_memory_code(code, session_id="code-a", session_key=session_key("code-a"), **kw)
+
+    result = run("db = [m for m in memories if 'database' in m['text'].lower()]\n"
+                 "print(len(memories), max(db, key=lambda m: m['time'])['text'])\n"
+                 "print(memories[0]['decisions'])")
     assert isinstance(result, SandboxResult) and result.ok and result.memories_loaded == 2
     assert result.output == "2 Switched the database to MongoDB.\n['We use PostgreSQL for the database.']\n"
 
     # a placeholder or a re-typed copy at the top is dropped, so the code reads the real list
-    retyped = server.run_memory_code("memories = [{'text': 'made up'},\n            {'text': 'also made up'}, {}]\n"
-                                     "print(len(memories))", session_id="code-a")
+    retyped = run("memories = [{'text': 'made up'},\n            {'text': 'also made up'}, {}]\n"
+                  "print(len(memories))")
     assert retyped.ok and retyped.output == "2\n"
-    assert server.run_memory_code("memories = [...]  # loaded\nprint(len(memories))", session_id="code-a").output == "2\n"
-    looped = server.run_memory_code("for memories in [[1]]: print(memories)", session_id="code-a")
+    assert run("memories = [...]  # loaded\nprint(len(memories))").output == "2\n"
+    looped = run("for memories in [[1]]: print(memories)")
     assert not looped.ok and "already loaded" in looped.error
-    assert server.run_memory_code("n = len([m for m in memories])\nprint(n)", session_id="code-a").output == "2\n"
+    assert run("n = len([m for m in memories])\nprint(n)").output == "2\n"
 
-    blocked = server.run_memory_code("import os", session_id="code-a")
+    blocked = run("import os")
     assert not blocked.ok and blocked.error.startswith("Blocked:")
-    slow = server.run_memory_code("while True: pass", session_id="code-a", timeout=0)
+    slow = run("while True: pass", timeout=0)
     assert slow.error == "Timed out after 1 seconds"                # timeout is clamped to 1..10
 
 
@@ -183,7 +186,7 @@ def test_the_chat_session_shows_the_code_steps(monkeypatch):
     client = FakeClient(reply=lambda messages: next(replies))
     monkeypatch.setattr(chat_model, "_client", lambda host: client)
     monkeypatch.setattr(graph, "_mcp_page_context", lambda **kw: PageContextResult(total_budget=1000))
-    monkeypatch.setattr(graph, "_mcp_list_all_memories", lambda: [])
+    monkeypatch.setattr(graph, "_mcp_list_session_memories", lambda session_id: [])
     monkeypatch.setattr(graph, "_mcp_run_memory_code", lambda code, session_id: SandboxResult(
         ok=True, output="Switched the database to MongoDB.", memories_loaded=2))
 

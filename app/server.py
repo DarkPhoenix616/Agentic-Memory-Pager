@@ -14,6 +14,11 @@ Serves the web UI (app/static/) and a small JSON API around one ChatSession:
                          compaction, memories paged in, reply), then "done" or "error".
     POST /api/settings   {"token_limit": int, "threshold": float, "background": bool}
     POST /api/new        start a new chat
+    GET  /api/sessions   the chats that can be reopened (their key is in the local keyring)
+    POST /api/open       {"session_id": "..."} reopen one of them
+
+Leaving a chat (new or open) first saves what is still in its context window
+to the vault; if that fails, the app stays on the current chat.
 
 Local only: binds to 127.0.0.1, accepts only localhost Host headers (no DNS
 rebinding), and POST requests must be JSON from the same origin, so other
@@ -26,6 +31,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import sys
 import threading
 from typing import Any, Dict, Optional
@@ -44,16 +50,18 @@ from starlette.routing import Mount, Route  # noqa: E402
 from starlette.staticfiles import StaticFiles  # noqa: E402
 
 from harness.chat_model import ChatModelError, chat_model_name, model_status  # noqa: E402
+from harness.local_keys import ensure_signing_key  # noqa: E402
 from harness.mcp_client import MCP_URL_ENV, MCPError, memory_server, vault_mode  # noqa: E402
 from harness.chat_session import (  # noqa: E402
-    DEFAULT_THRESHOLD, DEFAULT_TOKEN_LIMIT, MAX_TOKEN_LIMIT, ChatSession, Event, MessageTooLong,
+    DEFAULT_THRESHOLD, DEFAULT_TOKEN_LIMIT, MAX_TOKEN_LIMIT, ChatSession, Event, MessageTooLong, list_chats,
 )
+from harness.local_keys import known_sessions  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
-SIGNING_KEY_FILE = os.path.join(ROOT, "storage", ".amp_signing_key")
 LOCAL_HOSTS = {"127.0.0.1", "localhost"}
+SESSION_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")      # same rule as UnifiedMemory.session_id
 MIN_TOKEN_LIMIT = 1024
 MAX_EVENTS = 300            # most recent activity entries sent to the browser
 
@@ -85,6 +93,7 @@ def state_view(session: ChatSession) -> Dict[str, Any]:
                   "tokens_stored": session.tokens_stored},
         "transcript": [dict(entry, status=session.message_status(entry["id"])) for entry in session.transcript],
         "last_paged": session.last_paged,
+        "resumed": session.resumed,
         "events": [event_view(e) for e in session.events[-MAX_EVENTS:]],
         "vault": session.vault(),
     }
@@ -102,18 +111,42 @@ class ChatApp:
         self.turn_lock = threading.Lock()
         self.session = self._new_session(DEFAULT_TOKEN_LIMIT, DEFAULT_THRESHOLD, True)
 
-    def _new_session(self, token_limit: int, threshold: float, background: bool) -> ChatSession:
+    def _new_session(self, token_limit: int, threshold: float, background: bool,
+                     session_id: Optional[str] = None) -> ChatSession:
         if self._graph is None:
             from harness.graph import create_amp_graph
             self._graph = create_amp_graph()
-        session = ChatSession(token_limit=token_limit, threshold=threshold, graph=self._graph)
+        session = ChatSession(session_id=session_id, token_limit=token_limit, threshold=threshold,
+                              graph=self._graph)
         session.background = background
         return session
 
-    def reset(self) -> None:
+    def _leave(self) -> ChatSession:
+        """Save what is still in the current chat's context window to the vault."""
         old = self.session
-        old.wait_for_reclaim()
+        if not old.save_all():
+            raise SaveFailed("Could not save this chat to the vault (see Activity), so it stays open. "
+                             "Check that the local model is running and try again.")
+        return old
+
+    def reset(self) -> None:
+        old = self._leave()
         self.session = self._new_session(old.token_limit, old.threshold, old.background)
+
+    def open(self, session_id: str) -> None:
+        """Reopen a chat whose key is in the local keyring."""
+        if session_id == self.session.session_id:
+            return
+        if session_id not in known_sessions():
+            raise KeyError(session_id)
+        old = self._leave()
+        session = self._new_session(old.token_limit, old.threshold, old.background, session_id=session_id)
+        session.resume()
+        self.session = session
+
+
+class SaveFailed(RuntimeError):
+    """The current chat could not be saved, so the app did not leave it."""
 
 
 def vault_status() -> Dict[str, Any]:
@@ -193,6 +226,33 @@ def create_app(graph: Any = None) -> Starlette:
             return _bad_request("Wait for the current answer to finish.", 409)
         try:
             await asyncio.to_thread(chat.reset)
+        except (SaveFailed, MCPError) as exc:
+            return _bad_request(str(exc), 503)
+        finally:
+            chat.turn_lock.release()
+        return JSONResponse(await asyncio.to_thread(state_view, chat.session))
+
+    async def sessions(request: Request):
+        try:
+            chats = await asyncio.to_thread(list_chats, chat.session.session_id)
+        except MCPError as exc:
+            return _bad_request(str(exc), 503)
+        return JSONResponse({"chats": chats})
+
+    async def open_chat(request: Request):
+        if (error := _check_post(request)) is not None:
+            return error
+        session_id = str((await _json_body(request)).get("session_id", ""))
+        if not SESSION_ID_RE.match(session_id):
+            return _bad_request("That is not a chat ID.")
+        if not chat.turn_lock.acquire(blocking=False):
+            return _bad_request("Wait for the current answer to finish.", 409)
+        try:
+            await asyncio.to_thread(chat.open, session_id)
+        except KeyError:
+            return _bad_request("No such chat on this computer (its key is not in the local keyring).", 404)
+        except (SaveFailed, MCPError) as exc:
+            return _bad_request(str(exc), 503)
         finally:
             chat.turn_lock.release()
         return JSONResponse(await asyncio.to_thread(state_view, chat.session))
@@ -243,6 +303,8 @@ def create_app(graph: Any = None) -> Starlette:
         Route("/api/state", state),
         Route("/api/settings", settings, methods=["POST"]),
         Route("/api/new", new_chat, methods=["POST"]),
+        Route("/api/sessions", sessions),
+        Route("/api/open", open_chat, methods=["POST"]),
         Route("/api/chat", send, methods=["POST"]),
         Mount("/static", StaticFiles(directory=STATIC_DIR), name="static"),
     ]
@@ -250,27 +312,6 @@ def create_app(graph: Any = None) -> Starlette:
     app = Starlette(routes=routes, middleware=middleware)
     app.state.chat = chat
     return app
-
-
-def ensure_signing_key(path: str = SIGNING_KEY_FILE) -> str:
-    """Use AMP_SIGNING_KEY if set; otherwise load, or create once, a private local key.
-
-    Memories are HMAC-signed with it (harness/signing.py). Without a key every
-    memory is unverified and therefore READ_ONLY, and Layer 4 then blocks tool
-    calls (search_vault, run_memory_code) shaped by memories."""
-    if os.environ.get("AMP_SIGNING_KEY"):
-        return "from AMP_SIGNING_KEY"
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    created = False
-    if not os.path.exists(path):
-        import secrets
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)   # owner-only
-        with os.fdopen(fd, "w") as handle:
-            handle.write(secrets.token_hex(32))
-        created = True
-    with open(path, encoding="ascii") as handle:
-        os.environ["AMP_SIGNING_KEY"] = handle.read().strip()
-    return f"{'created' if created else 'loaded'} {os.path.relpath(path, ROOT)}"
 
 
 def main(argv=None) -> None:

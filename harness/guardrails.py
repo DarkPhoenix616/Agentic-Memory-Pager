@@ -389,8 +389,8 @@ def _scrub_list(items: List[str]) -> List[str]:
 # LAYER 2: SEMANTIC RISK SCORING (Phase 2, T4)
 # Layer 1 redacts KNOWN phrases; Layer 2 scores how "instruction-like" a memory
 # is so subtle attacks (role-play, tool-call bait) can be filtered at retrieval.
-# Thresholds are shared: T1's page_context() must import HIGH_RISK_THRESHOLD
-# rather than hard-coding its own number.
+# Thresholds are shared: the memory server's filters import HIGH_RISK_THRESHOLD
+# rather than hard-coding their own number.
 # ---------------------------------------------------------------------------
 
 RiskLevel = Literal["safe", "suspicious", "high_risk"]
@@ -432,17 +432,18 @@ def risk_level_for_score(score: float) -> RiskLevel:
 
 def _llama_guard_score(text: str) -> Optional[float]:
     """
-    Placeholder for the model-based classifier (0-100, or None if unavailable).
+    Model-based adversarial-intent score (0-100), or None when no model is available.
 
-    TODO [T1 / Teammate 1]: implement with Llama Guard 3 (or similar) and return
-    its adversarial-intent score scaled to 0-100. Requirements:
-      - Return None (not 0) when the model is unavailable or errors, so the
-        heuristic score below still applies; log a warning when that happens.
-      - Keep it fast (~100-200 ms) or cache by hash of `text`; it runs on every
-        store_memory() call.
-    Until implemented, scoring is heuristic-only.
+    Implemented in harness/risk_model.py. By default the local chat model
+    (llama3.1:8b) is asked whether the text gives orders to the AI that will
+    read it; AMP_RISK_MODEL=llama-guard3:1b uses Llama Guard 3 instead and
+    AMP_RISK_MODEL=off turns the model off. None (not 0) when the model is off
+    or fails, so the heuristic score still applies; a failure is logged and the
+    model is skipped for a minute. Scores are cached by text, so scoring the
+    same payload twice (compactor node, then store_memory) costs one call.
     """
-    return None
+    from harness.risk_model import score    # lazy: keeps ollama off the schemas' import path
+    return score(text)
 
 
 def _classify_adversarial_ensemble(text: str, source: str) -> tuple[float, RiskLevel]:
@@ -457,7 +458,7 @@ def _classify_adversarial_ensemble(text: str, source: str) -> tuple[float, RiskL
       - Imperative-sentence density: up to 25 (cannot reach "suspicious" alone)
       - Phase 3 obfuscation: disguised pattern hit counts as a Layer 1 hit (40);
         fuzzy near-miss phrase 25 each, cap 50; high-entropy blob 10 each, cap 20
-    The final score is max(heuristic, Llama Guard score) once T1 wires the model in.
+    The final score is max(heuristic, model score); see _llama_guard_score().
     """
     if not text or not text.strip():
         return 0.0, "safe"
@@ -497,8 +498,8 @@ def score_payload(
     """
     Public entry point: score a compacted payload for the UnifiedMemory envelope.
 
-    Used by T4's compactor nodes at creation time. T1 should call the same
-    function in store_memory() so the stored score never relies on the caller.
+    Used by the compactor nodes when a memory is created, and again by the
+    memory server's store_memory(), so the stored score never relies on the caller.
     All model-readable text is scored, including code docstrings.
     """
     if isinstance(payload, TextMemorySchema):
@@ -594,6 +595,23 @@ class CodeSymbol(BaseModel):
         le=1_000_000,  # Guard against absurdly large line numbers
         description="Line number in the original source file where this symbol begins.",
     )
+    calls: List[str] = Field(
+        default_factory=list,
+        max_length=50,
+        description=(
+            "The code graph: functions and classes this symbol calls that are defined in the same "
+            "file or imported by name, e.g. ['load_cart', 'Cart.total']. Empty for classes and variables."
+        ),
+    )
+
+    @field_validator("calls")
+    @classmethod
+    def calls_must_be_dotted_names(cls, v: List[str]) -> List[str]:
+        """Only dotted identifiers (load_cart, Cart.total), each at most 128 characters."""
+        for name in v:
+            if len(name) > 128 or not all(_IDENTIFIER_RE.match(part) for part in name.split(".")):
+                raise ValueError(f"calls entry '{name[:40]}' is not a dotted name.")
+        return v
 
     @field_validator("name")
     @classmethod
@@ -1013,7 +1031,7 @@ class UnifiedMemory(BaseModel):
         default=0.0,
         ge=0.0,
         le=100.0,
-        description="Adversarial-intent score 0-100 (see score_payload). Set by T4 nodes; T1 re-scores on store.",
+        description="Adversarial-intent score 0-100 (see score_payload). Set by the compactor nodes; the memory server re-scores it on store.",
     )
     risk_level: RiskLevel = Field(
         default="safe",
@@ -1170,6 +1188,41 @@ class SandboxResult(BaseModel):
     error: str = Field(default="", max_length=5000,
                        description="Why it was blocked, timed out or failed; empty on success.")
     memories_loaded: int = Field(default=0, ge=0, description="How many memories the code could see.")
+
+
+class MemoryInfo(BaseModel):
+    """
+    What the admin listing (MCP tool list_all_memories) shows about one stored
+    memory: that it exists, where it belongs and how risky it is, but not what
+    it says. Memory content is encrypted with its session's key, and only a
+    client holding that key can read it.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    memory_id: str = Field(..., max_length=64, description="The ChromaDB ID, e.g. mem_1a2b3c4d.")
+    session_id: str = Field(..., max_length=64)
+    memory_type: Literal["code", "text"]
+    compaction_source: Literal["ast", "rlm"]
+    timestamp: str = Field(..., max_length=64, description="When the memory was created (ISO 8601).")
+    risk_score: Optional[float] = Field(default=None, ge=0.0, le=100.0,
+                                        description="None for a row stored before risk scoring.")
+    encrypted: bool = Field(..., description="False only for an old row not yet encrypted (python -m server.backfill).")
+
+
+class SessionInfo(BaseModel):
+    """
+    One chat session in the vault, as the admin tool list_sessions shows it:
+    how many memories it has and when it was used, never what they say.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: str = Field(..., max_length=64)
+    memories: int = Field(..., ge=0, description="How many memories the session has in the vault.")
+    first_time: str = Field(default="", max_length=64, description="Time of its oldest memory (ISO 8601).")
+    last_time: str = Field(default="", max_length=64, description="Time of its newest memory (ISO 8601).")
+    encrypted: bool = Field(..., description="False if any of its memories is an old row not yet encrypted.")
 
 
 # ---------------------------------------------------------------------------

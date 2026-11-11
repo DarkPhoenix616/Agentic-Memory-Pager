@@ -1,11 +1,15 @@
+import json
+import logging
 import os
 import sys
+import threading
 import uuid
 import tiktoken
 from datetime import datetime, timezone
 from typing import List, Optional
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 import chromadb
+from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 
 
 encoder=tiktoken.get_encoding("cl100k_base") # gpt-4 one to count the number of tokens in code or dialogue. Isko hum token limit ke liye use karenge.
@@ -28,10 +32,26 @@ os.makedirs(CHROMA_DB_PATH, exist_ok=True)
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from harness.guardrails import UnifiedMemory, RetrievedMemory, PageContextResult, SandboxResult, _scrub_secrets
+from harness.guardrails import (
+    HIGH_RISK_THRESHOLD, MemoryInfo, PageContextResult, RetrievedMemory, SandboxResult, SessionInfo,
+    UnifiedMemory, _scrub_secrets, risk_level_for_score, score_payload,
+)
+from harness.local_keys import ensure_admin_token, ensure_signing_key, is_admin
+from harness.signing import SIGNING_KEY_ENV, sign_memory, verify_memory
+from server import session_crypto
 from server.sandbox import run_code
+from server.session_crypto import SessionKeyError
+
+logger = logging.getLogger(__name__)
 
 SANDBOX_MAX_TIMEOUT = 10  # seconds; run_memory_code clamps the caller's timeout to 1..10
+MAX_TOP_K = 100           # search_vault / page_context never consider more matches than this
+HIGH_RISK_HEADROOM = 10   # extra matches fetched so that dropping high-risk ones does not shrink results
+
+# Every delete_memory call (and every refused admin call) is appended here as one JSON line.
+AUDIT_LOG_ENV = "AMP_AUDIT_LOG"
+DEFAULT_AUDIT_LOG = os.path.join(PROJECT_ROOT, "storage", "amp_audit.log")
+_audit_lock = threading.Lock()
 
 # Clients reach it at http://localhost:<port>/mcp (AMP_MCP_URL in the harness).
 # AMP_MCP_PORT overrides the port; the host stays localhost, so only this machine can connect.
@@ -39,17 +59,25 @@ MCP_PORT = int(os.environ.get("AMP_MCP_PORT", "8001"))
 mcp = FastMCP("amp-memory", host="localhost", port=MCP_PORT)
 
 chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
-collection = chroma_client.get_or_create_collection("amp_memory")
+# ChromaDB's default embedding model (all-MiniLM-L6-v2). The server embeds the
+# plain text itself and stores only the vectors: no readable text is stored.
+EMBED = DefaultEmbeddingFunction()
+collection = chroma_client.get_or_create_collection("amp_memory", embedding_function=EMBED)
 
 
 # ---------------------------------------------------------------------------
 # UnifiedMemory <-> ChromaDB helpers
 #
-# Chroma stores a plain text "document" (what gets embedded and searched) plus
-# flat metadata. A UnifiedMemory is a nested object, so:
-#   - the searchable text is derived from the payload (_embedding_text)
-#   - the full validated UnifiedMemory is saved as JSON in metadata["envelope"]
-#     so it can be rebuilt exactly on the way out (_to_memory)
+# One ChromaDB row per memory:
+#   - embedding   the vector of the memory's searchable text (_embedding_text);
+#                 the text itself is not stored
+#   - metadata    session_id, memory_type, compaction_source, timestamp and
+#                 risk_score in the clear (for filtering and the admin list),
+#                 plus encrypted=True, key_check (fingerprint of the session
+#                 key) and envelope_enc: the full UnifiedMemory as JSON,
+#                 encrypted with the session's key (server/session_crypto.py)
+# Rows stored before encryption keep a plain "envelope" and are not served
+# until python -m server.backfill --apply encrypts them.
 # ---------------------------------------------------------------------------
 def _embedding_text(memory: UnifiedMemory) -> str:
     """Text that is embedded for semantic search, and counted for token budgets."""
@@ -60,88 +88,212 @@ def _embedding_text(memory: UnifiedMemory) -> str:
     if code.summary:
         parts.append(code.summary)
     parts.extend(symbol.signature for symbol in code.symbols)
+    parts.extend(f"{s.name} calls {', '.join(s.calls)}" for s in code.symbols if s.calls)   # the code graph
     return "\n".join(parts)
 
 
-def _to_memory(chroma_id: str, meta: Optional[dict]) -> Optional[UnifiedMemory]:
-    """Rebuild a UnifiedMemory from a stored row. Rows saved before the
-    UnifiedMemory format (no envelope) cannot be rebuilt and are skipped."""
-    if not meta or "envelope" not in meta:
-        return None
-    memory = UnifiedMemory.model_validate_json(meta["envelope"])
+def _to_memory(chroma_id: str, envelope_json: str) -> UnifiedMemory:
+    """Rebuild a UnifiedMemory from its stored JSON.
+
+    Memories saved before risk scoring existed have no risk_score in their JSON
+    and would load as "safe" (0). They are scored here on the way out, so the
+    high-risk filters still apply to them; the score is not written back
+    (python -m server.backfill does that)."""
+    stored = json.loads(envelope_json)
+    memory = UnifiedMemory.model_validate(stored)
     memory.vector_embedding_id = chroma_id
+    if "risk_score" not in stored:
+        _rescore(memory)
     return memory
 
 
+def _rescore(memory: UnifiedMemory) -> bool:
+    """Score the payload here, on the server, and keep the higher of the stored
+    and the server's score. True if the score went up."""
+    payload = memory.text_payload if memory.memory_type == "text" else memory.code_payload
+    score, _ = score_payload(payload, memory.provenance)
+    if score <= memory.risk_score:
+        return False
+    memory.risk_score = score
+    memory.risk_level = risk_level_for_score(score)     # no validate_assignment: keep the two in step by hand
+    return True
+
+
+def _is_high_risk(memory: UnifiedMemory) -> bool:
+    return memory.risk_score >= HIGH_RISK_THRESHOLD
+
+
+def _session_where(session_id: str) -> dict:
+    """ChromaDB filter for one session's encrypted rows."""
+    return {"$and": [{"session_id": session_id}, {"encrypted": True}]}
+
+
+def _authorize(session_id: str, session_key: str, action: str, ctx: Optional[Context]) -> str:
+    """Check that the caller holds this session's key; return the key check.
+
+    The first memory stored in a session fixes its key. A refused call is
+    written to the audit log and raises SessionKeyError (a PermissionError)."""
+    caller = _caller(ctx)
+    if not session_id:
+        _audit(action, "", caller, "refused: no session_id")
+        raise SessionKeyError(f"{action} works on one session: give its session_id and session_key.")
+    try:
+        check = session_crypto.key_check(session_key, session_id)
+    except SessionKeyError:
+        _audit(action, "", caller, "refused: missing or malformed session key", session_id)
+        raise SessionKeyError(f"{action} needs the session key of {session_id}.") from None
+    existing = collection.get(where=_session_where(session_id), limit=1, include=["metadatas"])
+    rows = existing.get("metadatas") or []
+    if rows and not session_crypto.same_key_check(str(rows[0].get("key_check", "")), check):
+        _audit(action, "", caller, "refused: wrong session key", session_id)
+        raise SessionKeyError(f"Wrong session key for {session_id}.")
+    return check
+
+
+def _open_row(chroma_id: str, meta: Optional[dict], session_key: str) -> Optional[UnifiedMemory]:
+    """Decrypt one row of the caller's session; None if it cannot be read."""
+    if not meta or not meta.get("encrypted"):
+        return None
+    try:
+        envelope = session_crypto.decrypt(meta["envelope_enc"], session_key, meta["session_id"], chroma_id)
+    except (SessionKeyError, KeyError, ValueError) as exc:
+        logger.warning("[Vault] Memory %s could not be decrypted (%s); skipped.", chroma_id, exc)
+        return None
+    return _to_memory(chroma_id, envelope)
+
+
+def _session_memories(session_id: str, session_key: str) -> List[UnifiedMemory]:
+    """Every readable memory of one session, high-risk ones included (call _authorize first)."""
+    rows = collection.get(where=_session_where(session_id), include=["metadatas"])
+    memories = []
+    for chroma_id, meta in zip(rows.get("ids", []), rows.get("metadatas", [])):
+        memory = _open_row(chroma_id, meta, session_key)
+        if memory is not None:
+            memories.append(memory)
+    return memories
+
+
+def _row_metadata(memory: UnifiedMemory, memory_id: str, session_key: str, check: str) -> dict:
+    """The ChromaDB metadata of one encrypted memory."""
+    return {
+        "session_id": memory.session_id,
+        "memory_type": memory.memory_type,
+        "compaction_source": memory.compaction_source,
+        "timestamp": memory.timestamp.isoformat(),
+        "risk_score": float(memory.risk_score),
+        "encrypted": True,
+        "key_check": check,
+        "envelope_enc": session_crypto.encrypt(memory.model_dump_json(), session_key, memory.session_id, memory_id),
+    }
+
+
+def _caller(ctx: Optional[Context]) -> str:
+    """Who called a tool, for the audit log: the MCP client's name, or in-process."""
+    if ctx is None:
+        return "in-process"
+    try:
+        info = ctx.session.client_params.clientInfo
+        return f"mcp:{info.name}" + (f"/{info.version}" if info.version else "")
+    except Exception:
+        return "mcp:unknown"
+
+
+def _audit(action: str, memory_id: str, caller: str, result: str, session_id: str = "") -> None:
+    """Append one line to the audit log (AMP_AUDIT_LOG, default storage/amp_audit.log)."""
+    record = {
+        "time": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "action": action,
+        "memory_id": memory_id,
+        "session_id": session_id,
+        "caller": caller,
+        "result": result,
+    }
+    logger.info("[Audit] %s", record)
+    path = os.environ.get(AUDIT_LOG_ENV) or DEFAULT_AUDIT_LOG
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with _audit_lock, open(path, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=True) + "\n")
+    except OSError as exc:
+        logger.error("[Audit] Could not write %s: %s", path, exc)
+
+
 @mcp.tool()
-def store_memory(memory: UnifiedMemory) -> UnifiedMemory:
+def store_memory(memory: UnifiedMemory, session_key: str = "", ctx: Optional[Context] = None) -> UnifiedMemory:
     """
-    Store a memory envelope into long-term memory.
+    Store a memory envelope into long-term memory, encrypted with its session's key.
 
     Args:
         memory: A UnifiedMemory (session_id, memory_type, compaction_source,
             raw_token_count and the matching code_payload or text_payload).
             Invalid input is rejected by the model's validation.
+        session_key: The key of memory.session_id (64 hex characters). The
+            first memory stored in a session fixes its key; after that only
+            the same key is accepted.
 
     Returns:
         The stored UnifiedMemory, with vector_embedding_id set to the ID
         ChromaDB assigned.
+
+    The caller's risk_score is not trusted: the server scores the payload
+    itself (score_payload) and keeps the higher of the two. The signature
+    covers risk_score, so when that raises the score a memory that arrived
+    with a valid signature is signed again, as the last step. A memory that
+    arrived unsigned, or with a signature that does not verify, is never
+    signed here: storing through this tool cannot make a memory "verified".
+    The server reads the same AMP_SIGNING_KEY as the chat app (harness/local_keys.py).
     """
-    # TODO [T1 / Teammate 1] PHASE 2 — re-score server-side; do not trust the caller.
-    #   The envelope now carries risk_score / risk_level / provenance (see
-    #   harness/guardrails.py). T4's graph nodes set them, but any client of this
-    #   MCP tool could send risk_score=0 for a malicious memory. Before storing:
-    #       payload = memory.text_payload or memory.code_payload
-    #       score, _ = score_payload(payload, memory.provenance)   # from harness.guardrails
-    #       memory.risk_score = max(memory.risk_score, score)
-    #       memory.risk_level = risk_level_for_score(memory.risk_score)
-    #   The envelope is saved as JSON below, so the new fields persist as-is.
-    #   Also implement _llama_guard_score() in harness/guardrails.py (the model hook).
-    # TODO [T1 / Teammate 1] PHASE 3 — RE-SIGN LAST. T4's graph nodes already sign
-    #   each memory (harness/signing.py, HMAC-SHA256 keyed by AMP_SIGNING_KEY), and the
-    #   signature covers risk_score and provenance. If you change any signed field
-    #   above (e.g. raise risk_score), re-sign as the final step before storing:
-    #       from harness.signing import sign_memory
-    #       memory.signature = sign_memory(memory)
-    #   Otherwise your change invalidates T4's signature and the memory is shown to
-    #   the LLM as verified="false" / READ_ONLY. The server process needs the SAME
-    #   AMP_SIGNING_KEY value as the harness. With no key set, sign_memory() returns None
-    #   (memory stored unsigned, treated as READ_ONLY); nothing raises.
+    check = _authorize(memory.session_id, session_key, "store_memory", ctx)
+    arrived_verified = verify_memory(memory)
+    if memory.signature and not arrived_verified and os.environ.get(SIGNING_KEY_ENV):
+        logger.warning("[store_memory] Memory %s arrived with a signature that does not verify; "
+                       "it is stored as unverified.", memory.id)
+    old_score = memory.risk_score
+    if _rescore(memory):
+        logger.info("[store_memory] Server score for memory %s is higher: %.1f -> %.1f (%s).",
+                    memory.id, old_score, memory.risk_score, memory.risk_level)
+        if arrived_verified:
+            memory.signature = sign_memory(memory)      # re-sign last: every signed field is final now
     memory_id = f"mem_{uuid.uuid4().hex[:8]}"
     memory.vector_embedding_id = memory_id
 
     collection.add(
-        documents=[_embedding_text(memory)],
         ids=[memory_id],
-        metadatas=[{
-            "session_id": memory.session_id,
-            "memory_type": memory.memory_type,
-            "compaction_source": memory.compaction_source,
-            "timestamp": memory.timestamp.isoformat(),
-            "envelope": memory.model_dump_json(),
-        }]
+        embeddings=EMBED([_embedding_text(memory)]),     # vectors only: the text is not stored
+        metadatas=[_row_metadata(memory, memory_id, session_key, check)],
     )
 
     return memory
 
 
 @mcp.tool()
-def search_vault(query: str, top_k: int = 5, session_id: str = "") -> List[RetrievedMemory]:
+def search_vault(query: str, top_k: int = 5, session_id: str = "", session_key: str = "",
+                 ctx: Optional[Context] = None) -> List[RetrievedMemory]:
     """
-    Search long-term memory for content semantically related to the query.
+    Search one session's long-term memory for content semantically related to the query.
 
     Args:
         query: The search query
         top_k: Maximum number of results to return (default: 5)
-        session_id: Filter results to a specific session/workspace
+        session_id: The session to search (required)
+        session_key: That session's key (required)
     Returns:
         List of RetrievedMemory records, best match first. Each holds the
         stored UnifiedMemory (memory), its vector distance to the query
         (distance, smaller means closer) and its token cost (token_cost).
         Empty list if no matches found.
+        High-risk memories (risk_score >= HIGH_RISK_THRESHOLD) are never
+        returned, whoever the caller is.
     """
+    _authorize(session_id, session_key, "search_vault", ctx)
+    return _search(query, top_k, session_id, session_key)
+
+
+def _search(query: str, top_k: int, session_id: str, session_key: str) -> List[RetrievedMemory]:
+    """search_vault without the key check (callers check it first)."""
     query = query.strip()
-    if not query:
+    top_k = min(int(top_k), MAX_TOP_K)
+    if not query or top_k <= 0:
         return []
 
     # Guard against asking for more results than exist in the collection —
@@ -149,86 +301,177 @@ def search_vault(query: str, top_k: int = 5, session_id: str = "") -> List[Retri
     count = collection.count()
     if count == 0:
         return []
-    effective_k = min(top_k, count)
+    # A few extra matches, so dropping high-risk ones below does not shrink the list.
+    effective_k = min(top_k + HIGH_RISK_HEADROOM, count)
 
-    where = {"session_id": session_id} if session_id else None
     results = collection.query(
         query_texts=[query],
         n_results=effective_k,
-        where=where
+        where=_session_where(session_id),
+        include=["metadatas", "distances"],
     )
 
     matches = []
+    hidden = 0
     ids = results.get("ids", [[]])[0]
     distances = results.get("distances", [[]])[0]
     metadatas = results.get("metadatas", [[]])[0]
 
     for i in range(len(ids)):
-        memory = _to_memory(ids[i], metadatas[i])
-        if memory is not None:
-            matches.append(RetrievedMemory(
-                memory=memory,
-                distance=distances[i],
-                token_cost=len(encoder.encode(_embedding_text(memory)))
-            ))
+        memory = _open_row(ids[i], metadatas[i], session_key)
+        if memory is None:
+            continue
+        if _is_high_risk(memory):
+            hidden += 1
+            continue
+        matches.append(RetrievedMemory(
+            memory=memory,
+            distance=distances[i],
+            token_cost=len(encoder.encode(_embedding_text(memory)))
+        ))
+        if len(matches) == top_k:
+            break
 
+    if hidden:
+        logger.info("[search_vault] Left out %d high-risk memories.", hidden)
     return matches
 
 
 @mcp.tool()
-def delete_memory(memory_id: str) -> str:
+def delete_memory(memory_id: str, admin_token: str = "", ctx: Optional[Context] = None) -> str:
     """
-    Delete a specific memory record by ID.
+    Delete a specific memory record by ID. Admin only.
 
     Args:
         memory_id: The ID of the memory to delete
-        
+        admin_token: The vault's admin token (AMP_ADMIN_TOKEN, else the
+            storage/.amp_admin_token file). Without it nothing is deleted.
+
     Returns:
-        Confirmation message
+        "Deleted <id>", or why nothing was deleted.
+
+    Every call, allowed or refused, is written to the audit log with the time,
+    the memory and session ID and the caller. The chat model can never reach
+    this tool: Layer 4 (harness/tool_guard.py) rejects it, and only the
+    harness's memory audit holds the token.
     """
-    # TODO [T1 / Teammate 1] PHASE 4 — this tool has no caller check. T4's harness
-    #   (harness/tool_guard.py, Layer 4) rejects any delete_memory request that comes
-    #   out of the LLM, but that only protects the harness path. Do NOT expose
-    #   delete_memory / list_all_memories / store_memory to the LLM as callable MCP
-    #   tools; they are for the harness and admins. Consider requiring an admin token
-    #   argument here, and log each deletion (id, caller, time) on the server side.
+    caller = _caller(ctx)
+    if not is_admin(admin_token):
+        _audit("delete_memory", memory_id, caller, "refused: missing or wrong admin token")
+        return f"Refused: deleting {memory_id} needs the admin token."
     try:
+        found = collection.get(ids=[memory_id])
+        if not found.get("ids"):
+            _audit("delete_memory", memory_id, caller, "not found")
+            return f"Not found: {memory_id}"
+        session_id = ((found.get("metadatas") or [None])[0] or {}).get("session_id", "")
         collection.delete(ids=[memory_id])
-        return f"Deleted {memory_id}"
     except Exception as e:
+        _audit("delete_memory", memory_id, caller, f"error: {e}")
         return f"Error deleting {memory_id}: {str(e)}"
+    _audit("delete_memory", memory_id, caller, "deleted", session_id=session_id)
+    return f"Deleted {memory_id}"
 
 
 @mcp.tool()
-def list_all_memories() -> List[UnifiedMemory]:
+def list_all_memories(admin_token: str = "", ctx: Optional[Context] = None) -> List[MemoryInfo]:
     """
-    List every memory currently stored (useful for debugging/inspection).
+    List every stored memory, from every session, without its content. Admin only.
+
+    Args:
+        admin_token: The vault's admin token (AMP_ADMIN_TOKEN, else the
+            storage/.amp_admin_token file).
 
     Returns:
-        List of all stored UnifiedMemory records.
+        One MemoryInfo per memory: ID, session, type, time, risk score and
+        whether it is encrypted. The content stays encrypted: reading it needs
+        the session's key (list_session_memories), not the admin token.
     """
-    all_data = collection.get()
-    memories = []
-    ids = all_data.get("ids", [])
-    metadatas = all_data.get("metadatas", [])
+    if not is_admin(admin_token):
+        _audit("list_all_memories", "", _caller(ctx), "refused: missing or wrong admin token")
+        raise PermissionError("list_all_memories needs the admin token.")
+    rows = collection.get(include=["metadatas"])
+    infos = []
+    for chroma_id, meta in zip(rows.get("ids", []), rows.get("metadatas", [])):
+        if not meta or meta.get("memory_type") not in ("code", "text"):
+            continue
+        encrypted = bool(meta.get("encrypted"))
+        if encrypted:
+            risk = meta.get("risk_score")
+        else:                                   # an old plain row: its score (if any) is in the envelope
+            risk = json.loads(meta["envelope"]).get("risk_score") if "envelope" in meta else None
+        infos.append(MemoryInfo(memory_id=chroma_id, session_id=str(meta.get("session_id", "")),
+                                memory_type=meta["memory_type"], compaction_source=meta.get("compaction_source", "rlm"),
+                                timestamp=str(meta.get("timestamp", "")), risk_score=risk, encrypted=encrypted))
+    return infos
 
-    for i in range(len(ids)):
-        memory = _to_memory(ids[i], metadatas[i])
-        if memory is not None:
-            memories.append(memory)
-
-    return memories
 
 @mcp.tool()
-def page_context(query: str, total_budget: int = 1000, session_id: str = "", candidate_pool: int = 20) -> PageContextResult:
+def list_sessions(admin_token: str = "", ctx: Optional[Context] = None) -> List[SessionInfo]:
     """
-    Retrieve context from long-term memory for a query, limited by a token budget.
+    Every chat session in the vault, most recently used first. Admin only.
+
+    Args:
+        admin_token: The vault's admin token (AMP_ADMIN_TOKEN, else the
+            storage/.amp_admin_token file).
+
+    Returns:
+        One SessionInfo per session: its ID, how many memories it has and the
+        times of its oldest and newest memory. No content: reading a session
+        needs its key (list_session_memories).
+    """
+    if not is_admin(admin_token):
+        _audit("list_sessions", "", _caller(ctx), "refused: missing or wrong admin token")
+        raise PermissionError("list_sessions needs the admin token.")
+    sessions: dict = {}
+    for meta in collection.get(include=["metadatas"]).get("metadatas") or []:
+        if not meta or not meta.get("session_id"):
+            continue
+        sid = str(meta["session_id"])
+        stamp = str(meta.get("timestamp", ""))
+        info = sessions.setdefault(sid, {"session_id": sid, "memories": 0, "first_time": stamp,
+                                         "last_time": stamp, "encrypted": True})
+        info["memories"] += 1
+        info["first_time"] = min(info["first_time"], stamp) if info["first_time"] else stamp
+        info["last_time"] = max(info["last_time"], stamp)
+        info["encrypted"] = info["encrypted"] and bool(meta.get("encrypted"))
+    ordered = sorted(sessions.values(), key=lambda info: info["last_time"], reverse=True)
+    return [SessionInfo(**info) for info in ordered]
+
+
+@mcp.tool()
+def list_session_memories(session_id: str, session_key: str = "", limit: int = 0,
+                          include_high_risk: bool = False, ctx: Optional[Context] = None) -> List[UnifiedMemory]:
+    """
+    One session's memories, newest first (for the chat app's vault view and its memory audit).
+
+    Args:
+        session_id: The session to list
+        session_key: That session's key
+        limit: At most this many memories (0 = all)
+        include_high_risk: Also return high-risk memories. Leave False when the
+            result goes to a model.
+
+    Returns:
+        The session's UnifiedMemory records, newest first.
+    """
+    _authorize(session_id, session_key, "list_session_memories", ctx)
+    memories = [m for m in _session_memories(session_id, session_key) if include_high_risk or not _is_high_risk(m)]
+    memories.sort(key=lambda m: m.timestamp, reverse=True)
+    return memories[:limit] if limit > 0 else memories
+
+@mcp.tool()
+def page_context(query: str, total_budget: int = 1000, session_id: str = "", candidate_pool: int = 20,
+                 session_key: str = "", ctx: Optional[Context] = None) -> PageContextResult:
+    """
+    Retrieve context from one session's long-term memory for a query, limited by a token budget.
 
     Args:
         query: What the agent needs to recall
         total_budget: Maximum total tokens the returned memories may use (default: 1000)
-        session_id: Optional. If given, only use this session's memories
+        session_id: The session to recall from (required)
         candidate_pool: How many top matches to consider before applying the budget (default: 20)
+        session_key: That session's key (required)
 
     Returns:
         A PageContextResult with:
@@ -238,22 +481,16 @@ def page_context(query: str, total_budget: int = 1000, session_id: str = "", can
           skipped: how many matches were left out because they did not fit
         A memory's token cost is the token count of its searchable text (the
         text summary, or for code the file path, summary and signatures).
+        High-risk memories are left out before the budget is applied, so they
+        never use up budget (search_vault drops them).
     """
+    _authorize(session_id, session_key, "page_context", ctx)
     query = query.strip()
     if not query or total_budget <= 0:
         return PageContextResult(total_budget=total_budget)
 
-    # Reuse search_vault. Chroma returns candidates closest-first already.
-    candidates = search_vault(query, top_k=candidate_pool, session_id=session_id)
-    # TODO [T1 / Teammate 1] PHASE 2 — filter high-risk candidates here, BEFORE
-    #   the token-budget loop below, so they do not consume budget:
-    #       from harness.guardrails import HIGH_RISK_THRESHOLD
-    #       candidates = [c for c in candidates if c.memory.risk_score < HIGH_RISK_THRESHOLD]
-    #   Import the shared constant; do not hard-code 70. T4's graph already
-    #   filters on its side (defense in depth); this keeps the server safe for
-    #   other callers. Consider the same filter in search_vault().
-    # TODO [T1] Rows stored before Phase 2 load with risk_score=0 ("safe"). Decide
-    #   whether to backfill them with score_payload() via list_all_memories().
+    # Same search as search_vault: closest-first, high-risk memories already removed.
+    candidates = _search(query, candidate_pool, session_id, session_key)
     if not candidates:
         return PageContextResult(total_budget=total_budget)
 
@@ -291,6 +528,7 @@ def _sandbox_record(memory: UnifiedMemory) -> dict:
         "bugs": list(text.bugs_resolved) if text else [],
         "constraints": list(text.user_constraints) if text else [],
         "file": code.file_path if code else "",
+        "calls": {s.name: list(s.calls) for s in code.symbols if s.calls} if code else {},
     }
 
 
@@ -330,9 +568,10 @@ def _use_loaded_memories(code: str) -> Optional[str]:
 
 
 @mcp.tool()
-def run_memory_code(code: str, session_id: str = "", timeout: int = 5) -> SandboxResult:
+def run_memory_code(code: str, session_id: str = "", timeout: int = 5, session_key: str = "",
+                    ctx: Optional[Context] = None) -> SandboxResult:
     """
-    Run a short Python program over the stored memories, in the sandbox.
+    Run a short Python program over one session's stored memories, in the sandbox.
 
     For questions that need computing over many memories rather than reading
     a few: the latest decision about something, how many bugs were fixed,
@@ -344,22 +583,28 @@ def run_memory_code(code: str, session_id: str = "", timeout: int = 5) -> Sandbo
             and print()s its answer.
             Each memory is a dict: id, time (ISO string), kind ("text" or
             "code"), text, decisions, bugs, constraints (lists of strings) and
-            file (code file path or ""). They are ordered oldest first.
+            file (code file path or ""), calls (for code: which function
+            calls which, e.g. {"checkout": ["load_cart", "total"]}). They are
+            ordered oldest first.
             Only json, re, math, statistics, collections, itertools, datetime
             and string can be imported; open, eval, exec and dunder names are
             blocked.
-        session_id: Only this session's memories (all sessions if empty).
+        session_id: The session whose memories are loaded (required).
         timeout: Seconds before the program is stopped (1 to 10, default 5).
+        session_key: That session's key (required).
 
     Returns:
         A SandboxResult: ok, output (what it printed), error and
         memories_loaded. Output and error are secret-scrubbed and truncated.
+        High-risk memories are not loaded, like in search_vault: the output
+        goes back to the model, so it must not carry their text.
     """
     code = _use_loaded_memories(code)
     if code is None:
         return SandboxResult(ok=False, error="Blocked: `memories` is already loaded with the stored "
                              "memories; read it, do not assign to it.")
-    memories = [m for m in list_all_memories() if not session_id or m.session_id == session_id]
+    _authorize(session_id, session_key, "run_memory_code", ctx)
+    memories = [m for m in _session_memories(session_id, session_key) if not _is_high_risk(m)]
     memories.sort(key=lambda m: m.timestamp)
     records = [_sandbox_record(m) for m in memories]
     seconds = max(1, min(SANDBOX_MAX_TIMEOUT, int(timeout)))
@@ -367,6 +612,9 @@ def run_memory_code(code: str, session_id: str = "", timeout: int = 5) -> Sandbo
 
 
 if __name__ == "__main__":
+    # The same two secrets as the chat app (same env vars, else the same files under storage/),
+    # so memories it signed verify here and its admin calls are accepted.
     print(f"ChromaDB persisting to: {CHROMA_DB_PATH}")
+    print(f"Signing key: {ensure_signing_key()}; admin token: {ensure_admin_token()}")
     print(f"MCP endpoint: http://localhost:{MCP_PORT}/mcp")
     mcp.run(transport="streamable-http")

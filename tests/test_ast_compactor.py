@@ -237,7 +237,7 @@ class TestSafety:
         assert compact_code("x = 1", raw).file_path == expected
 
     @pytest.mark.parametrize("raw, expected", [
-        ("Python", "python"), ("py", "python"), ("", "unknown"), ("C++", "unknown"), ("rust", "rust")])
+        ("Python", "python"), ("py", "python"), ("", "unknown"), ("C++", "cpp"), ("rust", "rust")])
     def test_language_is_normalised(self, raw, expected):
         assert compact_code("x = 1", "a.txt", language=raw).language == expected
 
@@ -311,3 +311,119 @@ def test_compression_report():
     print(f"{'TOTAL':30} {totals['orig']:7} {full_ratio:9.1%} {short_ratio:9.1%}")
     assert full_ratio < 0.5
     assert short_ratio < 0.3
+
+
+# ---------------------------------------------------------------------------
+# The code graph: which function calls which
+# ---------------------------------------------------------------------------
+
+SHOP = '''from payments import pay
+import json
+
+class Cart:
+    def total(self):
+        return sum(self.prices())
+
+    def prices(self):
+        return [1, 2]
+
+def load_cart(user):
+    return Cart()
+
+def checkout(user):
+    cart = load_cart(user)
+    print(json.dumps({}))
+    return pay(cart.total())
+'''
+
+
+def test_the_code_graph_links_calls_to_what_the_file_defines_or_imports():
+    calls = {s.name: s.calls for s in compact_code(SHOP, file_path="shop.py").symbols}
+    assert calls["checkout"] == ["load_cart", "pay"]       # pay is imported by name; print and json.dumps are not
+    assert calls["Cart.total"] == ["Cart.prices"]          # self.prices() is written as Cart.prices
+    assert calls["load_cart"] == ["Cart"] and calls["Cart"] == [] and calls["Cart.prices"] == []
+
+
+def test_calls_must_be_dotted_names():
+    from harness.guardrails import CodeSymbol
+    import pydantic
+    CodeSymbol(name="f", type="function", signature="def f():", start_line=1, calls=["Cart.total", "load"])
+    with pytest.raises(pydantic.ValidationError):
+        CodeSymbol(name="f", type="function", signature="def f():", start_line=1, calls=["rm -rf /"])
+
+
+def test_old_seals_still_verify_and_new_calls_are_sealed(monkeypatch):
+    from harness import signing
+    from harness.guardrails import UnifiedMemory
+    monkeypatch.setenv(signing.SIGNING_KEY_ENV, "graph-test-key")
+    schema = compact_code(SHOP, file_path="shop.py")
+    memory = UnifiedMemory(session_id="g", memory_type="code", compaction_source="ast", raw_token_count=50,
+                           code_payload=schema)
+    without = memory.model_copy(deep=True)
+    for symbol in without.code_payload.symbols:
+        symbol.calls = []
+    assert b'"calls"' not in signing._canonical_bytes(without)    # same bytes as before the code graph existed
+    memory.signature = signing.sign_memory(memory)
+    assert signing.verify_memory(memory)
+    memory.code_payload.symbols[-1].calls = ["load_cart", "delete_everything"]
+    assert not signing.verify_memory(memory)                      # the graph is covered by the seal
+
+
+def test_the_code_graph_is_searchable():
+    import server.amp_memory_server as server
+    from harness.guardrails import UnifiedMemory
+    memory = UnifiedMemory(session_id="g", memory_type="code", compaction_source="ast", raw_token_count=50,
+                           code_payload=compact_code(SHOP, file_path="shop.py"))
+    assert "checkout calls load_cart, pay" in server._embedding_text(memory)
+    assert server._sandbox_record(memory)["calls"]["checkout"] == ["load_cart", "pay"]
+
+
+# ---------------------------------------------------------------------------
+# Tree-sitter: JavaScript, TypeScript, Java, C and C++
+# ---------------------------------------------------------------------------
+
+JS = ('import { pay } from "./payments";\n/** Adds the prices. */\nfunction total(cart) { return cart.items.length; }\n'
+      'const checkout = (user) => { const c = loadCart(user); return pay(total(c)); };\n'
+      'function loadCart(user) { return { user }; }\nclass Cart {\n  size() { return this.count(); }\n  count() { return 1; }\n}\n')
+JAVA = ('import java.util.List;\n/** A shopping cart. */\npublic class Cart {\n'
+        '  public int total() { return sum(); }\n  private int sum() { return 2; }\n}\n')
+CPP = '#include "pay.h"\nclass Cart {\n public:\n  int total() { return sum(); }\n  int sum() { return 2; }\n};\n'
+C = '#include <stdio.h>\nstatic int add(int a, int b) { return a + b; }\nint twice(int x) { return add(x, x); }\n'
+TS = 'import { Item } from "./item";\nexport function first(items: Item[]): Item { return items[0]; }\n'
+
+needs_tree_sitter = pytest.mark.skipif(not __import__("compactor.ast_code.ts_parser", fromlist=["x"]).available("javascript"),
+                                       reason="tree-sitter-language-pack is not installed")
+
+
+def graph(code, path):
+    schema = compact_code(code, file_path=path)
+    return schema, {s.name: (s.type, s.calls) for s in schema.symbols}
+
+
+@needs_tree_sitter
+def test_javascript_gets_symbols_imports_docs_and_calls():
+    schema, symbols = graph(JS, "cart.js")
+    assert schema.language == "javascript" and schema.dependencies == ["./payments"]
+    assert symbols["checkout"] == ("function", ["loadCart", "pay", "total"])      # an arrow function, pay is imported
+    assert symbols["Cart.size"] == ("method", ["Cart.count"])                     # this.count() -> Cart.count
+    assert next(s for s in schema.symbols if s.name == "total").docstring == "Adds the prices."
+    assert next(s for s in schema.symbols if s.name == "total").signature == "function total(cart)"
+
+
+@needs_tree_sitter
+def test_java_c_cpp_and_typescript():
+    schema, symbols = graph(JAVA, "Cart.java")
+    assert symbols == {"Cart": ("class", []), "Cart.total": ("method", ["Cart.sum"]), "Cart.sum": ("method", [])}
+    assert schema.symbols[0].docstring == "A shopping cart." and schema.dependencies == ["java.util.List"]
+    assert graph(CPP, "cart.cpp")[1]["Cart.total"] == ("method", ["Cart.sum"])
+    schema, symbols = graph(C, "util.c")
+    assert symbols["twice"] == ("function", ["add"]) and schema.dependencies == ["stdio.h"]
+    schema, symbols = graph(TS, "list.ts")
+    assert schema.language == "typescript" and "first" in symbols and schema.dependencies == ["./item"]
+
+
+def test_without_tree_sitter_other_languages_fall_back_to_the_line_scan(monkeypatch):
+    from compactor.ast_code import ts_parser
+    monkeypatch.setattr(ts_parser, "available", lambda grammar: False)
+    schema = compact_code(JAVA, file_path="Cart.java")
+    assert schema.language == "java" and "line scan" in schema.summary

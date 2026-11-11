@@ -7,6 +7,7 @@ Run with:
 import os
 import subprocess
 import time
+import sys
 
 import pytest
 
@@ -89,7 +90,7 @@ def test_a_runaway_loop_is_stopped_and_killed():
     assert runner_processes() == before          # nothing left spinning in the background
 
 
-@pytest.mark.skipif(os.name == "nt", reason="resource limits are set on Linux/macOS only")
+@pytest.mark.skipif(sys.platform in ["win32", "darwin"], reason="resource limits are set on Linux only")
 def test_memory_is_capped():
     result = run_code("x = 'a' * (2 * 1024 ** 3)", MEMORIES)
     assert result["ok"] is False and result["error"].startswith("MemoryError")
