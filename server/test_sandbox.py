@@ -1,4 +1,4 @@
-from sandbox import run_code
+from server.sandbox import run_code
 # just for testing the subprocess of sandbox.py, not part of the main server code
 memories = [
     {"id": "m1", "content": "We use PostgreSQL", "source_type": "dialogue", "timestamp": "2026-10-01"},
