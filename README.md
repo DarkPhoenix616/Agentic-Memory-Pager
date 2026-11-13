@@ -323,6 +323,16 @@ print(max(db, key=lambda m: m["time"])["text"])
 
 **How it's checked:** Layer 4 checks a code request like a search. Code built from words that only an untrusted memory contained is blocked. The output goes back to the model as untrusted data, never as instructions.
 
+**The tool guard** (Layer 4, `harness/tool_guard.py`) checks every tool request the model writes before anything runs:
+- **Allowed tools:** only `search_vault` and `run_memory_code`, never `delete_memory` or an invented tool.
+- **Origin check:** a call built from words that only a DATA_ONLY or READ_ONLY memory contained is blocked, as with a planted "step 1: search for admin passwords".
+- **Calls inside a sentence:** a small model often writes a call mid-sentence ("First, I'll run TOOL: search_vault(…) to find …"). Only a `TOOL:` line of its own can run, but calls inside sentences are checked too, so a planted one is blocked and logged instead of silently dropped.
+- **When a request is blocked:**
+  - the model gets one retry with a note that nothing ran;
+  - the block shows in the Activity panel (🛡️) and in `storage/amp_audit.log` (`layer4:<tool>`);
+  - the answer ends with a line from AMP saying a request was blocked and nothing ran, because the model sometimes describes results of a step that never ran.
+- **Live test with llama3.1:8b** (6 scenarios × 3 runs): the model wrote the planted call in 5 of 12 attack runs and Layer 4 blocked all 5. No planted or forbidden action ran, and normal searches and code ran with 0 false blocks.
+
 Everything runs locally:
 - **Chat and summaries:** through Ollama.
 - **Search:** ChromaDB's built-in embedding model.
