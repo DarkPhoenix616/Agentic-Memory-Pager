@@ -21,6 +21,7 @@ in `BTP/report_eval/`, test venv `AgenticMemoryPager/.venv` (git-ignored).
 
 | Part | Branch | State |
 |---|---|---|
+| Fix: *New chat* did not clear the page (found by the user, 2026-11-13) | `fix/new-chat-redraw` (merged, then deleted) | **Done.** The page redrew while still marked busy, so the old messages stayed after *New chat* or opening a chat. Reproduced and confirmed fixed in headless Chrome; a regression test fails on the old code. 460 tests pass. Section 5q. |
 | Final round, task 8: a lighter code graph | `feature/lighter-code-graph` (merged, then deleted) | **Done.** Call lines are out of the search text (−26% tokens, search unchanged: they were mostly past the embedding model's 256-word-piece window); the model now *sees* the calls of a paged code memory (+3 tokens). Call questions: 3/9 → **8/9** right. 459 tests pass. Section 5p. |
 | Final round, task 7: relevance cut-off for paging | `feature/relevance-cutoff` (merged, then deleted) | **Done.** Memories farther than 1.4 from the question are not paged in, except for questions about the user or the chat. 16-fact chat: recall still 16/16; general questions 653 → 108 memory tokens (prompt −36%); no time change. 459 tests pass. Section 5o. |
 | Final round, task 6: full conversation when a chat is reopened | `feature/chat-transcript` (merged, then deleted) | **Done.** Every message is kept, secrets scrubbed and encrypted with the chat's key; a reopened chat shows them again (greyed where paged out), for display only. Live: 6/6 messages back, recall 2/2 through the vault, 0 readable words in the files. 444 tests pass. Section 5n. |
@@ -1232,6 +1233,21 @@ Since step 4 (5g), each function of a code memory added a line to its search tex
 - **Small live test:** 9 questions per version, one pair of files.
 - **Finding, not changed here:** a code memory is charged its whole search text against the paging budget (~400 tokens per repo file), but the model is shown only its first 5 signatures (~44 tokens). Chat code blocks are small, so this matters mostly for whole files. A follow-up could charge what is shown, or show more.
 
+## 5q. Fix: *New chat* did not clear the page (2026-11-13)
+
+- **Found by the user:** in the running app, pressing *New chat* seemed to do nothing.
+- **Cause, in `app/static/app.js`:**
+  - `leave()` (used by *New chat* and by opening a chat from the list) called `render()` while `busy` was still true;
+  - `render()` skips the message list while busy;
+  - `busy` was cleared only afterwards, with no second redraw.
+  
+  So the server switched chats correctly (`POST /api/new` answered in 0.05 s with a new chat), but the old messages stayed on screen. It has been there since step 2 (5e). It was missed because every earlier check called the API directly, or loaded the page fresh after switching.
+- **Fix:** `leave()` now clears `busy` first, then sets the new state and redraws. If the switch fails, the old chat stays and the error is shown.
+- **Checked in a real browser** (`report_eval/ui_check/new_chat_ui.py`): headless Chrome over the DevTools protocol, a throwaway app on port 8030, real llama3.1:8b. It sends a message, presses *New chat*, then reopens the old chat.
+  - **Before:** after *New chat* the page still showed 2 messages (the server was already on the new chat).
+  - **After:** 0 messages and the empty-chat hint; reopening showed the 2 messages again.
+- **Regression test:** `tests/test_web_app.py::test_new_chat_redraws_the_messages_after_busy_is_cleared` runs the real `leave()` in Node with stand-ins. It fails on the old code and passes on the fix. Tests: 460 passed, 1 skipped.
+
 ## 6. Decision log
 
 | Date | Decision | Why |
@@ -1353,4 +1369,5 @@ AMP_PAGE_MAX_DISTANCE=off .venv/bin/python -I ../report_eval/relevance_cutoff/re
 python3 ../report_eval/relevance_cutoff/compare.py ../report_eval/relevance_cutoff/{A_no_cutoff,B_cutoff_1p4}.json
 .venv/bin/python -I ../report_eval/code_graph/measure_graph.py                 # section 5p: cost and search value of call lines (no model)
 .venv/bin/python -I ../report_eval/code_graph/live_who_calls.py new_code_calls_shown 3   # section 5p: call questions, real model
+.venv/bin/python -I ../report_eval/ui_check/new_chat_ui.py after_fix               # section 5q: New chat in a real browser
 ```
