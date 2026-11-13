@@ -169,7 +169,9 @@ def test_a_chat_is_saved_when_left_and_can_be_reopened(web):
     assert saved["memories"] == 1 and not saved["current"] and "Pixel" in saved["title"]
 
     state = web.post("/api/open", json={"session_id": old_id}).json()
-    assert state["session_id"] == old_id and state["transcript"] == []
+    assert state["session_id"] == old_id and state["restored_messages"] == 2
+    assert [m["content"] for m in state["transcript"]][0] == "My cat is called Pixel."
+    assert all(m["status"] == "paged out" for m in state["transcript"])
     assert state["resumed"] and "Pixel" in state["resumed"][0]["text"]
     assert next(c for c in web.get("/api/sessions").json()["chats"] if c["session_id"] == old_id)["current"]
 
