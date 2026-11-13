@@ -21,6 +21,7 @@ in `BTP/report_eval/`, test venv `AgenticMemoryPager/.venv` (git-ignored).
 
 | Part | Branch | State |
 |---|---|---|
+| Final round, task 6: full conversation when a chat is reopened | `feature/chat-transcript` (merged, then deleted) | **Done.** Every message is kept, secrets scrubbed and encrypted with the chat's key; a reopened chat shows them again (greyed where paged out), for display only. Live: 6/6 messages back, recall 2/2 through the vault, 0 readable words in the files. 444 tests pass. Section 5n. |
 | Final round, task 5: final check from a fresh clone | `feature/final-check` (merged, then deleted) | **Done.** Fresh clone + fresh venv: install 44 s, 439 passed + 1 skipped (the live test passes too). Full chat in the web app, in-process and over MCP: every recall right, tools work, reopen works, vault holds no readable text. Fixed: stale README Quickstart, `tiktoken` missing from requirements. Section 5m. |
 | Final round, task 4: live test of the tool guard (Layer 4) | `feature/layer4-live` (merged, then deleted) | **Done.** First live test of Layer 4. It found that calls written inside a sentence never reached the guard; fixed. Final run: the model wrote a planted call in 5 of 12 attack runs and all 5 were blocked; nothing planted ran; 0 false blocks. 439 tests pass. Section 5l. |
 | Final round, task 3: fact poisoning | `feature/fact-conflicts` (merged, then deleted) | **Done.** The server marks a new memory that contradicts an older one, and the chat model shows the user both versions. Red team now **13/13**, plus 2/2 more poisoning attacks; 0 false marks. 428 tests pass. Section 5k. |
@@ -87,7 +88,7 @@ Next steps:
    3. Fact poisoning (the 1 red-team attack that got through, section 5f): record where each fact came from, prefer the user's own words, flag a note that contradicts an older one; re-run the red team. **Done**, see section 5k. Built: the contradiction mark, the stored time on every memory, and the rule to ask the user. "Prefer the user's own words" was dropped: in this attack the true and the false note both came in through the user's paste, so the source cannot tell them apart.
    4. Live test of the tool guard (Layer 4) with the real model. **Done**, see section 5l. It found and fixed a gap: calls written inside a sentence never reached Layer 4.
    5. Final check: fresh install from `requirements.txt`, all tests, one full chat in the web app, report and README updated. **Done**, see section 5m.
-   6. Show the full old conversation when a chat is reopened (saved encrypted with the session key). Not started.
+   6. Show the full old conversation when a chat is reopened (saved encrypted with the session key). **Done**, see section 5n.
    7. Relevance cut-off in `page_context`, so unrelated memories are not paged in. Not started.
    8. A lighter code graph, so code memories grow by less than 33% (section 5g). Not started.
    - Kept as known limits, not built: encrypting the search vectors, step 6 extras, connecting ChatGPT or claude.ai through a public link.
@@ -651,8 +652,8 @@ Test set: 12 exchanges where the user states small facts and asks for a ~150-wor
 
 ### 5e.3 What it does not do (by design for now)
 
-- **No full transcript.** Only memories are stored. A reopened chat shows its saved notes, not the old messages; the model still recalls them through paging.
-  - Showing the full message history, as ChatGPT and Claude do, would need the message list saved too, encrypted with the session key. Discussed with the user, not built.
+- ~~**No full transcript.** Only memories are stored. A reopened chat shows its saved notes, not the old messages; the model still recalls them through paging.~~
+  - ~~Showing the full message history, as ChatGPT and Claude do, would need the message list saved too, encrypted with the session key. Discussed with the user, not built.~~ Solved on 2026-11-13: section 5n.
 - ~~**No save on close.** A chat is saved only when the user leaves it in the app. Closing the tab or stopping the server loses what was not yet paged out.~~ Solved on 2026-11-13: auto-save, section 5j.
 
 ## 5f. Step 3: red-team test against the real model (2026-11-10)
@@ -1068,6 +1069,50 @@ The aim was to test exactly what is on GitHub, the way a new user would.
 - Other hardware: the turn times are from this machine.
 - The unused packages (`instructor`, `litellm`, `langfuse`) are still in `requirements.txt`. Removing them would make the install smaller, but they are part of the planned stack, so they were left.
 
+## 5n. Final round, task 6: the full conversation when a chat is reopened (2026-11-13)
+
+### 5n.1 The problem
+
+A reopened chat showed only its latest memories ("where it left off"), not its messages (5e.3). ChatGPT and Claude show the whole conversation again.
+
+### 5n.2 What was built (branch `feature/chat-transcript`, merged, then deleted)
+
+- **Saving the messages:** after every answer, the chat's messages are written to `storage/chats/<chat id>.transcript` (`harness/chat_store.py`).
+  - Encrypted with the chat's session key: AES-256-GCM, the chat ID and a record name bound in, atomic, owner-only.
+  - **Secrets are scrubbed first** with the vault's own scrubber, so a pasted API key is saved as `[REDACTED_SECRET]`. The open chat still shows what was typed.
+  - Unlike the unsaved part (5j), this file **stays** when the chat is left.
+- **Reopening** (`ChatSession.resume`): the messages come back with the rest of the chat.
+  - Their status is computed as before: "paged out" unless their chunks are still in the context window.
+  - Message IDs and the turn number continue after the old ones.
+- **Display only.** The model is *not* given the old messages: it sees its context window plus the memories paged in for each question, exactly as before. So paging still does the work, and a long old chat can't overflow the window.
+- **Safety:**
+  - A chat that has saved messages but was not reopened with `resume()` never overwrites them.
+  - A file that does not decrypt is reported, kept, and not overwritten.
+- **The web page:**
+  - **On reopen:** "📂 Reopened this chat: its N earlier messages are below. Greyed ones were paged out to the vault." Each old message has its "📦 paged out" tag, and *What the model remembers* folds open.
+  - **The chat list:** your first message is the title (it used to be the start of the oldest memory), and each chat shows "N messages · M memories".
+  - **Older chats** (from before this change) still open as before.
+
+### 5n.3 Results
+
+- **Tests:** 444 passed, 1 skipped (5 new).
+  - They cover: saved after every turn, encrypted, 0600, secrets scrubbed, kept after leaving; a reopened chat shows its messages as paged out while the model's request holds none of them; IDs continue; no overwrite without `resume()`; an unreadable file is kept; the list's title and message count.
+  - 3 old tests changed: they checked that a reopened chat shows *no* messages.
+- **Live, real llama3.1:8b**, the app as its own process on temporary folders (`report_eval/chat_transcript/live_transcript.py`, `results.json`, screenshot `reopened_chat.png` from headless Chrome):
+  1. **The chat:** 3 turns (cat Pixel and codename ZEBRAFISH, a pasted `cart_total` function, a long question), then *New chat*.
+  2. **The list** showed it as "Hi! My cat is called Pixel and my project codename is ZEBRAFISH.", 6 messages, 4 memories.
+  3. **Reopened:** all 6 messages back, all "paged out" (they went to the vault when the chat was left), plus 4 "what the model remembers" notes.
+  4. **Asked** "What is my cat called, and what is my project codename?": "your cat's name is Pixel … it's ZEBRAFISH". That's 2/2, through the vault (4 memories paged in, 319 tokens).
+  5. **The new messages** continued as `u7`, `a8`.
+  6. **On disk:** readable "ZEBRAFISH" / "Pixel" / "cart_total" in the chat files 0 / 0 / 0.
+
+### 5n.4 Limits (honest)
+
+- **The whole conversation is now kept on disk** (encrypted). Before, only compressed memories were. It has the same protection as the vault: whoever can read the keyring can read it.
+- **Secret scrubbing uses the vault's patterns.** A secret in an unknown format is kept, as in the vault.
+- **No delete-a-chat button yet.** Deleting `storage/chats/<id>.*` removes the messages, and the admin tools delete its memories.
+- **The file is rewritten after every answer.** That's fine for chats of hundreds of messages; a very long chat would want an append-only log.
+
 ## 6. Decision log
 
 | Date | Decision | Why |
@@ -1111,6 +1156,8 @@ The aim was to test exactly what is on GitHub, the way a new user would.
 | 2026-11-13 | Layer 4 judges calls inside sentences but never runs them | The live test showed the model writes planted calls mid-sentence, and the cleaner dropped them unseen. Running them would change behaviour; judging them makes blocks visible and triggers the "nothing ran" retry. |
 | 2026-11-13 | A fixed line from AMP under answers with a blocked request | The 8B model described results of blocked steps in 2 of 5 runs despite the retry note; a deterministic line can't be ignored by the model. |
 | 2026-11-13 | Mark unused tech in the README as "planned, not used" instead of deleting it | It is the team's original design; the report lists these as optional extras. The README should not claim they are used. |
+| 2026-11-13 | Saved messages are for display only, never sent to the model | Sending the old messages would refill the window and undo paging; the vault already gives the model what is relevant. |
+| 2026-11-13 | Scrub secrets before saving messages | The vault never keeps secrets; the message file should not be the place where they survive. |
 
 ---
 
@@ -1179,4 +1226,5 @@ python3 ../report_eval/layer4_live/analyze.py ../report_eval/layer4_live/results
 git clone -b akshaybranch https://github.com/DarkPhoenix616/Agentic-Memory-Pager.git /tmp/amp && cd /tmp/amp
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/python -m pytest -q
 .venv/bin/python <BTP>/report_eval/final_check/final_check.py /tmp/amp
+.venv/bin/python ../report_eval/chat_transcript/live_transcript.py            # section 5n: reopen shows the messages (real model, screenshot)
 ```
