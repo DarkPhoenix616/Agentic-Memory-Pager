@@ -51,7 +51,7 @@ from starlette.applications import Starlette  # noqa: E402
 from starlette.middleware import Middleware  # noqa: E402
 from starlette.middleware.trustedhost import TrustedHostMiddleware  # noqa: E402
 from starlette.requests import Request  # noqa: E402
-from starlette.responses import FileResponse, JSONResponse, StreamingResponse  # noqa: E402
+from starlette.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse  # noqa: E402
 from starlette.routing import Mount, Route  # noqa: E402
 from starlette.staticfiles import StaticFiles  # noqa: E402
 
@@ -206,6 +206,43 @@ async def _json_body(request: Request) -> Dict[str, Any]:
     return body if isinstance(body, dict) else {}
 
 
+def index_html() -> str:
+    """index.html with a version on its script and stylesheet (/static/app.js?v=<mtime>):
+    a changed file gets a new address, so no browser cache, even a "fresh" one
+    that a normal reload keeps, can run an old app.js (report section 5s)."""
+    with open(os.path.join(STATIC_DIR, "index.html"), encoding="utf-8") as handle:
+        html = handle.read()
+    for name in ("app.js", "style.css"):
+        stamp = int(os.path.getmtime(os.path.join(STATIC_DIR, name)))
+        html = html.replace(f'"/static/{name}"', f'"/static/{name}?v={stamp}"')
+    return html
+
+
+class NoStalePages:
+    """ASGI middleware: the page and its static files are sent with
+    "Cache-Control: no-cache", so the browser checks for a newer version on
+    every load (a cheap 304 when nothing changed). Without it, browsers kept
+    an old app.js for a while and a fixed page showed only after a reload.
+    API responses, including the streamed chat, pass through untouched."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        path = scope.get("path", "")
+        if scope["type"] != "http" or not (path == "/" or path.startswith("/static/")):
+            await self.app(scope, receive, send)
+            return
+
+        async def send_no_cache(message):
+            if message["type"] == "http.response.start":
+                headers = [(k, v) for k, v in message.get("headers", []) if k.lower() != b"cache-control"]
+                message = dict(message, headers=headers + [(b"cache-control", b"no-cache")])
+            await send(message)
+
+        await self.app(scope, receive, send_no_cache)
+
+
 def create_app(graph: Any = None, shutdown_wait: float = SHUTDOWN_WAIT) -> Starlette:
     chat = ChatApp(graph, shutdown_wait)
 
@@ -219,7 +256,7 @@ def create_app(graph: Any = None, shutdown_wait: float = SHUTDOWN_WAIT) -> Starl
                      else "could not save its unsaved part (see the activity log)."))
 
     async def index(request: Request):
-        return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+        return HTMLResponse(index_html())
 
     async def status(request: Request):
         ready, message = await asyncio.to_thread(model_status)
@@ -337,7 +374,8 @@ def create_app(graph: Any = None, shutdown_wait: float = SHUTDOWN_WAIT) -> Starl
         Route("/api/chat", send, methods=["POST"]),
         Mount("/static", StaticFiles(directory=STATIC_DIR), name="static"),
     ]
-    middleware = [Middleware(TrustedHostMiddleware, allowed_hosts=[*LOCAL_HOSTS, "testserver"])]
+    middleware = [Middleware(TrustedHostMiddleware, allowed_hosts=[*LOCAL_HOSTS, "testserver"]),
+                  Middleware(NoStalePages)]
     app = Starlette(routes=routes, middleware=middleware, lifespan=lifespan)
     app.state.chat = chat
     return app

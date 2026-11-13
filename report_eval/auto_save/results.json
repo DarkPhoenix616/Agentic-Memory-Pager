@@ -1,0 +1,103 @@
+{
+  "tmp": "/tmp/amp-live-autosave-zkrttwkd",
+  "model": "llama3.1:8b",
+  "phases": {
+    "A_ctrl_c": {
+      "turns": [
+        {
+          "message": "Hi! My cat is called Pixel and my favourite colour is teal.",
+          "reply": "Nice to meet you! I've taken note of your cat's name, Pixel. I don't have any information about your cat, but I can chat with you about it if you'd like. As for your favourite colour, teal is a lovely shade. Do you have a particular reason why you like teal, or is it just a colour that you've always been drawn to?",
+          "error": "",
+          "compactions": 0
+        },
+        {
+          "message": "My project codename is ZEBRAFISH. Please remember it.",
+          "reply": "I've stored the codename \"ZEBRAFISH\" for your project. I'll keep it in mind for our conversation.",
+          "error": "",
+          "compactions": 0
+        }
+      ],
+      "session_id": "chat-265c9166",
+      "chunks": 2,
+      "tokens": 215,
+      "vault_memories": 0,
+      "shutdown_seconds": 0.53,
+      "shutdown_output": [
+        "AMP Chat on http://127.0.0.1:8011  (model: llama3.1:8b; Memory in-process (no MCP server); signing key from AMP_SIGNING_KEY)",
+        "AMP Chat stopped. chat-265c9166: its unsaved part is kept on disk; reopen the chat to continue."
+      ],
+      "file_exists": true,
+      "file_mode": "0o600",
+      "plaintext_in_file": false
+    },
+    "B_reopen_after_ctrl_c": {
+      "listed": {
+        "session_id": "chat-265c9166",
+        "memories": 0,
+        "last_time": "2026-11-13T11:26:05.294664+00:00",
+        "unsaved": true,
+        "current": false,
+        "title": "Hi! My cat is called Pixel and my favourite colour is teal. Assistant\u2026"
+      },
+      "open_status": 200,
+      "restored": 2,
+      "context_chunks_after_open": 2,
+      "recall": {
+        "message": "What is my cat's name, my favourite colour and my project codename?",
+        "reply": "According to what you've told me, your cat's name is Pixel, your favourite colour is teal, and your project codename is ZEBRAFISH.",
+        "error": "",
+        "compactions": 0
+      },
+      "facts_recalled": [
+        "pixel",
+        "teal",
+        "zebrafish"
+      ]
+    },
+    "C_reopen_after_kill_9": {
+      "extra_turn": {
+        "message": "One more thing: my dog is called Bruno.",
+        "reply": "I've taken note of your dog's name, Bruno. So, to recap, I remember that your cat's name is Pixel, your favourite colour is teal, and your project codename is ZEBRAFISH. You also mentioned having a dog, but I don't have any specific information about Bruno yet.",
+        "error": "",
+        "compactions": 0
+      },
+      "chunks_before_kill": 4,
+      "listed": {
+        "session_id": "chat-265c9166",
+        "memories": 0,
+        "last_time": "2026-11-13T11:26:14.175170+00:00",
+        "unsaved": true,
+        "current": false,
+        "title": "Hi! My cat is called Pixel and my favourite colour is teal. Assistant\u2026"
+      },
+      "open_status": 200,
+      "restored": 4,
+      "recall": {
+        "message": "What is my cat's name, my favourite colour and my project codename? And my dog's name?",
+        "reply": "I've got it all stored away! Your cat's name is Pixel, your favourite colour is teal, your project codename is ZEBRAFISH, and your dog's name is Bruno.",
+        "error": "",
+        "compactions": 0
+      },
+      "facts_recalled": [
+        "pixel",
+        "teal",
+        "zebrafish",
+        "bruno"
+      ]
+    },
+    "D_control_no_file": {
+      "listed": null,
+      "open_status": 200,
+      "restored": 0,
+      "recall": {
+        "message": "What is my cat's name, my favourite colour and my project codename?",
+        "reply": "I don't have any information about your cat's name, favourite colour, or project codename. I'm a coding assistant, and our conversation just started. I don't retain any personal data or information outside of this chat. However, I can help you with general questions or coding-related topics. Would you like to ask something else?",
+        "error": "",
+        "compactions": 0
+      },
+      "facts_recalled": []
+    }
+  },
+  "save_ms": 0.19,
+  "save_bytes": 48706
+}

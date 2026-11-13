@@ -23,13 +23,8 @@
   <main class="layout">
     <section class="chat" aria-label="Chat">
       <div id="messages" class="messages" aria-live="polite">
-        <div id="resume" class="resume" hidden></div>
-        <div id="empty" class="empty">
-          <h2>A local chatbot that pages its memory</h2>
-          <p>The context window works like RAM. When it fills past the trigger, the oldest messages
-            are compressed (code by the AST compactor, dialogue by the RLM summarizer) and moved to the
-            vault. Ask about them later and they are paged back in.</p>
-          <p class="hint">Try: tell it a fact, ask a few long questions, then ask about the fact again.</p>
+        <div id="empty" class="greet">
+          <div class="bubble">Hello! 👋 How can I help you today?</div>
         </div>
       </div>
       <div id="notice" class="notice" role="status" hidden></div>

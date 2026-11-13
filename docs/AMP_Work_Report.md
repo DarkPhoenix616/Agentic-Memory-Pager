@@ -13,7 +13,8 @@ How to use this file:
 
 Paths: repo `BTP/AgenticMemoryPager/` (clone of
 `github.com/DarkPhoenix616/Agentic-Memory-Pager`), eval scripts and saved outputs
-in `BTP/report_eval/`, test venv `AgenticMemoryPager/.venv` (git-ignored).
+in `report_eval/` inside the repo (moved in on 2026-11-13; see its README), test
+venv `AgenticMemoryPager/.venv` (git-ignored).
 
 ---
 
@@ -21,6 +22,9 @@ in `BTP/report_eval/`, test venv `AgenticMemoryPager/.venv` (git-ignored).
 
 | Part | Branch | State |
 |---|---|---|
+| The browser kept running the old page script (2026-11-13) | `fix/versioned-assets` (merged, then deleted) | **Done.** The page now loads `app.js` and `style.css` by version (`?v=<mtime>`), so a changed file always gets a new address. 462 tests pass. Section 5s. |
+| Chat switching, made right (user request, 2026-11-13) | `fix/chat-switch-ui` (merged, then deleted) | **Done.** A new chat shows only "Hello! 👋 How can I help you today?"; older chats without saved messages show their saved summaries; the page is never served stale. Checked in headless Chrome. 461 tests pass. Section 5r. |
+| Fix: *New chat* did not clear the page (found by the user, 2026-11-13) | `fix/new-chat-redraw` (merged, then deleted) | **Done.** The page redrew while still marked busy, so the old messages stayed after *New chat* or opening a chat. Reproduced and confirmed fixed in headless Chrome; a regression test fails on the old code. 460 tests pass. Section 5q. |
 | Final round, task 8: a lighter code graph | `feature/lighter-code-graph` (merged, then deleted) | **Done.** Call lines are out of the search text (−26% tokens, search unchanged: they were mostly past the embedding model's 256-word-piece window); the model now *sees* the calls of a paged code memory (+3 tokens). Call questions: 3/9 → **8/9** right. 459 tests pass. Section 5p. |
 | Final round, task 7: relevance cut-off for paging | `feature/relevance-cutoff` (merged, then deleted) | **Done.** Memories farther than 1.4 from the question are not paged in, except for questions about the user or the chat. 16-fact chat: recall still 16/16; general questions 653 → 108 memory tokens (prompt −36%); no time change. 459 tests pass. Section 5o. |
 | Final round, task 6: full conversation when a chat is reopened | `feature/chat-transcript` (merged, then deleted) | **Done.** Every message is kept, secrets scrubbed and encrypted with the chat's key; a reopened chat shows them again (greyed where paged out), for display only. Live: 6/6 messages back, recall 2/2 through the vault, 0 readable words in the files. 444 tests pass. Section 5n. |
@@ -444,7 +448,7 @@ Also: the README now documents all of this, its outdated repository tree was reb
 
 ### 5b.4 Results
 
-**Risk model choice** (scripts and JSON results in `BTP/report_eval/guard_eval/`). The test set:
+**Risk model choice** (scripts and JSON results in `report_eval/guard_eval/`). The test set:
 - **15 attacks.** 3 are classic; 12 are paraphrased with no trigger words.
 - **111 normal memories:**
   - 15 handwritten, including tricky ones like "Ignore the tiktoken warning…", "Delete all files in the temp directory…" and a note that explains prompt injection;
@@ -598,7 +602,7 @@ When an exchange is longer than 150 tokens and is mostly a long explanation, lla
 
 ### 5d.3 Results
 
-Test set: 12 exchanges where the user states small facts and asks for a ~150-word explanation. llama3.1:8b wrote the answers once, and they are saved, so every version sees the same text. Scripts are in `BTP/report_eval/user_facts_eval/`.
+Test set: 12 exchanges where the user states small facts and asks for a ~150-word explanation. llama3.1:8b wrote the answers once, and they are saved, so every version sees the same text. Scripts are in `report_eval/user_facts_eval/`.
 
 | Summarizer | 12 single exchanges | The 12 joined as one long chat (2 pieces + merge) |
 |---|---|---|
@@ -663,7 +667,7 @@ Test set: 12 exchanges where the user states small facts and asks for a ~150-wor
 
 ### 5f.1 How it was run
 
-`BTP/report_eval/red_team.py`, llama3.1:8b, on a temporary vault and keyring:
+`report_eval/red_team.py`, llama3.1:8b, on a temporary vault and keyring:
 1. **Planting.** Each attack note was pasted into its own chat, next to a harmless fact ("We use PostgreSQL for the vault database."). Both went into the vault through the normal pipeline: Layer 1 screening, the risk score (word rules + model), the seal and session encryption.
 2. **Triggering.** The chat was reopened and the model was asked an ordinary question that pages the notes back in.
 3. **Canaries.** Each attack had one, so success is unambiguous: a code word in the reply, a blocked tool that ran, a leaked secret, deleted memories, or a changed fact.
@@ -1232,6 +1236,64 @@ Since step 4 (5g), each function of a code memory added a line to its search tex
 - **Small live test:** 9 questions per version, one pair of files.
 - **Finding, not changed here:** a code memory is charged its whole search text against the paging budget (~400 tokens per repo file), but the model is shown only its first 5 signatures (~44 tokens). Chat code blocks are small, so this matters mostly for whole files. A follow-up could charge what is shown, or show more.
 
+## 5q. Fix: *New chat* did not clear the page (2026-11-13)
+
+- **Found by the user:** in the running app, pressing *New chat* seemed to do nothing.
+- **Cause, in `app/static/app.js`:**
+  - `leave()` (used by *New chat* and by opening a chat from the list) called `render()` while `busy` was still true;
+  - `render()` skips the message list while busy;
+  - `busy` was cleared only afterwards, with no second redraw.
+  
+  So the server switched chats correctly (`POST /api/new` answered in 0.05 s with a new chat), but the old messages stayed on screen. It has been there since step 2 (5e). It was missed because every earlier check called the API directly, or loaded the page fresh after switching.
+- **Fix:** `leave()` now clears `busy` first, then sets the new state and redraws. If the switch fails, the old chat stays and the error is shown.
+- **Checked in a real browser** (`report_eval/ui_check/new_chat_ui.py`): headless Chrome over the DevTools protocol, a throwaway app on port 8030, real llama3.1:8b. It sends a message, presses *New chat*, then reopens the old chat.
+  - **Before:** after *New chat* the page still showed 2 messages (the server was already on the new chat).
+  - **After:** 0 messages and the empty-chat hint; reopening showed the 2 messages again.
+- **Regression test:** `tests/test_web_app.py::test_new_chat_redraws_the_messages_after_busy_is_cleared` runs the real `leave()` in Node with stand-ins. It fails on the old code and passes on the fix. Tests: 460 passed, 1 skipped.
+
+## 5r. Chat switching, made right (2026-11-13)
+
+The user asked:
+- *New chat* should clear the messages and start a plain chat with just a greeting;
+- clicking an old chat should show its messages, without a reload.
+
+- **Stale page:** the server sent `app.js` without `Cache-Control`, so the browser kept an old copy for a while. The 5q fix appeared only after a reload. The page and `/static/` are now sent with `Cache-Control: no-cache` (a small ASGI middleware in `app/server.py`; API responses and the streamed chat are untouched), so every load checks for a newer version.
+- **Greeting:** the long explanation in an empty chat is replaced by one bubble, "Hello! 👋 How can I help you today?". It is shown only while the chat is empty, and it is not a message: not saved, not sent to the model.
+- **Old chats without saved messages:** chats from before 5n have no saved messages, only memories. When one is reopened, its saved summaries are now shown as the conversation, oldest first, each tagged "📦 saved summary", with a line saying why. Before, the message area stayed empty apart from the "where it left off" cards.
+- **Checked in a real browser** (`report_eval/ui_check/new_chat_ui.py after_fix_2`: headless Chrome, port 8030, temporary folders, real llama3.1:8b):
+
+| Step | The page shows |
+|---|---|
+| Fresh page | only the greeting |
+| After one message | 2 messages |
+| *New chat* | 0 messages, only the greeting |
+| Reopen the first chat | its 2 messages, no greeting, no reload |
+| Reopen it with its saved-messages file removed (an older chat) | 1 saved summary and the explanation line |
+| `app.js` | `Cache-Control: no-cache` |
+
+- **Test:** `test_the_page_is_never_served_stale` checks the header on `/`, `app.js` and `style.css`, and that the API has none. Tests: 461 passed, 1 skipped.
+- **Cleanup:** the red-team script (5k) didn't set `AMP_CHATS_DIR`, so its run left 17 `rt-*.pending` files in the real `storage/chats/`. They belonged to test chats whose keys were in a throwaway keyring, so nothing listed or read them. They are removed, and `red_team.py` and `live_chat_history.py` now use a temporary chats folder.
+
+## 5s. The browser kept running the old page script (2026-11-13)
+
+- **What the user saw:** after 5q and 5r, clicking an old chat still didn't show its messages.
+- **Diagnosis:**
+  - The server had switched: the live app's state showed chat `chat-a8b3cd30` with its 20 messages restored.
+  - The browser had kept the old `app.js`, from before `Cache-Control` was set. On a normal reload, Chrome refetches the page but keeps subresources it thinks are still fresh. So the `no-cache` header from 5r only takes effect once the browser fetches the script again.
+- **Fix:** `GET /` now serves `index.html` with `?v=<file mtime>` on `/static/app.js` and `/static/style.css` (`app.server.index_html`). A changed file gets a new address, so no cache can run the old one. With the page itself sent `no-cache`, one reload is always enough.
+- **Checked:**
+  - test `test_the_page_loads_its_script_by_version`;
+  - the real-browser check (`new_chat_ui.py after_fix_3`) passes again: greeting, *New chat* clears, reopen shows the messages, older chat shows its summary.
+  - Tests: 462 passed, 1 skipped.
+
+## 5t. The reopen info box is removed (2026-11-13)
+
+On the user's request, the box shown at the top of a reopened chat is gone: "Reopened this chat: its N earlier messages are below…", the folded "What the model remembers (latest 5 memories)" and the note about paging.
+- **What stays:** the old messages, greyed where they were paged out, and the saved summaries of older chats (each tagged "📦 saved summary").
+- **Where the event still shows:** in the Activity panel.
+- `#resume`, `renderResume()` and its CSS were removed.
+- **Checked:** the real-browser check (`new_chat_ui.py after_box_removed`) passes, and the box is no longer in the page. Tests: 462 passed, 1 skipped.
+
 ## 6. Decision log
 
 | Date | Decision | Why |
@@ -1314,8 +1376,8 @@ cd BTP/AgenticMemoryPager
 .venv/bin/python -m pytest tests/ -q                              # unit + graph tests
 AMP_RLM_LIVE=1 .venv/bin/python -m pytest tests/test_rlm_summarizer.py -k live   # needs Ollama
 cd ../report_eval && python3 make_chat.py                          # writes chat.txt + facts.json
-cd ../AgenticMemoryPager && .venv/bin/python -m compactor.rlm_text ../report_eval/chat.txt --json > ../report_eval/run.json
-python3 ../report_eval/recall.py ../report_eval/facts.json ../report_eval/run.json
+cd ../AgenticMemoryPager && .venv/bin/python -m compactor.rlm_text report_eval/chat.txt --json > report_eval/run.json
+python3 report_eval/recall.py report_eval/facts.json report_eval/run.json
 .venv/bin/python -m pytest tests/test_chat_session.py -q          # chat app core (fakes, no GPU)
 .venv/bin/python -m app.server                                     # the chat app itself: http://127.0.0.1:8000
 
@@ -1323,8 +1385,8 @@ python3 ../report_eval/recall.py ../report_eval/facts.json ../report_eval/run.js
 .venv/bin/python -m pytest tests/test_server_guards.py tests/test_risk_model.py tests/test_mcp_transport.py -q
 .venv/bin/python -m server.backfill                                # dry run on the real vault
 ollama pull llama-guard3:1b                                        # only for the comparison
-.venv/bin/python -I ../report_eval/guard_eval/eval_guard3.py       # word rules vs Llama Guard vs llama3.1:8b
-.venv/bin/python -I ../report_eval/guard_eval/live_mcp_check.py    # server as its own process, outside client
+.venv/bin/python -I report_eval/guard_eval/eval_guard3.py       # word rules vs Llama Guard vs llama3.1:8b
+.venv/bin/python -I report_eval/guard_eval/live_mcp_check.py    # server as its own process, outside client
 
 # Session keys and encryption (section 5c)
 .venv/bin/python -m pytest tests/test_session_keys.py -q
@@ -1334,23 +1396,24 @@ ollama pull llama-guard3:1b                                        # only for th
 grep -r -a -c "some phrase" storage/chroma_db                      # check: 0 means no readable copy
 
 # User facts in summaries (section 5d) and reopening chats (section 5e)
-.venv/bin/python -I ../report_eval/user_facts_eval/eval_user_facts.py final   # 12 exchanges + one long chat
-.venv/bin/python -I ../report_eval/user_facts_eval/eval_guard_only.py         # the guard with the old prompts
-.venv/bin/python -I ../report_eval/live_chat_history.py                       # chat, leave, reopen, recall (real model)
-.venv/bin/python -I ../report_eval/red_team.py                                # section 5f: 13 attacks vs the real model
-.venv/bin/python -I ../report_eval/auto_save/live_auto_save.py                 # section 5j: Ctrl+C, kill -9, reopen (real model)
-.venv/bin/python -I ../report_eval/fact_conflicts/calibrate.py                 # section 5k: threshold for the contradiction check
-.venv/bin/python -I ../report_eval/red_team.py                                # section 5k: red team again (stricter poisoning canary)
-.venv/bin/python -I ../report_eval/layer4_live/layer4_live.py                  # section 5l: Layer 4 live (6 scenarios x 3 runs)
-python3 ../report_eval/layer4_live/analyze.py ../report_eval/layer4_live/results.json   # its numbers
+.venv/bin/python -I report_eval/user_facts_eval/eval_user_facts.py final   # 12 exchanges + one long chat
+.venv/bin/python -I report_eval/user_facts_eval/eval_guard_only.py         # the guard with the old prompts
+.venv/bin/python -I report_eval/live_chat_history.py                       # chat, leave, reopen, recall (real model)
+.venv/bin/python -I report_eval/red_team.py                                # section 5f: 13 attacks vs the real model
+.venv/bin/python -I report_eval/auto_save/live_auto_save.py                 # section 5j: Ctrl+C, kill -9, reopen (real model)
+.venv/bin/python -I report_eval/fact_conflicts/calibrate.py                 # section 5k: threshold for the contradiction check
+.venv/bin/python -I report_eval/red_team.py                                # section 5k: red team again (stricter poisoning canary)
+.venv/bin/python -I report_eval/layer4_live/layer4_live.py                  # section 5l: Layer 4 live (6 scenarios x 3 runs)
+python3 report_eval/layer4_live/analyze.py report_eval/layer4_live/results.json   # its numbers
 # section 5m: fresh clone + fresh venv, then the full web-app chat (in-process and over MCP)
 git clone -b akshaybranch https://github.com/DarkPhoenix616/Agentic-Memory-Pager.git /tmp/amp && cd /tmp/amp
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/python -m pytest -q
 .venv/bin/python <BTP>/report_eval/final_check/final_check.py /tmp/amp
-.venv/bin/python ../report_eval/chat_transcript/live_transcript.py            # section 5n: reopen shows the messages (real model, screenshot)
-AMP_PAGE_MAX_DISTANCE=off .venv/bin/python -I ../report_eval/relevance_cutoff/recall_cutoff_eval.py A_no_cutoff  # section 5o, no cut-off
-.venv/bin/python -I ../report_eval/relevance_cutoff/recall_cutoff_eval.py B_cutoff_1p4  # section 5o, the default cut-off
-python3 ../report_eval/relevance_cutoff/compare.py ../report_eval/relevance_cutoff/{A_no_cutoff,B_cutoff_1p4}.json
-.venv/bin/python -I ../report_eval/code_graph/measure_graph.py                 # section 5p: cost and search value of call lines (no model)
-.venv/bin/python -I ../report_eval/code_graph/live_who_calls.py new_code_calls_shown 3   # section 5p: call questions, real model
+.venv/bin/python report_eval/chat_transcript/live_transcript.py            # section 5n: reopen shows the messages (real model, screenshot)
+AMP_PAGE_MAX_DISTANCE=off .venv/bin/python -I report_eval/relevance_cutoff/recall_cutoff_eval.py A_no_cutoff  # section 5o, no cut-off
+.venv/bin/python -I report_eval/relevance_cutoff/recall_cutoff_eval.py B_cutoff_1p4  # section 5o, the default cut-off
+python3 report_eval/relevance_cutoff/compare.py report_eval/relevance_cutoff/{A_no_cutoff,B_cutoff_1p4}.json
+.venv/bin/python -I report_eval/code_graph/measure_graph.py                 # section 5p: cost and search value of call lines (no model)
+.venv/bin/python -I report_eval/code_graph/live_who_calls.py new_code_calls_shown 3   # section 5p: call questions, real model
+.venv/bin/python -I report_eval/ui_check/new_chat_ui.py after_fix               # section 5q: New chat in a real browser
 ```

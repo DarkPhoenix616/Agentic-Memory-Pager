@@ -1,0 +1,156 @@
+{
+ "summary": {
+  "label": "before",
+  "single_exchanges": {
+   "kept": 17,
+   "total": 25
+  },
+  "long_chat": {
+   "kept": 14,
+   "total": 25,
+   "pieces": 2,
+   "reduce_levels": 1,
+   "in_tokens": 2707,
+   "out_tokens": 164,
+   "lost": [
+    "Pixel",
+    "ZEBRAFISH",
+    "Aman",
+    "Mehta",
+    "Bruno",
+    "Friday",
+    "amp-backups-2026",
+    "Mumbai",
+    "Sanya",
+    "teal",
+    "AMP_LAB_5G"
+   ]
+  },
+  "out_tokens_single_total": 988,
+  "seconds": 117.3
+ },
+ "rows": [
+  {
+   "question": "My cat is called Pixel and my codename is ZEBRAFISH. Explain in about 150 words what a vector database is.",
+   "facts": {
+    "Pixel": false,
+    "ZEBRAFISH": true
+   },
+   "summary": "The user asked for an explanation of a vector database, which stores data as dense vectors for efficient similarity search. The assistant compared it to a game of hide-and-seek, where objects are represented as vectors with specific features. The user, ZEBRAFISH, might appreciate the scalability and performance benefits of vector databases.",
+   "in_tokens": 191,
+   "out_tokens": 65
+  },
+  {
+   "question": "I'm Akshay from IIT Jodhpur, and my teammate Aman wrote the guardrails. Explain in about 150 words how HNSW indexing works.",
+   "facts": {
+    "Akshay": true,
+    "Jodhpur": true,
+    "Aman": true
+   },
+   "summary": "Akshay from IIT Jodhpur asked about HNSW indexing, which is a graph-based indexing technique used in similarity search and nearest neighbor search applications. It constructs a graph where each node represents a data point and edges represent similarity. The graph is organized into a hierarchical structure, allowing for efficient search. HNSW indexing outperforms traditional techniques like k-d trees and ball trees, especially for high-dimensional data. Aman's guardrails implementation likely uses a variant of HNSW indexing.",
+   "in_tokens": 304,
+   "out_tokens": 103
+  },
+  {
+   "question": "Our demo is on 14 December in room LHC-104. Explain in about 150 words what an embedding is.",
+   "facts": {
+    "December": true,
+    "LHC-104": true
+   },
+   "summary": "The demo is scheduled for 14 December in room LHC-104. An embedding is a way of representing one mathematical object or structure within another, preserving its underlying structure. It's a continuous map that takes the object to a subset of another space without intersecting itself. Embeddings are used in topology, geometry, and algebra to study properties of objects by relating them to more familiar ones. The demo will explore embeddings in a visual and interactive way.",
+   "in_tokens": 217,
+   "out_tokens": 91
+  },
+  {
+   "question": "My laptop is a Lenovo LOQ with an RTX 3050. Explain in about 150 words what quantization of an LLM means.",
+   "facts": {
+    "Lenovo": false,
+    "LOQ": false,
+    "RTX 3050": false
+   },
+   "summary": "The user's laptop model was assumed to be incorrect, and the assistant explained quantization in LLMs. Quantization is the process of approximating a continuous-valued model with a discrete-valued one, reducing computational cost and memory requirements. It involves converting model weights and activations to lower-precision integer values, potentially reducing accuracy but enabling lower-power devices or reduced memory requirements.",
+   "in_tokens": 237,
+   "out_tokens": 76
+  },
+  {
+   "question": "The project's internal name is Orion and the vault server runs on port 8001. Explain in about 150 words what JSON-RPC is.",
+   "facts": {
+    "Orion": true,
+    "8001": true
+   },
+   "summary": "The project's internal name is Orion and the vault server runs on port 8001. JSON-RPC is a lightweight protocol for making remote procedure calls over the web, using JSON to encode requests and responses. In the context of Orion, JSON-RPC is likely used to interact with the vault server, allowing clients to access its functionality in a programmatic way.",
+   "in_tokens": 211,
+   "out_tokens": 73
+  },
+  {
+   "question": "Dr. Mehta wants the final report in IEEE format. Explain in about 150 words what a context window is.",
+   "facts": {
+    "Mehta": false,
+    "IEEE": true
+   },
+   "summary": "The user asked the assistant to explain a context window in 150 words, in IEEE format. The assistant provided a 150-word explanation of a context window, which is a region of a document or webpage that provides additional information or context to the user. The context window can be triggered by hovering over a specific term or by clicking on a link.",
+   "in_tokens": 213,
+   "out_tokens": 70
+  },
+  {
+   "question": "Our backup model is qwen3:8b and the main one is llama3.1:8b. Explain in about 150 words what temperature does when sampling.",
+   "facts": {
+    "qwen3:8b": true,
+    "llama3.1:8b": true
+   },
+   "summary": "The user asked about the temperature in sampling, and the assistant explained that it refers to the process of measuring temperature in the environment or system being sampled. In the context of the user's models (qwen3:8b and llama3.1:8b), temperature is related to the fine-tuning or training temperature. The assistant also explained that temperature is a hyperparameter in deep learning that controls the sharpness of the model's output distribution, and is used in sampling-based methods to control the exploration-exploitation trade-off. The assistant noted that the temperature value is a hyperparameter that needs to be tuned for the specific task and dataset.",
+   "in_tokens": 225,
+   "out_tokens": 131
+  },
+  {
+   "question": "My dog Bruno chewed my notes, so I lost the slides for Friday. Explain in about 150 words what a transformer layer does.",
+   "facts": {
+    "Bruno": false,
+    "Friday": true
+   },
+   "summary": "The user lost their slides for Friday due to their dog chewing their notes. A transformer layer is explained in detail, including its role in the Transformer model, its ability to handle sequential data, and its self-attention mechanism. The layer processes input sequences, generates attention weights, and computes a weighted sum of input elements. This process is repeated multiple times to capture long-range dependencies and contextual relationships.",
+   "in_tokens": 241,
+   "out_tokens": 79
+  },
+  {
+   "question": "We keep the backups in a bucket called amp-backups-2026 in Mumbai. Explain in about 150 words what cosine similarity is.",
+   "facts": {
+    "amp-backups-2026": true,
+    "Mumbai": true
+   },
+   "summary": "The user specified the location of backups in a bucket called amp-backups-2026 in Mumbai. The assistant explained cosine similarity, a measure of similarity between two vectors, used in text analysis, information retrieval, and machine learning. It calculates the cosine of the angle between two vectors and ranges from -1 to 1. The assistant suggested using cosine similarity to compare backups or identify similar files.",
+   "in_tokens": 228,
+   "out_tokens": 79
+  },
+  {
+   "question": "Sanya from the design team picked teal as the main colour of the UI. Explain in about 150 words what a REST API is.",
+   "facts": {
+    "Sanya": false,
+    "teal": true
+   },
+   "summary": "The main colour of the UI was decided to be teal. A REST API was explained to be an architectural style for designing networked applications, based on resources identified by URIs, which can be manipulated using standard HTTP methods. The explanation was given as an analogy to a library catalog system. The assistant made a lighthearted comment about designing a UI as elegant as a REST API.",
+   "in_tokens": 218,
+   "out_tokens": 79
+  },
+  {
+   "question": "My Wi-Fi network is called AMP_LAB_5G. Explain in about 150 words how tokenization works.",
+   "facts": {
+    "AMP_LAB_5G": true
+   },
+   "summary": "The user asked about tokenization, a security process that replaces sensitive information with a unique token or code. Tokenization is used to secure the AMP_LAB_5G Wi-Fi network by assigning a unique token or session ID to each device that connects. This provides an additional layer of security by reducing the risk of unauthorized access to sensitive data.",
+   "in_tokens": 207,
+   "out_tokens": 69
+  },
+  {
+   "question": "Remember that our client is Tata Motors and the contract ends in March. Explain in about 150 words what a knowledge graph is.",
+   "facts": {
+    "Tata Motors": true,
+    "March": false
+   },
+   "summary": "The assistant explained what a knowledge graph is to the user, highlighting its benefits for Tata Motors. A knowledge graph is a data structure that represents entities, their relationships, and context. It's a powerful tool for organizing and linking data from various sources, making it easily accessible and usable. The assistant offered to help Tata Motors explore the possibilities and create a tailored solution.",
+   "in_tokens": 215,
+   "out_tokens": 73
+  }
+ ],
+ "long_chat_summary": "The conversation covered various topics, including vector databases, HNSW indexing, embeddings, and quantization of LLMs. Akshay from IIT Jodhpur discussed the project's internal name, Orion, and the vault server running on port 8001. The user mentioned their laptop, a Lenovo LOQ with an RTX 3050, and their backup model, qwen3:8b, and main model, llama3.1:8b. The assistant explained concepts such as cosine similarity, REST APIs, tokenization, and knowledge graphs in about 150 words. The conversation also mentioned the client, Tata Motors, and the contract that ends in March. The user's demo on 14 December in room LHC-104 and the final report in IEEE format were also discussed."
+}

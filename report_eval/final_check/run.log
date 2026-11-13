@@ -1,0 +1,49 @@
+
+== A_in_process
+compactions: 0
+engines: []
+vault_memories: 0
+recall: {'pixel': True, 'zebrafish': True, 'tax': True}
+recall_after_reopen: {'pixel': True, 'zebrafish': True}
+new_chat_status: 200
+reopen_status: 200
+resumed_notes: 5
+plaintext_in_vault: {'ZEBRAFISH': 0, 'Pixel': 0, 'cart_total': 0}
+files: {'.amp_signing_key': '0o600', '.amp_session_keys': '0o600', '.amp_admin_token': '0o600', 'amp_audit.log': 'missing'}
+chats_dir: ['chat-cc68a428.pending']
+shutdown_seconds: 0.49
+shutdown_output: ['AMP Chat on http://127.0.0.1:8021  (model: llama3.1:8b; Memory in-process (no MCP server); signing key created storage/.amp_signing_key)', 'AMP Chat stopped. chat-cc68a428: its unsaved part is kept on disk; reopen the chat to continue.']
+page_ok: True
+app_js_ok: True
+status: llama3.1:8b (local, Ollama) | Memory in-process (no MCP server)
+  [  3.1s] 'Hi! My name is Akshay. My cat is called Pixel and my project codename is ZEBRAFI' -> "Nice to meet you, Akshay! I've taken note of your cat's name (Pixel) and your project codename (ZEBRAFISH). I'll keep these in mind as we chat." 
+        steps: ['monitor', 'reply']
+  [  7.9s] 'Here is the function we use for the shop cart:\n```python\ndef cart_total(items, t' -> 'This function calculates the total cost of items in a shopping cart, including tax. It takes two parameters: `items`, which is a list of dictionaries containing' 
+        steps: ['monitor', 'reply']
+  [ 13.6s] 'Explain in a few short paragraphs how a context window works in a language model' -> "A context window in a language model is a buffer that stores a limited amount of text from the conversation history. It's used to keep track of the conversation" 
+        steps: ['monitor', 'reply']
+  [  3.7s] "What is my cat's name, my project codename, and what does my cart_total function" -> "According to the memories, your cat's name is Pixel, your project codename is ZEBRAFISH, and the cart_total function calculates the total cost of items in a sho" 
+        steps: ['monitor', 'reply']
+  [  6.5s] 'Use search_vault to look up what my project codename is, then tell me.' -> 'According to the memories, your project codename is ZEBRAFISH.' 
+        steps: ['monitor', 'monitor', 'search', 'search', 'reply', 'page_in']
+  [  8.3s] 'Use run_memory_code to count how many memories mention Pixel, then tell me the n' -> 'According to the memories, there is 1 memory that mentions Pixel.' 
+        steps: ['monitor', 'code', 'code', 'reply', 'page_in']
+  [  3.2s] 'What is my cat called and what is my project codename?' -> "According to the memories, your cat's name is Pixel, and your project codename is ZEBRAFISH." 
+        steps: ['monitor', 'reply', 'page_in']
+
+== B_over_mcp
+compactions: 1
+engines: ['RLM']
+vault_memories: 1
+recall: {'pixel': True, 'zebrafish': True, 'tax': True}
+shutdown_seconds: 0.43
+shutdown_output: ['AMP Chat on http://127.0.0.1:8022  (model: llama3.1:8b; Memory over MCP (http://localhost:8031/mcp); signing key loaded storage/.amp_signing_key)', 'AMP Chat stopped. chat-fa86525b: its unsaved part is kept on disk; reopen the chat to continue.']
+status: llama3.1:8b (local, Ollama) | Memory over MCP (http://localhost:8031/mcp)
+  [  3.7s] 'Hi! My name is Akshay. My cat is called Pixel and my project codename is ZEBRAFI' -> "I've stored the information for later reference. According to the memories, your cat's name is Pixel and your project codename is ZEBRAFISH. Is there something " 
+        steps: ['monitor', 'reply']
+  [ 13.0s] 'Here is the function we use for the shop cart:\n```python\ndef cart_total(items, t' -> 'This function calculates the total cost of items in a shopping cart, including tax. It takes two parameters: `items`, which is a list of dictionaries containing' 
+        steps: ['monitor', 'reply']
+  [ 13.7s] 'Explain in a few short paragraphs how a context window works in a language model' -> 'A context window, also known as a context buffer or memory, is a limited-sized buffer that stores the recent input or conversation history of a language model. ' 
+        steps: ['monitor', 'reply']
+  [  4.7s] "What is my cat's name, my project codename, and what does my cart_total function" -> "According to the memories, your cat's name is Pixel, your project codename is ZEBRAFISH, and the cart_total function calculates the total cost of items in a sho" 
+        steps: ['monitor', 'monitor', 'reply', 'page_in']

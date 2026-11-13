@@ -1,0 +1,2940 @@
+{
+ "label": "B_cutoff_1p4",
+ "token_limit": 2048,
+ "max_distance": "none",
+ "recalled": 16,
+ "compactions": 45,
+ "vault_size": 45,
+ "seconds": 931.0,
+ "rows": [
+  {
+   "kind": "fact",
+   "message": "Please remember: my cat is called Pixel.",
+   "answer": "I've stored the information. According to the memories, your cat's name is Pixel.",
+   "seconds": 8.6,
+   "paged": [],
+   "paged_tokens": 0,
+   "prompt_tokens": 919,
+   "reply_tokens": 19,
+   "says_memories": true
+  },
+  {
+   "kind": "filler",
+   "message": "Explain in detail how hash tables handle collisions.",
+   "answer": "Hash tables are a fundamental data structure in computer science, and they're used extensively in various applications. A hash table is a data structure that stores key-value pairs in an array using a hash function to map keys to indices of the array. The hash function takes a key as input and generates a hash code, which is used to determine the index at which the corresponding value should be stored.\n\nNow, let's dive into how hash tables handle collisions.\n\n**What is a collision?**\n\nA collision occurs when two different keys hash to the same index in the array. This is a problem because the hash table is designed to store unique key-value pairs, and if two keys hash to the same index, it's unclear which value should be stored at that index.\n\n**Handling collisions**\n\nThere are several ways to handle collisions in hash tables:\n\n1. **Separate Chaining**: In this approach, each index in the array contains a linked list of key-value pairs that hashed to that index. When a collision occurs, the new key-value pair is added to the linked list at the corresponding index. This approach is simple to implement, but it can lead to slow lookup times if the linked lists become too long.\n2. **Open Addressing**: In this approach, when a collision occurs, the hash table searches for the next available slot in the array. If no slot is available, the table may resize itself to accommodate more key-value pairs. Open addressing can be faster than separate chaining, but it can also lead to slower lookup times if the table is frequently resized.\n3. **Linear Probing**: This is a variation of open addressing where the hash table searches for the next available slot by probing the array in a linear fashion (e.g., by incrementing the index by 1). If no slot is available, the table may resize itself.\n4. **Quadratic Probing**: This is another variation of open addressing where the hash table searches for the next available slot by probing the array in a quadratic fashion (e.g., by incrementing the index by 1, then by 4, then by 9, etc.). Quadratic probing is designed to reduce clustering, which occurs when multiple keys hash to the same index.\n5. **Cuckoo Hashing**: In this approach, each key-value pair is stored in one of two arrays. When a collision occurs, the hash table swaps the colliding key-value pair with a key-value pair from the other array. This approach is designed to minimize clustering and reduce the number of collisions.\n\n**Choosing a collision resolution strategy**\n\nThe choice of collision resolution strategy depends on the specific use case and the characteristics of the data being stored. Separate chaining is simple to implement but can lead to slow lookup times. Open addressing and its variants can be faster but may lead to slower lookup times if the table is frequently resized. Cuckoo hashing is designed to minimize clustering and reduce the number of collisions, but it can be more complex to implement.\n\nIn summary, hash tables handle collisions by using various collision resolution strategies, including separate chaining, open addressing, linear probing, quadratic probing, and cuckoo hashing. The choice of strategy depends on the specific use case and the characteristics of the data being stored.\n\nAccording to the memories, you asked me to explain how hash tables handle collisions.",
+   "seconds": 35.4,
+   "paged": [],
+   "paged_tokens": 0,
+   "prompt_tokens": 957,
+   "reply_tokens": 670,
+   "says_memories": true
+  },
+  {
+   "kind": "fact",
+   "message": "Note this: our project codename is BLUEHERON.",
+   "answer": "I've stored the information. According to the memories, the codename for your project is BLUEHERON.",
+   "seconds": 2.5,
+   "paged": [],
+   "paged_tokens": 0,
+   "prompt_tokens": 1648,
+   "reply_tokens": 23,
+   "says_memories": true
+  },
+  {
+   "kind": "filler",
+   "message": "Explain the CAP theorem with examples.",
+   "answer": "The CAP theorem, also known as the Brewer's CAP theorem, states that it's impossible for a distributed data storage system to simultaneously guarantee all three of the following:\n\n1. **Consistency**: Every read operation will see the most recent write or an error.\n2. **Availability**: Every request receives a response, without guarantee that it contains the most recent version of the information.\n3. **Partition tolerance**: The system continues to operate even when there are network partitions (i.e., the system can still function even if some nodes are not reachable).\n\nLet's consider an example to illustrate this:\n\nSuppose we have a banking system that allows users to transfer money between accounts. We want to ensure that the system is consistent, available, and partition-tolerant.\n\n**Consistency**: If a user transfers money from account A to account B, we want to ensure that the system reflects the updated balance immediately, without any possibility of seeing an outdated balance.\n\n**Availability**: We want the system to be available 24/7, so that users can transfer money at any time, without any downtime.\n\n**Partition tolerance**: Suppose there's a network partition between the bank's headquarters and a remote branch. We want the system to continue operating, so that users can still transfer money even if the remote branch is not reachable.\n\nHowever, if we try to achieve all three properties simultaneously, we'll encounter problems. For example, if we use a distributed database that guarantees consistency, but the network partition occurs, the system will become unavailable, violating the availability property.\n\nTo illustrate this, consider the following example:\n\nSuppose we have a distributed database with two nodes, A and B. Node A is responsible for handling write operations, while node B is responsible for handling read operations. When a user transfers money from account A to account B, the system updates the balance on node A, but not on node B (since node B is not reachable due to the network partition).\n\nNow, when the user tries to read the balance on node B, it will see the outdated balance, violating the consistency property. On the other hand, if we try to make the system available by allowing it to continue operating despite the network partition, we'll compromise the consistency property.\n\nTo resolve this trade-off, distributed systems often use techniques such as:\n\n* **Eventual consistency**: The system ensures that the data will eventually become consistent, even if it's not immediately available.\n* **Weak consistency**: The system allows for some degree of inconsistency, but ensures that the data will eventually become consistent.\n* **Distributed transactions**: The system uses transactions to ensure that multiple nodes are updated atomically, even in the presence of network partitions.\n\nIn summary, the CAP theorem highlights the trade-offs involved in designing distributed systems that are consistent, available, and partition-tolerant. By understanding these trade-offs, we can design systems that meet the specific needs of our applications.\n\nAccording to the memories, you asked me to explain the CAP theorem with examples.",
+   "seconds": 34.4,
+   "paged": [],
+   "paged_tokens": 0,
+   "prompt_tokens": 1688,
+   "reply_tokens": 604,
+   "says_memories": true
+  },
+  {
+   "kind": "fact",
+   "message": "Rule for this project: the vault must use ChromaDB, never SQLite.",
+   "answer": "I've stored the information. According to the memories, the project codename is BLUEHERON, and the vault must use ChromaDB, not SQLite.",
+   "seconds": 3.8,
+   "paged": [],
+   "paged_tokens": 0,
+   "prompt_tokens": 2317,
+   "reply_tokens": 33,
+   "says_memories": true
+  },
+  {
+   "kind": "filler",
+   "message": "Explain in detail how TCP congestion control works.",
+   "answer": "TCP congestion control is a mechanism used to prevent network congestion by controlling the amount of data that a sender can send to a receiver. The goal of congestion control is to ensure that the network can handle the amount of data being sent, and to prevent packet loss due to network congestion.\n\nTCP uses a combination of algorithms and feedback from the receiver to control the amount of data being sent. Here's a detailed explanation of how TCP congestion control works:\n\n**Basic Principles**\n\nTCP congestion control is based on the following principles:\n\n1. **Windowing**: The sender maintains a window of unacknowledged data, which is the amount of data that can be sent before receiving an acknowledgement from the receiver.\n2. **Feedback**: The receiver sends acknowledgements (ACKs) to the sender, indicating which packets have been received correctly.\n3. **Adaptation**: The sender adapts its sending rate based on the feedback from the receiver.\n\n**Congestion Control Algorithms**\n\nTCP uses several congestion control algorithms to control the sending rate. The most common algorithms are:\n\n1. **Slow Start**: When a connection is established, the sender starts with a small window size and increases it exponentially until it reaches a maximum value.\n2. **Congestion Avoidance**: Once the window size reaches a maximum value, the sender enters congestion avoidance mode, where it increases the window size linearly.\n3. **Fast Retransmit**: If the sender receives three duplicate ACKs, it assumes that a packet has been lost and retransmits the packet.\n4. **Fast Recovery**: If the sender retransmits a packet, it increases the window size to compensate for the lost packet.\n\n**TCP Congestion Control Parameters**\n\nTCP congestion control uses several parameters to control the sending rate. The most important parameters are:\n\n1. **Cwnd** (Congestion Window): The maximum amount of data that can be sent before receiving an acknowledgement.\n2. **ssthresh** (Slow Start Threshold): The maximum window size in slow start mode.\n3. **MSS** (Maximum Segment Size): The maximum size of a TCP segment.\n\n**How TCP Congestion Control Works**\n\nHere's a step-by-step explanation of how TCP congestion control works:\n\n1. **Connection Establishment**: A connection is established between the sender and receiver.\n2. **Slow Start**: The sender starts with a small window size (e.g., 1 MSS) and increases it exponentially until it reaches the ssthresh value.\n3. **Congestion Avoidance**: Once the window size reaches the ssthresh value, the sender enters congestion avoidance mode, where it increases the window size linearly.\n4. **Feedback**: The receiver sends ACKs to the sender, indicating which packets have been received correctly.\n5. **Adaptation**: The sender adapts its sending rate based on the feedback from the receiver. If the sender receives an ACK for a packet, it increases the window size. If the sender receives a packet loss indication (e.g., three duplicate ACKs), it reduces the window size.\n6. **Fast Retransmit**: If the sender receives three duplicate ACKs, it assumes that a packet has been lost and retransmits the packet.\n7. **Fast Recovery**: If the sender retransmits a packet, it increases the window size to compensate for the lost packet.\n\n**TCP Congestion Control Algorithms**\n\nTCP uses several congestion control algorithms to control the sending rate. The most common algorithms are:\n\n1. **Reno**: A combination of slow start, congestion avoidance, and fast retransmit.\n2. **NewReno**: An extension of Reno that allows for faster recovery from packet loss.\n3. **Cubic**: A more aggressive algorithm that allows for faster sending rates.\n\n**Conclusion**\n\nTCP congestion control is a complex mechanism that prevents network congestion by controlling the amount of data that a sender can send to a receiver. The sender uses feedback from the receiver to adapt its sending rate, and the receiver sends ACKs to indicate which packets have been received correctly. TCP congestion control algorithms, such as Reno, NewReno, and Cubic, control the sending rate based on the feedback from the receiver.\n\nAccording to the memories, you asked me to explain in detail how TCP congestion control works.",
+   "seconds": 58.6,
+   "paged": [],
+   "paged_tokens": 0,
+   "prompt_tokens": 1643,
+   "reply_tokens": 861,
+   "says_memories": true
+  },
+  {
+   "kind": "fact",
+   "message": "FYI, my teammate Aman owns the guardrails module.",
+   "answer": "I've stored the information. According to the memories, your teammate Aman owns the guardrails module.",
+   "seconds": 16.2,
+   "paged": [
+    {
+     "distance": 1.7,
+     "tokens": 38,
+     "facts": [
+      "blueheron"
+     ]
+    },
+    {
+     "distance": 1.78,
+     "tokens": 31,
+     "facts": [
+      "pixel"
+     ]
+    },
+    {
+     "distance": 1.896,
+     "tokens": 113,
+     "facts": []
+    },
+    {
+     "distance": 2.065,
+     "tokens": 88,
+     "facts": []
+    }
+   ],
+   "paged_tokens": 270,
+   "prompt_tokens": 2437,
+   "reply_tokens": 22,
+   "says_memories": true
+  },
+  {
+   "kind": "filler",
+   "message": "Explain Python decorators with an example.",
+   "answer": "Python decorators are a powerful tool that allows you to modify the behavior of a function without changing its source code.\n\nA decorator is a function that takes another function as an argument and returns a new function that \"wraps\" the original function. The new function produced by the decorator is then called instead of the original function when it's invoked.\n\nHere's an example of a simple decorator that prints a message before and after calling the original function:\n\n```python\ndef my_decorator(func):\n    def wrapper():\n        print(\"Something is happening before the function is called.\")\n        func()\n        print(\"Something is happening after the function is called.\")\n    return wrapper\n\n@my_decorator\ndef say_hello():\n    print(\"Hello!\")\n\nsay_hello()\n```\n\nIn this example, `my_decorator` is a function that takes `func` as an argument and returns `wrapper`. `wrapper` is a new function that calls `func` and prints messages before and after calling it.\n\nWhen we use the `@my_decorator` syntax above the `say_hello` function definition, it's equivalent to writing `say_hello = my_decorator(say_hello)`. So, when we call `say_hello()`, we're actually calling the `wrapper` function returned by `my_decorator`.\n\nOutput:\n\n```\nSomething is happening before the function is called.\nHello!\nSomething is happening after the function is called.\n```\n\nDecorators are often used for tasks such as:\n\n* Logging: to log information before and after a function is called\n* Authentication: to check if a user is authenticated before allowing them to access a function\n* Authorization: to check if a user has the necessary permissions to access a function\n* Caching: to cache the result of a function so that it doesn't need to be recalculated every time it's called\n\nAccording to the memories, you asked me to explain Python decorators with an example.",
+   "seconds": 23.2,
+   "paged": [],
+   "paged_tokens": 0,
+   "prompt_tokens": 1900,
+   "reply_tokens": 383,
+   "says_memories": true
+  },
+  {
+   "kind": "fact",
+   "message": "Remember that our final demo is on 14 December.",
+   "answer": "I've stored the information. According to the memories, our final demo is scheduled for 14 December.",
+   "seconds": 12.4,
+   "paged": [
+    {
+     "distance": 1.849,
+     "tokens": 38,
+     "facts": [
+      "blueheron"
+     ]
+    },
+    {
+     "distance": 1.873,
+     "tokens": 52,
+     "facts": [
+      "blueheron",
+      "sqlite"
+     ]
+    },
+    {
+     "distance": 1.902,
+     "tokens": 88,
+     "facts": []
+    },
+    {
+     "distance": 1.955,
+     "tokens": 31,
+     "facts": [
+      "pixel"
+     ]
+    },
+    {
+     "distance": 2.038,
+     "tokens": 89,
+     "facts": []
+    },
+    {
+     "distance": 2.087,
+     "tokens": 113,
+     "facts": []
+    }
+   ],
+   "paged_tokens": 411,
+   "prompt_tokens": 2330,
+   "reply_tokens": 22,
+   "says_memories": true
+  },
+  {
+   "kind": "filler",
+   "message": "What is the difference between processes and threads? Explain in detail.",
+   "answer": "Processes and threads are both used for concurrent execution of tasks, but they have distinct differences in terms of their own memory space, creation, and synchronization.\n\n**Processes:**\n\nA process is an independent entity that runs its own memory space. Each process has its own:\n\n* Memory: Each process has its own virtual address space, which is separate from other processes.\n* Resources: Each process has its own set of open files, sockets, and other system resources.\n* State: Each process has its own state, including its own program counter, stack, and registers.\n\nWhen a new process is created, the operating system allocates a new virtual address space for it, and the process starts executing from the beginning.\n\n**Threads:**\n\nA thread, on the other hand, is a lightweight process that shares the same memory space as its parent process. Each thread has its own:\n\n* Stack: Each thread has its own stack, which is used to store the thread's local variables and function call stack.\n* Program counter: Each thread has its own program counter, which keeps track of the thread's current instruction pointer.\n* Registers: Each thread has its own set of registers, which are used to store the thread's local variables and function call stack.\n\nWhen a new thread is created, it shares the same virtual address space as its parent process, and it starts executing from the beginning.\n\n**Key differences:**\n\n1. **Memory Space:** Processes have their own memory space, while threads share the same memory space as their parent process.\n2. **Creation:** Creating a new process is more expensive than creating a new thread, as it requires allocating a new virtual address space.\n3. **Synchronization:** Threads require synchronization mechanisms, such as locks and semaphores, to coordinate access to shared resources. Processes do not require synchronization, as each process has its own resources.\n4. **Communication:** Processes can communicate with each other using inter-process communication (IPC) mechanisms, such as pipes and sockets. Threads can communicate with each other using shared variables and synchronization mechanisms.\n\n**When to use each:**\n\n1. **Use processes when:**\n\t* You need to run multiple tasks independently, with their own resources and memory space.\n\t* You need to protect the integrity of each task from other tasks.\n\t* You need to use IPC mechanisms to communicate between tasks.\n2. **Use threads when:**\n\t* You need to run multiple tasks concurrently, with shared resources and memory space.\n\t* You need to improve responsiveness and throughput by executing tasks in parallel.\n\t* You need to use synchronization mechanisms to coordinate access to shared resources.\n\nAccording to the memories, you asked me to explain the difference between processes and threads in detail.",
+   "seconds": 30.7,
+   "paged": [],
+   "paged_tokens": 0,
+   "prompt_tokens": 1423,
+   "reply_tokens": 550,
+   "says_memories": true
+  },
+  {
+   "kind": "fact",
+   "message": "Note: the memory server runs on port 8001.",
+   "answer": "I've stored the information. According to the memories, the memory server runs on port 8001.",
+   "seconds": 3.0,
+   "paged": [],
+   "paged_tokens": 0,
+   "prompt_tokens": 1994,
+   "reply_tokens": 22,
+   "says_memories": true
+  },
+  {
+   "kind": "filler",
+   "message": "Explain in detail how a B-tree index works.",
+   "answer": "A B-tree index is a self-balancing search tree data structure that keeps data sorted and allows for efficient insertion, deletion, and search operations. It is commonly used in databases and file systems to index large amounts of data.\n\n**Basic Structure:**\n\nA B-tree index consists of a set of nodes, each of which contains a range of keys and a set of child pointers. Each node has a fixed number of child pointers, which point to other nodes in the tree. The root node is the topmost node in the tree, and it has a fixed number of child pointers that point to other nodes.\n\n**Properties:**\n\nA B-tree index has the following properties:\n\n1. **Balanced:** The tree is self-balancing, which means that the height of the tree remains relatively constant even after insertion or deletion of nodes.\n2. **Ordered:** The keys in each node are ordered, which allows for efficient search and range queries.\n3. **Fixed number of child pointers:** Each node has a fixed number of child pointers, which allows for efficient insertion and deletion of nodes.\n4. **Leaf nodes:** The leaf nodes are the nodes at the bottom of the tree, and they contain the actual data.\n\n**Operations:**\n\nA B-tree index supports the following operations:\n\n1. **Insertion:** When a new key is inserted into the tree, the tree is rebalanced to maintain the balance property.\n2. **Deletion:** When a key is deleted from the tree, the tree is rebalanced to maintain the balance property.\n3. **Search:** When a key is searched for in the tree, the tree is traversed from the root node to the leaf nodes until the key is found.\n4. **Range queries:** When a range of keys is queried in the tree, the tree is traversed from the root node to the leaf nodes until the range is found.\n\n**B-tree Operations:**\n\nA B-tree index supports the following operations:\n\n1. **Insert(key):** Inserts a new key into the tree and rebalances the tree to maintain the balance property.\n2. **Delete(key):** Deletes a key from the tree and rebalances the tree to maintain the balance property.\n3. **Search(key):** Searches for a key in the tree and returns the node containing the key.\n4. **RangeQuery(minKey, maxKey):** Queries the tree for all keys within the range [minKey, maxKey] and returns the nodes containing the keys.\n\n**Example:**\n\nSuppose we have a B-tree index with the following nodes:\n\n* Root node: [10, 20, 30]\n* Child node 1: [15, 25]\n* Child node 2: [20, 30]\n* Leaf node 1: [15, 20]\n* Leaf node 2: [20, 25]\n* Leaf node 3: [25, 30]\n\nIf we insert a new key 22 into the tree, the tree will be rebalanced to maintain the balance property. The updated tree will be:\n\n* Root node: [10, 20, 30]\n* Child node 1: [15, 25]\n* Child node 2: [20, 30]\n* Leaf node 1: [15, 20]\n* Leaf node 2: [20, 22]\n* Leaf node 3: [22, 25]\n* Leaf node 4: [25, 30]\n\nIf we search for the key 22 in the tree, the tree will be traversed from the root node to the leaf nodes until the key is found. The node containing the key 22 is Leaf node 2.\n\nAccording to the memories, you asked me to explain in detail how a B-tree index works.",
+   "seconds": 46.3,
+   "paged": [],
+   "paged_tokens": 0,
+   "prompt_tokens": 2036,
+   "reply_tokens": 777,
+   "says_memories": true
+  },
+  {
+   "kind": "fact",
+   "message": "Our laptop GPU is an RTX 3050 with 6 GB.",
+   "answer": "According to the memories, your laptop's GPU is an NVIDIA GeForce RTX 3050 with 6 GB of video memory.",
+   "seconds": 25.0,
+   "paged": [
+    {
+     "distance": 1.755,
+     "tokens": 38,
+     "facts": [
+      "blueheron"
+     ]
+    },
+    {
+     "distance": 1.764,
+     "tokens": 89,
+     "facts": []
+    },
+    {
+     "distance": 1.785,
+     "tokens": 38,
+     "facts": [
+      "aman"
+     ]
+    },
+    {
+     "distance": 1.825,
+     "tokens": 113,
+     "facts": []
+    },
+    {
+     "distance": 1.844,
+     "tokens": 31,
+     "facts": [
+      "pixel"
+     ]
+    },
+    {
+     "distance": 1.89,
+     "tokens": 128,
+     "facts": []
+    },
+    {
+     "distance": 1.916,
+     "tokens": 36,
+     "facts": [
+      "december"
+     ]
+    },
+    {
+     "distance": 1.926,
+     "tokens": 88,
+     "facts": []
+    },
+    {
+     "distance": 1.926,
+     "tokens": 6,
+     "facts": []
+    },
+    {
+     "distance": 2.015,
+     "tokens": 80,
+     "facts": []
+    },
+    {
+     "distance": 2.048,
+     "tokens": 20,
+     "facts": []
+    },
+    {
+     "distance": 2.051,
+     "tokens": 52,
+     "facts": [
+      "blueheron",
+      "sqlite"
+     ]
+    }
+   ],
+   "paged_tokens": 719,
+   "prompt_tokens": 3492,
+   "reply_tokens": 27,
+   "says_memories": true
+  },
+  {
+   "kind": "filler",
+   "message": "Explain in detail how garbage collection works in Java.",
+   "answer": "Garbage collection in Java is a process that automatically frees up memory occupied by objects that are no longer needed or referenced. It is a critical component of Java's memory management system.\n\n**How Garbage Collection Works:**\n\n1. **Mark Phase:** The garbage collector identifies objects that are still referenced and marks them as \"live\". This is done by traversing the heap and following all the references from the roots (global variables, stack variables, and registers).\n2. **Sweep Phase:** The garbage collector then identifies the objects that are not marked as \"live\" and are therefore considered garbage. These objects are then removed from the heap.\n3. **Compact Phase:** The garbage collector may also perform a compact phase, where it moves all the live objects together in the heap, eliminating any gaps or holes.\n\n**Types of Garbage Collection:**\n\n1. **Generational Garbage Collection:** Java uses a generational approach to garbage collection, where objects are divided into three generations based on their lifetime:\n\t* **Young Generation:** Objects that are recently created and are likely to be short-lived.\n\t* **Old Generation:** Objects that have survived the young generation and are likely to be long-lived.\n\t* **Permanent Generation:** Objects that are used by the JVM itself, such as class metadata and string literals.\n2. **Concurrent Mark-and-Sweep (CMS) Garbage Collection:** This is a low-pause-time garbage collector that runs concurrently with the application, marking and sweeping the heap in the background.\n3. **Garbage-First (G1) Garbage Collection:** This is a low-pause-time garbage collector that divides the heap into smaller regions and uses a combination of marking and sweeping to collect garbage.\n\n**Garbage Collection Algorithms:**\n\n1. **Mark-and-Sweep:** This is the basic algorithm used by the garbage collector. It marks all the reachable objects and then sweeps the heap to remove the unreachable objects.\n2. **Mark-and-Compact:** This algorithm is similar to mark-and-sweep, but it also compacts the heap to eliminate any gaps or holes.\n\n**Garbage Collection Modes:**\n\n1. **Serial Garbage Collection:** This is the default garbage collection mode, where the garbage collector runs in a single thread.\n2. **Parallel Garbage Collection:** This mode allows the garbage collector to run in multiple threads, improving performance on multi-core systems.\n3. **Concurrent Garbage Collection:** This mode allows the garbage collector to run concurrently with the application, reducing pause times.\n\n**Garbage Collection Parameters:**\n\n1. **NewRatio:** This parameter controls the ratio of the young generation to the old generation.\n2. **MaxTenuringThreshold:** This parameter controls the maximum age of an object before it is promoted to the old generation.\n3. **SurvivorRatio:** This parameter controls the ratio of the survivor space to the young generation.\n\n**Best Practices for Garbage Collection:**\n\n1. **Avoid Object Creation:** Minimize object creation by reusing objects whenever possible.\n2. **Avoid Object Retention:** Avoid retaining objects for longer than necessary, as this can lead to memory leaks.\n3. **Use Weak References:** Use weak references to objects to allow the garbage collector to collect them when they are no longer referenced.\n\nAccording to the memories, you asked me to explain in detail how garbage collection works in Java.",
+   "seconds": 41.5,
+   "paged": [
+    {
+     "distance": 1.186,
+     "tokens": 113,
+     "facts": []
+    },
+    {
+     "distance": 1.383,
+     "tokens": 88,
+     "facts": []
+    }
+   ],
+   "paged_tokens": 201,
+   "prompt_tokens": 2164,
+   "reply_tokens": 682,
+   "says_memories": true
+  },
+  {
+   "kind": "fact",
+   "message": "The bug in pager_v3.py was an off-by-one error in the eviction loop.",
+   "answer": "According to the memories, you mentioned that the bug in pager_v3.py was an off-by-one error in the eviction loop.",
+   "seconds": 14.0,
+   "paged": [],
+   "paged_tokens": 0,
+   "prompt_tokens": 1681,
+   "reply_tokens": 27,
+   "says_memories": true
+  },
+  {
+   "kind": "filler",
+   "message": "Explain the transformer attention mechanism in detail.",
+   "answer": "The transformer attention mechanism is a key component of the transformer architecture, which is a type of neural network designed for sequence-to-sequence tasks such as machine translation, text summarization, and question answering.\n\n**What is Attention?**\n\nAttention is a mechanism that allows the model to focus on specific parts of the input sequence when generating the output. It's a way to weigh the importance of different input elements when computing the output.\n\n**How Does Attention Work?**\n\nThe attention mechanism works as follows:\n\n1. **Query**: The model generates a query vector, which is a representation of the current input element.\n2. **Keys and Values**: The model generates a set of key vectors and value vectors, which are representations of the input elements.\n3. **Attention Weights**: The model computes attention weights, which represent the importance of each input element with respect to the query.\n4. **Weighted Sum**: The model computes a weighted sum of the value vectors, using the attention weights as weights.\n5. **Output**: The final output is a weighted sum of the value vectors, which represents the output of the attention mechanism.\n\n**Types of Attention**\n\nThere are several types of attention mechanisms, including:\n\n1. **Self-Attention**: This is the most common type of attention, where the model attends to different parts of the input sequence.\n2. **Inter-Attention**: This type of attention is used in multi-head attention, where the model attends to different parts of the input sequence in parallel.\n3. **Hierarchical Attention**: This type of attention is used in hierarchical models, where the model attends to different levels of abstraction.\n\n**Multi-Head Attention**\n\nMulti-head attention is a technique that allows the model to attend to different parts of the input sequence in parallel. It works as follows:\n\n1. **Split Query, Keys, and Values**: The model splits the query, keys, and values into multiple heads.\n2. **Compute Attention Weights**: The model computes attention weights for each head.\n3. **Compute Weighted Sum**: The model computes a weighted sum of the value vectors for each head.\n4. **Concatenate Outputs**: The model concatenates the outputs of each head.\n\n**Benefits of Attention**\n\nThe attention mechanism has several benefits, including:\n\n1. **Improved Performance**: Attention can improve the performance of sequence-to-sequence models by allowing them to focus on the most relevant parts of the input sequence.\n2. **Increased Flexibility**: Attention can be used in a variety of applications, including machine translation, text summarization, and question answering.\n3. **Interpretability**: Attention can provide insights into how the model is making decisions, which can be useful for understanding the model's behavior.\n\nAccording to the memories, you asked me to explain the transformer attention mechanism in detail.",
+   "seconds": 32.9,
+   "paged": [],
+   "paged_tokens": 0,
+   "prompt_tokens": 1726,
+   "reply_tokens": 565,
+   "says_memories": true
+  },
+  {
+   "kind": "fact",
+   "message": "We chose LangGraph for orchestration.",
+   "answer": "According to the memories, you mentioned that you chose LangGraph for orchestration.",
+   "seconds": 5.4,
+   "paged": [
+    {
+     "distance": 1.79,
+     "tokens": 6,
+     "facts": []
+    },
+    {
+     "distance": 1.803,
+     "tokens": 128,
+     "facts": []
+    },
+    {
+     "distance": 1.811,
+     "tokens": 38,
+     "facts": [
+      "blueheron"
+     ]
+    },
+    {
+     "distance": 1.825,
+     "tokens": 20,
+     "facts": []
+    },
+    {
+     "distance": 1.867,
+     "tokens": 105,
+     "facts": []
+    },
+    {
+     "distance": 1.868,
+     "tokens": 36,
+     "facts": [
+      "december"
+     ]
+    },
+    {
+     "distance": 1.906,
+     "tokens": 52,
+     "facts": [
+      "blueheron",
+      "sqlite"
+     ]
+    },
+    {
+     "distance": 1.921,
+     "tokens": 89,
+     "facts": []
+    },
+    {
+     "distance": 1.921,
+     "tokens": 80,
+     "facts": []
+    },
+    {
+     "distance": 1.941,
+     "tokens": 37,
+     "facts": [
+      "8001"
+     ]
+    },
+    {
+     "distance": 2.012,
+     "tokens": 88,
+     "facts": []
+    },
+    {
+     "distance": 2.016,
+     "tokens": 38,
+     "facts": [
+      "aman"
+     ]
+    },
+    {
+     "distance": 2.032,
+     "tokens": 31,
+     "facts": [
+      "pixel"
+     ]
+    },
+    {
+     "distance": 2.127,
+     "tokens": 113,
+     "facts": []
+    }
+   ],
+   "paged_tokens": 861,
+   "prompt_tokens": 4331,
+   "reply_tokens": 17,
+   "says_memories": true
+  },
+  {
+   "kind": "filler",
+   "message": "Explain the SOLID principles with examples.",
+   "answer": "The SOLID principles are a set of design principles for object-oriented programming that aim to promote clean, maintainable, and scalable code.\n\n**S - Single Responsibility Principle (SRP)**\n\nThe SRP states that a class should have only one reason to change. In other words, a class should have a single responsibility and should not be responsible for multiple, unrelated tasks.\n\nExample:\n\nSuppose we have a `User` class that is responsible for both storing user data and sending emails. This is a violation of the SRP because the `User` class has two unrelated responsibilities.\n\n```python\nclass User:\n    def __init__(self, name, email):\n        self.name = name\n        self.email = email\n\n    def save_to_database(self):\n        # code to save user data to database\n\n    def send_email(self):\n        # code to send email\n```\n\nTo fix this, we can create separate classes for storing user data and sending emails.\n\n```python\nclass User:\n    def __init__(self, name, email):\n        self.name = name\n        self.email = email\n\nclass UserDatabase:\n    def save_user(self, user):\n        # code to save user data to database\n\nclass EmailService:\n    def send_email(self, user):\n        # code to send email\n```\n\n**O - Open/Closed Principle (OCP)**\n\nThe OCP states that a class should be open for extension but closed for modification. In other words, we should be able to add new functionality to a class without modifying its existing code.\n\nExample:\n\nSuppose we have a `PaymentGateway` class that supports only one payment method, credit card. If we want to add a new payment method, such as PayPal, we would have to modify the existing code.\n\n```python\nclass PaymentGateway:\n    def process_payment(self, amount):\n        # code to process credit card payment\n```\n\nTo fix this, we can create an abstract class `PaymentGateway` that defines the interface for payment processing, and then create concrete classes for each payment method.\n\n```python\nfrom abc import ABC, abstractmethod\n\nclass PaymentGateway(ABC):\n    @abstractmethod\n    def process_payment(self, amount):\n        pass\n\nclass CreditCardPaymentGateway(PaymentGateway):\n    def process_payment(self, amount):\n        # code to process credit card payment\n\nclass PayPalPaymentGateway(PaymentGateway):\n    def process_payment(self, amount):\n        # code to process PayPal payment\n```\n\n**L - Liskov Substitution Principle (LSP)**\n\nThe LSP states that subtypes should be substitutable for their base types. In other words, we should be able to use a subtype wherever a base type is expected.\n\nExample:\n\nSuppose we have a `Rectangle` class that has a method `get_area()`, and we create a `Square` class that inherits from `Rectangle`. However, the `Square` class has a different implementation for `get_area()`.\n\n```python\nclass Rectangle:\n    def get_area(self):\n        # code to calculate area of rectangle\n\nclass Square(Rectangle):\n    def get_area(self):\n        # code to calculate area of square\n```\n\nTo fix this, we can create an abstract class `Shape` that defines the interface for shapes, and then create concrete classes for each shape.\n\n```python\nfrom abc import ABC, abstractmethod\n\nclass Shape(ABC):\n    @abstractmethod\n    def get_area(self):\n        pass\n\nclass Rectangle(Shape):\n    def get_area(self):\n        # code to calculate area of rectangle\n\nclass Square(Shape):\n    def get_area(self):\n        # code to calculate area of square\n```\n\n**I - Interface Segregation Principle (ISP)**\n\nThe ISP states that clients should not be forced to depend on interfaces they do not use. In other words, we should break down large interfaces into smaller, more focused interfaces.\n\nExample:\n\nSuppose we have a `PaymentGateway` interface that has methods for both credit card and PayPal payments. However, a client that only uses credit card payments does not need to implement the PayPal payment method.\n\n```python\nclass PaymentGateway:\n    def process_credit_card_payment(self, amount):\n        # code to process credit card payment\n\n    def process_paypal_payment(self, amount):\n        # code to process PayPal payment\n```\n\nTo fix this, we can create separate interfaces for credit card and PayPal payments.\n\n```python\nclass CreditCardPaymentGateway:\n    def process_credit_card_payment(self, amount):\n        # code to process credit card payment\n\nclass PayPalPaymentGateway:\n    def process_paypal_payment(self, amount):\n        # code to process PayPal payment\n```\n\n**D - Dependency Inversion Principle (DIP)**\n\nThe DIP states that high-level modules should not depend on low-level modules, but both should depend on abstractions. In other words, we should decouple high-level modules from low-level modules by using abstractions.\n\nExample:\n\nSuppose we have a `PaymentProcessor` class that depends on a `",
+   "seconds": 68.0,
+   "paged": [],
+   "paged_tokens": 0,
+   "prompt_tokens": 1590,
+   "reply_tokens": 1024,
+   "says_memories": false
+  },
+  {
+   "kind": "fact",
+   "message": "My project supervisor is Dr. Rao.",
+   "answer": "According to the memories, your project supervisor is indeed Dr. Rao.",
+   "seconds": 12.4,
+   "paged": [
+    {
+     "distance": 1.321,
+     "tokens": 38,
+     "facts": [
+      "blueheron"
+     ]
+    },
+    {
+     "distance": 1.658,
+     "tokens": 36,
+     "facts": [
+      "december"
+     ]
+    },
+    {
+     "distance": 1.68,
+     "tokens": 49,
+     "facts": []
+    },
+    {
+     "distance": 1.68,
+     "tokens": 28,
+     "facts": [
+      "langgraph"
+     ]
+    },
+    {
+     "distance": 1.702,
+     "tokens": 38,
+     "facts": [
+      "aman"
+     ]
+    },
+    {
+     "distance": 1.705,
+     "tokens": 89,
+     "facts": []
+    },
+    {
+     "distance": 1.721,
+     "tokens": 128,
+     "facts": []
+    },
+    {
+     "distance": 1.754,
+     "tokens": 37,
+     "facts": [
+      "8001"
+     ]
+    },
+    {
+     "distance": 1.759,
+     "tokens": 52,
+     "facts": [
+      "blueheron",
+      "sqlite"
+     ]
+    },
+    {
+     "distance": 1.767,
+     "tokens": 105,
+     "facts": []
+    },
+    {
+     "distance": 1.767,
+     "tokens": 80,
+     "facts": []
+    },
+    {
+     "distance": 1.837,
+     "tokens": 103,
+     "facts": []
+    },
+    {
+     "distance": 1.853,
+     "tokens": 88,
+     "facts": []
+    },
+    {
+     "distance": 1.863,
+     "tokens": 113,
+     "facts": []
+    }
+   ],
+   "paged_tokens": 984,
+   "prompt_tokens": 4167,
+   "reply_tokens": 15,
+   "says_memories": true
+  },
+  {
+   "kind": "filler",
+   "message": "Explain in detail how virtual memory and paging work in an operating system.",
+   "answer": "According to the memories, you asked me to explain how virtual memory and paging work in an operating system.\n\nVirtual memory is a memory management technique that allows a computer to use more memory than is physically available in the system. It does this by using a combination of physical RAM and a hard drive or solid-state drive to store data.\n\nHere's how it works:\n\n1.  The operating system divides the physical RAM into fixed-size blocks called pages. Each page has a unique address.\n2.  The operating system also divides the hard drive or solid-state drive into fixed-size blocks called frames. Each frame has a unique address.\n3.  When a program requests memory, the operating system checks if there is enough free RAM to satisfy the request. If there is, the operating system allocates the requested memory from the free RAM.\n4.  If there is not enough free RAM, the operating system uses the hard drive or solid-state drive to store some of the data. This is called swapping.\n5.  The operating system uses a data structure called a page table to keep track of which pages are stored in RAM and which are stored on the hard drive or solid-state drive.\n6.  When a program requests a page of memory, the operating system checks the page table to see if the page is stored in RAM. If it is, the operating system returns the page to the program.\n7.  If the page is not stored in RAM, the operating system swaps the page from the hard drive or solid-state drive into RAM. This is called a page fault.\n8.  The operating system then returns the page to the program.\n\nPaging is a technique used by the operating system to manage virtual memory. It works as follows:\n\n1.  The operating system divides the physical RAM into fixed-size blocks called pages.\n2.  The operating system divides the hard drive or solid-state drive into fixed-size blocks called frames.\n3.  When a program requests memory, the operating system checks if there is enough free RAM to satisfy the request. If there is, the operating system allocates the requested memory from the free RAM.\n4.  If there is not enough free RAM, the operating system uses the hard drive or solid-state drive to store some of the data. This is called swapping.\n5.  The operating system uses a data structure called a page table to keep track of which pages are stored in RAM and which are stored on the hard drive or solid-state drive.\n6.  When a program requests a page of memory, the operating system checks the page table to see if the page is stored in RAM. If it is, the operating system returns the page to the program.\n7.  If the page is not stored in RAM, the operating system swaps the page from the hard drive or solid-state drive into RAM. This is called a page fault.\n8.  The operating system then returns the page to the program.\n\nHere's an example of how paging works:\n\nSuppose we have a program that requests 10 pages of memory. The operating system checks the page table and sees that 5 pages are stored in RAM and 5 pages are stored on the hard drive or solid-state drive. The operating system swaps the 5 pages from the hard drive or solid-state drive into RAM. This is called a page fault.\n\nThe operating system then returns the 5 pages to the program. The program can now access the 5 pages of memory.\n\nHere's a code example of how paging works in a simple operating system:\n\n```python\nimport os\n\n# Define the page size\nPAGE_SIZE = 4096\n\n# Define the number of pages\nNUM_PAGES = 10\n\n# Create a page table\npage_table = {}\n\n# Initialize the page table\nfor i in range(NUM_PAGES):\n    page_table[i] = None\n\n# Request 10 pages of memory\nfor i in range(NUM_PAGES):\n    # Check if the page is stored in RAM\n    if page_table[i] is None:\n        # Swap the page from the hard drive or solid-state drive into RAM\n        page_table[i] = os.read(i * PAGE_SIZE, PAGE_SIZE)\n    # Return the page to the program\n    print(page_table[i])\n```\n\nThis code example demonstrates how paging works in a simple operating system. It shows how the operating system checks the page table to see if a page is stored in RAM, and if not, swaps the page from the hard drive or solid-state drive into RAM.",
+   "seconds": 60.0,
+   "paged": [
+    {
+     "distance": 1.244,
+     "tokens": 103,
+     "facts": []
+    },
+    {
+     "distance": 1.246,
+     "tokens": 37,
+     "facts": [
+      "8001"
+     ]
+    },
+    {
+     "distance": 1.306,
+     "tokens": 113,
+     "facts": []
+    },
+    {
+     "distance": 1.357,
+     "tokens": 48,
+     "facts": [
+      "off by one"
+     ]
+    },
+    {
+     "distance": 1.36,
+     "tokens": 128,
+     "facts": []
+    },
+    {
+     "distance": 1.4,
+     "tokens": 88,
+     "facts": []
+    }
+   ],
+   "paged_tokens": 517,
+   "prompt_tokens": 3037,
+   "reply_tokens": 913,
+   "says_memories": true
+  },
+  {
+   "kind": "fact",
+   "message": "My favourite editor is Neovim.",
+   "answer": "According to the memories, your favorite editor is indeed Neovim.",
+   "seconds": 16.2,
+   "paged": [
+    {
+     "distance": 1.552,
+     "tokens": 28,
+     "facts": [
+      "langgraph"
+     ]
+    },
+    {
+     "distance": 1.714,
+     "tokens": 52,
+     "facts": [
+      "blueheron",
+      "sqlite"
+     ]
+    },
+    {
+     "distance": 1.765,
+     "tokens": 31,
+     "facts": [
+      "pixel"
+     ]
+    },
+    {
+     "distance": 1.78,
+     "tokens": 38,
+     "facts": [
+      "blueheron"
+     ]
+    },
+    {
+     "distance": 1.819,
+     "tokens": 36,
+     "facts": [
+      "december"
+     ]
+    },
+    {
+     "distance": 1.824,
+     "tokens": 105,
+     "facts": []
+    },
+    {
+     "distance": 1.852,
+     "tokens": 103,
+     "facts": []
+    },
+    {
+     "distance": 1.867,
+     "tokens": 6,
+     "facts": []
+    },
+    {
+     "distance": 1.889,
+     "tokens": 45,
+     "facts": [
+      "3050",
+      "30"
+     ]
+    },
+    {
+     "distance": 1.892,
+     "tokens": 80,
+     "facts": []
+    },
+    {
+     "distance": 1.897,
+     "tokens": 48,
+     "facts": [
+      "off by one"
+     ]
+    },
+    {
+     "distance": 1.918,
+     "tokens": 103,
+     "facts": []
+    },
+    {
+     "distance": 1.923,
+     "tokens": 18,
+     "facts": []
+    },
+    {
+     "distance": 1.929,
+     "tokens": 31,
+     "facts": []
+    },
+    {
+     "distance": 1.935,
+     "tokens": 128,
+     "facts": []
+    }
+   ],
+   "paged_tokens": 852,
+   "prompt_tokens": 4151,
+   "reply_tokens": 15,
+   "says_memories": true
+  },
+  {
+   "kind": "filler",
+   "message": "Explain in detail how HTTPS establishes a secure connection.",
+   "answer": "According to the memories, you asked me to explain how HTTPS establishes a secure connection.\n\nHTTPS (Hypertext Transfer Protocol Secure) is a protocol for secure communication over the internet. It uses a combination of encryption and authentication to establish a secure connection between a client (such as a web browser) and a server.\n\nHere's how HTTPS establishes a secure connection:\n\n1.  The client initiates a connection to the server by sending a request to the server's IP address.\n2.  The server responds with a certificate that contains the server's public key and identity information.\n3.  The client verifies the certificate by checking the server's identity and ensuring that the certificate is valid and not expired.\n4.  If the certificate is valid, the client generates a random session key and encrypts it with the server's public key.\n5.  The client sends the encrypted session key to the server.\n6.  The server decrypts the session key using its private key and uses it to encrypt all subsequent data sent to the client.\n7.  The client and server then use the session key to encrypt and decrypt all data sent between them.\n\nThe HTTPS protocol uses the following components to establish a secure connection:\n\n1.  **TLS (Transport Layer Security)**: TLS is a protocol that provides encryption and authentication for data sent over the internet. It is used by HTTPS to establish a secure connection between the client and server.\n2.  **SSL (Secure Sockets Layer)**: SSL is an older protocol that was used for secure communication over the internet. It is still used by some servers, but it is being phased out in favor of TLS.\n3.  **Certificates**: Certificates are used to authenticate the identity of the server and to establish trust between the client and server. They contain the server's public key and identity information.\n4.  **Public Key Cryptography**: Public key cryptography is used to encrypt the session key and to authenticate the server's identity.\n5.  **Private Key Cryptography**: Private key cryptography is used to decrypt the session key and to authenticate the client's identity.\n\nHere's an example of how HTTPS establishes a secure connection:\n\nSuppose a client wants to connect to a server using HTTPS. The client initiates a connection to the server by sending a request to the server's IP address.\n\nThe server responds with a certificate that contains the server's public key and identity information. The client verifies the certificate by checking the server's identity and ensuring that the certificate is valid and not expired.\n\nIf the certificate is valid, the client generates a random session key and encrypts it with the server's public key. The client sends the encrypted session key to the server.\n\nThe server decrypts the session key using its private key and uses it to encrypt all subsequent data sent to the client. The client and server then use the session key to encrypt and decrypt all data sent between them.\n\nHere's a code example of how HTTPS establishes a secure connection:\n\n[code block 1: python]\n\nThis code example demonstrates how HTTPS establishes a secure connection using the `ssl` module in Python.\n\n```python\nimport ssl\nimport socket\n\n# Create a socket\nsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n\n# Create an SSL context\ncontext = ssl.create_default_context()\n\n# Wrap the socket with the SSL context\nssl_sock = context.wrap_socket(sock, server_hostname='example.com')\n\n# Connect to the server\nssl_sock.connect(('example.com', 443))\n\n# Send data to the server\nssl_sock.send(b'Hello, server!')\n\n# Receive data from the server\ndata = ssl_sock.recv(1024)\n\n# Print the received data\nprint(data.decode())\n\n# Close the socket\nssl_sock.close()\n```\n\nThis code example demonstrates how to establish a secure connection using HTTPS. It creates a socket, wraps it with an SSL context, and connects to a server using the `ssl` module in Python.",
+   "seconds": 48.2,
+   "paged": [],
+   "paged_tokens": 0,
+   "prompt_tokens": 2102,
+   "reply_tokens": 796,
+   "says_memories": true
+  },
+  {
+   "kind": "fact",
+   "message": "My lucky number is 47.",
+   "answer": "According to the memories, your lucky number is indeed 47.",
+   "seconds": 16.6,
+   "paged": [
+    {
+     "distance": 1.783,
+     "tokens": 52,
+     "facts": [
+      "blueheron",
+      "sqlite"
+     ]
+    },
+    {
+     "distance": 1.816,
+     "tokens": 38,
+     "facts": [
+      "blueheron"
+     ]
+    },
+    {
+     "distance": 1.836,
+     "tokens": 31,
+     "facts": [
+      "pixel"
+     ]
+    },
+    {
+     "distance": 1.866,
+     "tokens": 54,
+     "facts": []
+    },
+    {
+     "distance": 1.867,
+     "tokens": 25,
+     "facts": []
+    },
+    {
+     "distance": 1.871,
+     "tokens": 26,
+     "facts": [
+      "rao"
+     ]
+    },
+    {
+     "distance": 1.873,
+     "tokens": 36,
+     "facts": [
+      "december"
+     ]
+    },
+    {
+     "distance": 1.875,
+     "tokens": 113,
+     "facts": []
+    },
+    {
+     "distance": 1.88,
+     "tokens": 36,
+     "facts": []
+    },
+    {
+     "distance": 1.884,
+     "tokens": 29,
+     "facts": []
+    },
+    {
+     "distance": 1.91,
+     "tokens": 18,
+     "facts": []
+    },
+    {
+     "distance": 1.91,
+     "tokens": 37,
+     "facts": [
+      "8001"
+     ]
+    },
+    {
+     "distance": 1.914,
+     "tokens": 38,
+     "facts": [
+      "aman"
+     ]
+    },
+    {
+     "distance": 1.918,
+     "tokens": 40,
+     "facts": []
+    },
+    {
+     "distance": 1.924,
+     "tokens": 105,
+     "facts": []
+    }
+   ],
+   "paged_tokens": 678,
+   "prompt_tokens": 3816,
+   "reply_tokens": 14,
+   "says_memories": true
+  },
+  {
+   "kind": "filler",
+   "message": "Explain dynamic programming using the knapsack problem.",
+   "answer": "Dynamic programming is a method for solving complex problems by breaking them down into simpler subproblems, solving each subproblem only once, and storing the solutions to subproblems to avoid redundant computation.\n\nThe knapsack problem is a classic example of a problem that can be solved using dynamic programming. The knapsack problem is defined as follows:\n\nGiven a set of items, each with a weight and a value, determine the subset of items to include in a knapsack of limited capacity that maximizes the total value.\n\nHere's a step-by-step explanation of how dynamic programming can be used to solve the knapsack problem:\n\n1.  Define the problem and the variables involved:\n    *   `n`: the number of items\n    *   `w`: the capacity of the knapsack\n    *   `v[i]`: the value of the `i`-th item\n    *   `w[i]`: the weight of the `i`-th item\n    *   `dp[i][j]`: the maximum value that can be obtained with the first `i` items and a knapsack capacity of `j`\n2.  Create a 2D table `dp` to store the solutions to subproblems:\n    *   `dp[i][j]` is initialized to 0 for all `i` and `j`\n3.  Fill in the table `dp` using the following recurrence relation:\n    *   If `w[i] > j`, then `dp[i][j] = dp[i-1][j]`\n    *   Otherwise, `dp[i][j] = max(dp[i-1][j], dp[i-1][j-w[i]] + v[i])`\n4.  The maximum value that can be obtained is stored in `dp[n][w]`\n\nHere's an example of how dynamic programming can be used to solve the knapsack problem:\n\nSuppose we have the following items:\n\n| Item | Weight | Value |\n| --- | --- | --- |\n| 1    | 2     | 10   |\n| 2    | 3     | 20   |\n| 3    | 1     | 5    |\n\nWe want to find the subset of items to include in a knapsack of capacity 5 that maximizes the total value.\n\nUsing dynamic programming, we can create a 2D table `dp` to store the solutions to subproblems:\n\n|  | 0 | 1 | 2 | 3 | 4 | 5 |\n| --- | --- | --- | --- | --- | --- | --- |\n| 0 | 0 | 0 | 0 | 0 | 0 | 0 |\n| 1 | 0 | 0 | 0 | 0 | 0 | 0 |\n| 2 | 0 | 0 | 0 | 0 | 0 | 0 |\n| 3 | 0 | 0 | 0 | 0 | 0 | 0 |\n\nWe fill in the table `dp` using the recurrence relation:\n\n|  | 0 | 1 | 2 | 3 | 4 | 5 |\n| --- | --- | --- | --- | --- | --- | --- |\n| 0 | 0 | 0 | 0 | 0 | 0 | 0 |\n| 1 | 0 | 0 | 0 | 0 | 0 | 0 |\n| 2 | 0 | 0 | 0 | 0 | 0 | 0 |\n| 3 | 0 | 0 | 0 | 0 | 0 | 0 |\n\nThe maximum value that can be obtained is stored in `dp[3][5]`, which is 25.\n\nHere's a code example of how dynamic programming can be used to solve the knapsack problem:\n\n[code block 1: python]\n\nThis code example demonstrates how dynamic programming can be used to solve the knapsack problem. It creates a 2D table `dp` to store the solutions to subproblems and fills in the table using the recurrence relation.\n\n[code block 1: python]\n\n```python\ndef knapsack(weights, values, capacity):\n    n = len(values)\n    dp = [[0 for _ in range(capacity + 1)] for _ in range(n + 1)]\n\n    for i in range(1, n + 1):\n        for j in range(1, capacity + 1):\n            if weights[i - 1] > j:\n                dp[i][j] = dp[i - 1][j]\n            else:\n                dp[i][j] = max(dp[i - 1][j], dp[i - 1][j - weights[i - 1]] + values[i - 1])\n\n    return dp[n][capacity]\n\nweights = [2, 3, 1]\nvalues = [10,",
+   "seconds": 60.8,
+   "paged": [],
+   "paged_tokens": 0,
+   "prompt_tokens": 1956,
+   "reply_tokens": 1024,
+   "says_memories": false
+  },
+  {
+   "kind": "fact",
+   "message": "The embedding model we use is all-MiniLM-L6-v2.",
+   "answer": "According to the memories, the embedding model you are using is indeed the all-MiniLM-L6-v2.",
+   "seconds": 15.8,
+   "paged": [
+    {
+     "distance": 1.651,
+     "tokens": 42,
+     "facts": []
+    },
+    {
+     "distance": 1.654,
+     "tokens": 28,
+     "facts": [
+      "langgraph"
+     ]
+    },
+    {
+     "distance": 1.684,
+     "tokens": 31,
+     "facts": []
+    },
+    {
+     "distance": 1.685,
+     "tokens": 24,
+     "facts": []
+    },
+    {
+     "distance": 1.686,
+     "tokens": 45,
+     "facts": [
+      "3050",
+      "30"
+     ]
+    },
+    {
+     "distance": 1.698,
+     "tokens": 6,
+     "facts": []
+    },
+    {
+     "distance": 1.708,
+     "tokens": 31,
+     "facts": [
+      "pixel"
+     ]
+    },
+    {
+     "distance": 1.728,
+     "tokens": 26,
+     "facts": [
+      "neovim"
+     ]
+    },
+    {
+     "distance": 1.729,
+     "tokens": 38,
+     "facts": [
+      "blueheron"
+     ]
+    },
+    {
+     "distance": 1.742,
+     "tokens": 20,
+     "facts": []
+    },
+    {
+     "distance": 1.745,
+     "tokens": 36,
+     "facts": []
+    },
+    {
+     "distance": 1.746,
+     "tokens": 29,
+     "facts": []
+    },
+    {
+     "distance": 1.766,
+     "tokens": 25,
+     "facts": []
+    },
+    {
+     "distance": 1.768,
+     "tokens": 36,
+     "facts": [
+      "december"
+     ]
+    },
+    {
+     "distance": 1.769,
+     "tokens": 38,
+     "facts": [
+      "aman"
+     ]
+    },
+    {
+     "distance": 1.771,
+     "tokens": 20,
+     "facts": []
+    },
+    {
+     "distance": 1.771,
+     "tokens": 40,
+     "facts": []
+    },
+    {
+     "distance": 1.781,
+     "tokens": 18,
+     "facts": []
+    }
+   ],
+   "paged_tokens": 533,
+   "prompt_tokens": 3950,
+   "reply_tokens": 24,
+   "says_memories": true
+  },
+  {
+   "kind": "filler",
+   "message": "Explain eventual consistency with examples.",
+   "answer": "Eventual consistency is a consistency model used in distributed databases, where the data is eventually consistent across all nodes, but it may take some time for the changes to propagate to all nodes.\n\nHere's an example to illustrate eventual consistency:\n\nSuppose we have a distributed database with two nodes, Node A and Node B. The database stores a key-value pair with the key \"John\" and value \"New York\".\n\nInitially, the data is consistent across both nodes:\n\nNode A: {\"John\": \"New York\"}\nNode B: {\"John\": \"New York\"}\n\nNow, let's say we update the value for the key \"John\" to \"Chicago\" on Node A:\n\nNode A: {\"John\": \"Chicago\"}\nNode B: {\"John\": \"New York\"}\n\nIn a strongly consistent system, the update would be immediately propagated to Node B, and the data would be consistent across both nodes:\n\nNode A: {\"John\": \"Chicago\"}\nNode B: {\"John\": \"Chicago\"}\n\nHowever, in an eventually consistent system, the update may take some time to propagate to Node B. During this time, Node B may still return the old value for the key \"John\":\n\nNode A: {\"John\": \"Chicago\"}\nNode B: {\"John\": \"New York\"}\n\nEventually, the update will propagate to Node B, and the data will be consistent across both nodes:\n\nNode A: {\"John\": \"Chicago\"}\nNode B: {\"John\": \"Chicago\"}\n\nThis is an example of eventual consistency, where the data is eventually consistent across all nodes, but it may take some time for the changes to propagate.\n\nAccording to the memories, the user asked the assistant to explain eventual consistency with examples, and the assistant provided a detailed explanation of the concept, including an example to illustrate how eventual consistency works in a distributed database.",
+   "seconds": 24.8,
+   "paged": [
+    {
+     "distance": 0.975,
+     "tokens": 88,
+     "facts": []
+    },
+    {
+     "distance": 1.301,
+     "tokens": 103,
+     "facts": []
+    },
+    {
+     "distance": 1.386,
+     "tokens": 113,
+     "facts": []
+    },
+    {
+     "distance": 1.391,
+     "tokens": 103,
+     "facts": []
+    }
+   ],
+   "paged_tokens": 407,
+   "prompt_tokens": 2760,
+   "reply_tokens": 366,
+   "says_memories": true
+  },
+  {
+   "kind": "fact",
+   "message": "Constraint: the final report must be under 30 pages.",
+   "answer": "According to the memories, the constraint is that the final report must be under 30 pages.",
+   "seconds": 14.2,
+   "paged": [],
+   "paged_tokens": 0,
+   "prompt_tokens": 1516,
+   "reply_tokens": 20,
+   "says_memories": true
+  },
+  {
+   "kind": "filler",
+   "message": "Explain in detail how Git stores commits internally.",
+   "answer": "Git stores commits internally as a directed acyclic graph (DAG) of commit objects. Each commit object is a node in the graph, and the edges between nodes represent the parent-child relationships between commits.\n\nA commit object in Git is a binary blob that contains the following information:\n\n* A header that specifies the commit type (e.g., commit, tree, blob)\n* A unique identifier for the commit (the commit hash)\n* A parent list, which contains the hashes of the parent commits\n* A tree object hash, which points to the tree object that represents the commit's snapshot\n* A commit author and committer, along with their email addresses and timestamps\n* A commit message\n\nThe tree object is a binary blob that represents the commit's snapshot. It contains a list of file entries, each of which specifies a file path, mode, and hash. The hash points to the blob object that represents the file's contents.\n\nBlob objects are the actual file contents, stored as binary data.\n\nWhen you make a commit, Git creates a new commit object and adds it to the DAG. The commit object is then linked to its parent commits, and the tree object is updated to reflect the new commit's snapshot.\n\nAccording to the memories, the user asked the assistant to explain how Git stores commits internally, and the assistant provided a detailed explanation of the commit object, tree object, and blob object, as well as the relationships between them.",
+   "seconds": 17.2,
+   "paged": [],
+   "paged_tokens": 0,
+   "prompt_tokens": 1555,
+   "reply_tokens": 292,
+   "says_memories": true
+  },
+  {
+   "kind": "fact",
+   "message": "I live in Jodhpur.",
+   "answer": "According to the memories, you live in Jodhpur.",
+   "seconds": 4.5,
+   "paged": [
+    {
+     "distance": 1.65,
+     "tokens": 26,
+     "facts": [
+      "rao"
+     ]
+    },
+    {
+     "distance": 1.763,
+     "tokens": 20,
+     "facts": []
+    },
+    {
+     "distance": 1.829,
+     "tokens": 29,
+     "facts": []
+    },
+    {
+     "distance": 1.85,
+     "tokens": 54,
+     "facts": []
+    },
+    {
+     "distance": 1.851,
+     "tokens": 36,
+     "facts": []
+    },
+    {
+     "distance": 1.852,
+     "tokens": 18,
+     "facts": []
+    },
+    {
+     "distance": 1.882,
+     "tokens": 96,
+     "facts": []
+    },
+    {
+     "distance": 1.899,
+     "tokens": 24,
+     "facts": []
+    },
+    {
+     "distance": 1.908,
+     "tokens": 20,
+     "facts": []
+    },
+    {
+     "distance": 1.916,
+     "tokens": 42,
+     "facts": []
+    },
+    {
+     "distance": 1.917,
+     "tokens": 31,
+     "facts": []
+    },
+    {
+     "distance": 1.92,
+     "tokens": 38,
+     "facts": [
+      "blueheron"
+     ]
+    },
+    {
+     "distance": 1.937,
+     "tokens": 24,
+     "facts": [
+      "47"
+     ]
+    },
+    {
+     "distance": 1.943,
+     "tokens": 6,
+     "facts": []
+    },
+    {
+     "distance": 1.946,
+     "tokens": 38,
+     "facts": [
+      "aman"
+     ]
+    },
+    {
+     "distance": 1.949,
+     "tokens": 45,
+     "facts": [
+      "3050",
+      "30"
+     ]
+    },
+    {
+     "distance": 1.958,
+     "tokens": 28,
+     "facts": [
+      "langgraph"
+     ]
+    }
+   ],
+   "paged_tokens": 575,
+   "prompt_tokens": 3767,
+   "reply_tokens": 14,
+   "says_memories": true
+  },
+  {
+   "kind": "filler",
+   "message": "Explain in detail how vector databases find nearest neighbours.",
+   "answer": "Vector databases find nearest neighbors by using various algorithms that calculate the similarity between vectors. One common approach is to use the cosine similarity, which measures the cosine of the angle between two vectors.\n\nWhen you query a vector database for nearest neighbors, the database first retrieves the vectors that match the query vector's metadata, such as the vector's dimensionality and data type. Then, it calculates the cosine similarity between the query vector and each of the retrieved vectors.\n\nThe cosine similarity is calculated using the dot product of the two vectors divided by the product of their magnitudes. The dot product is a measure of how similar the two vectors are, and the magnitudes are used to normalize the dot product to ensure that the similarity is independent of the vector's magnitude.\n\nThe database then ranks the vectors based on their cosine similarity scores, with the highest scores indicating the most similar vectors. The top-ranked vectors are then returned as the nearest neighbors.\n\nSome vector databases also use other algorithms, such as the Euclidean distance or the Haversine distance, to find nearest neighbors. These algorithms calculate the distance between the query vector and each of the retrieved vectors, and then rank the vectors based on their distances.\n\nIn addition to these algorithms, some vector databases also use techniques such as dimensionality reduction, which reduces the dimensionality of the vectors to improve the efficiency of the nearest neighbor search. Other techniques, such as indexing and caching, are also used to improve the performance of the nearest neighbor search.\n\nAccording to the memories, the user asked the assistant to explain how vector databases find nearest neighbors, and the assistant provided a detailed explanation of the cosine similarity and other algorithms used to find nearest neighbors in vector databases.",
+   "seconds": 21.2,
+   "paged": [
+    {
+     "distance": 1.362,
+     "tokens": 105,
+     "facts": []
+    }
+   ],
+   "paged_tokens": 105,
+   "prompt_tokens": 2071,
+   "reply_tokens": 338,
+   "says_memories": true
+  },
+  {
+   "kind": "fact",
+   "message": "Our backup model is qwen3:8b.",
+   "answer": "According to the memories, the backup model is qwen3:8b.",
+   "seconds": 6.6,
+   "paged": [
+    {
+     "distance": 1.325,
+     "tokens": 42,
+     "facts": [
+      "minilm"
+     ]
+    },
+    {
+     "distance": 1.356,
+     "tokens": 52,
+     "facts": [
+      "blueheron",
+      "sqlite"
+     ]
+    },
+    {
+     "distance": 1.357,
+     "tokens": 38,
+     "facts": [
+      "blueheron"
+     ]
+    },
+    {
+     "distance": 1.419,
+     "tokens": 36,
+     "facts": [
+      "december"
+     ]
+    },
+    {
+     "distance": 1.518,
+     "tokens": 37,
+     "facts": [
+      "8001"
+     ]
+    },
+    {
+     "distance": 1.536,
+     "tokens": 38,
+     "facts": [
+      "aman"
+     ]
+    },
+    {
+     "distance": 1.563,
+     "tokens": 31,
+     "facts": [
+      "pixel"
+     ]
+    },
+    {
+     "distance": 1.613,
+     "tokens": 24,
+     "facts": [
+      "47"
+     ]
+    },
+    {
+     "distance": 1.628,
+     "tokens": 26,
+     "facts": [
+      "neovim"
+     ]
+    },
+    {
+     "distance": 1.648,
+     "tokens": 48,
+     "facts": [
+      "off by one"
+     ]
+    },
+    {
+     "distance": 1.667,
+     "tokens": 45,
+     "facts": [
+      "3050",
+      "30"
+     ]
+    },
+    {
+     "distance": 1.672,
+     "tokens": 89,
+     "facts": []
+    },
+    {
+     "distance": 1.674,
+     "tokens": 31,
+     "facts": []
+    },
+    {
+     "distance": 1.676,
+     "tokens": 88,
+     "facts": []
+    },
+    {
+     "distance": 1.716,
+     "tokens": 42,
+     "facts": []
+    },
+    {
+     "distance": 1.716,
+     "tokens": 92,
+     "facts": []
+    },
+    {
+     "distance": 1.724,
+     "tokens": 105,
+     "facts": []
+    },
+    {
+     "distance": 1.739,
+     "tokens": 26,
+     "facts": [
+      "rao"
+     ]
+    }
+   ],
+   "paged_tokens": 890,
+   "prompt_tokens": 4400,
+   "reply_tokens": 17,
+   "says_memories": true
+  },
+  {
+   "kind": "filler",
+   "message": "Explain MapReduce with an example.",
+   "answer": "MapReduce is a programming model used for processing large data sets in parallel across a cluster of computers. It consists of two main phases: the Map phase and the Reduce phase.\n\nIn the Map phase, the input data is split into smaller chunks, and each chunk is processed by a mapper function. The mapper function takes the input data, performs some operation on it, and produces a set of key-value pairs as output.\n\nIn the Reduce phase, the output from the Map phase is sorted by key and then processed by a reducer function. The reducer function takes the key-value pairs, performs some aggregation operation on them, and produces the final output.\n\nHere's an example of using MapReduce to count the number of occurrences of each word in a large document:\n\n**Map Phase:**\n\n* Input: A large document containing many words\n* Mapper function: Split each word from the document and emit a key-value pair with the word as the key and a count of 1 as the value\n* Output: A set of key-value pairs, where each key is a word and each value is a count of 1\n\n**Reduce Phase:**\n\n* Input: The output from the Map phase, which is a set of key-value pairs\n* Reducer function: Group the key-value pairs by key (word) and sum the values (counts) for each key\n* Output: A set of key-value pairs, where each key is a word and each value is the total count of occurrences of that word\n\nFor example, if the input document is:\n\n\"The quick brown fox jumps over the lazy dog\"\n\nThe Map phase would produce the following key-value pairs:\n\n* (quick, 1)\n* (brown, 1)\n* (fox, 1)\n* (jumps, 1)\n* (over, 1)\n* (lazy, 1)\n* (dog, 1)\n\nThe Reduce phase would then group these key-value pairs by key and sum the values:\n\n* (quick, 1)\n* (brown, 1)\n* (fox, 1)\n* (jumps, 1)\n* (over, 1)\n* (lazy, 1)\n* (dog, 1)\n\nThe final output would be a set of key-value pairs, where each key is a word and each value is the total count of occurrences of that word.\n\nAccording to the memories, the user asked the assistant to explain MapReduce with an example, and the assistant provided a detailed explanation of the MapReduce programming model and its application to counting word occurrences in a large document.",
+   "seconds": 35.2,
+   "paged": [
+    {
+     "distance": 1.2,
+     "tokens": 113,
+     "facts": []
+    },
+    {
+     "distance": 1.207,
+     "tokens": 88,
+     "facts": []
+    },
+    {
+     "distance": 1.297,
+     "tokens": 105,
+     "facts": []
+    },
+    {
+     "distance": 1.35,
+     "tokens": 92,
+     "facts": []
+    },
+    {
+     "distance": 1.384,
+     "tokens": 103,
+     "facts": []
+    }
+   ],
+   "paged_tokens": 501,
+   "prompt_tokens": 2960,
+   "reply_tokens": 525,
+   "says_memories": true
+  },
+  {
+   "kind": "probe",
+   "message": "What is my cat's name?",
+   "answer": "According to the memories, your cat's name is Pixel.",
+   "seconds": 20.4,
+   "paged": [
+    {
+     "distance": 0.841,
+     "tokens": 31,
+     "facts": [
+      "pixel"
+     ]
+    },
+    {
+     "distance": 1.601,
+     "tokens": 38,
+     "facts": [
+      "blueheron"
+     ]
+    },
+    {
+     "distance": 1.618,
+     "tokens": 24,
+     "facts": [
+      "47"
+     ]
+    },
+    {
+     "distance": 1.669,
+     "tokens": 42,
+     "facts": []
+    },
+    {
+     "distance": 1.688,
+     "tokens": 38,
+     "facts": [
+      "aman"
+     ]
+    },
+    {
+     "distance": 1.699,
+     "tokens": 26,
+     "facts": [
+      "neovim"
+     ]
+    },
+    {
+     "distance": 1.7,
+     "tokens": 26,
+     "facts": [
+      "rao"
+     ]
+    },
+    {
+     "distance": 1.711,
+     "tokens": 31,
+     "facts": []
+    },
+    {
+     "distance": 1.727,
+     "tokens": 25,
+     "facts": []
+    },
+    {
+     "distance": 1.731,
+     "tokens": 20,
+     "facts": []
+    },
+    {
+     "distance": 1.732,
+     "tokens": 40,
+     "facts": []
+    },
+    {
+     "distance": 1.746,
+     "tokens": 54,
+     "facts": []
+    },
+    {
+     "distance": 1.754,
+     "tokens": 18,
+     "facts": []
+    },
+    {
+     "distance": 1.764,
+     "tokens": 36,
+     "facts": []
+    },
+    {
+     "distance": 1.767,
+     "tokens": 29,
+     "facts": []
+    },
+    {
+     "distance": 1.792,
+     "tokens": 20,
+     "facts": []
+    },
+    {
+     "distance": 1.803,
+     "tokens": 6,
+     "facts": []
+    }
+   ],
+   "paged_tokens": 504,
+   "prompt_tokens": 3711,
+   "reply_tokens": 13,
+   "says_memories": true,
+   "keyword": "pixel",
+   "recalled": true,
+   "relevant_distances": [
+    0.841
+   ]
+  },
+  {
+   "kind": "probe",
+   "message": "What is our project codename?",
+   "answer": "According to the memories, the codename for your project is BLUEHERON.",
+   "seconds": 5.1,
+   "paged": [
+    {
+     "distance": 0.821,
+     "tokens": 38,
+     "facts": [
+      "blueheron"
+     ]
+    },
+    {
+     "distance": 1.257,
+     "tokens": 26,
+     "facts": [
+      "rao"
+     ]
+    },
+    {
+     "distance": 1.434,
+     "tokens": 52,
+     "facts": [
+      "blueheron",
+      "sqlite"
+     ]
+    },
+    {
+     "distance": 1.484,
+     "tokens": 6,
+     "facts": []
+    },
+    {
+     "distance": 1.551,
+     "tokens": 103,
+     "facts": []
+    },
+    {
+     "distance": 1.557,
+     "tokens": 36,
+     "facts": [
+      "december"
+     ]
+    },
+    {
+     "distance": 1.562,
+     "tokens": 31,
+     "facts": [
+      "pixel"
+     ]
+    },
+    {
+     "distance": 1.571,
+     "tokens": 20,
+     "facts": []
+    },
+    {
+     "distance": 1.574,
+     "tokens": 96,
+     "facts": []
+    },
+    {
+     "distance": 1.596,
+     "tokens": 26,
+     "facts": [
+      "neovim"
+     ]
+    },
+    {
+     "distance": 1.619,
+     "tokens": 38,
+     "facts": [
+      "aman"
+     ]
+    },
+    {
+     "distance": 1.631,
+     "tokens": 28,
+     "facts": [
+      "langgraph"
+     ]
+    },
+    {
+     "distance": 1.636,
+     "tokens": 36,
+     "facts": []
+    },
+    {
+     "distance": 1.64,
+     "tokens": 24,
+     "facts": []
+    },
+    {
+     "distance": 1.644,
+     "tokens": 54,
+     "facts": []
+    },
+    {
+     "distance": 1.65,
+     "tokens": 94,
+     "facts": []
+    },
+    {
+     "distance": 1.659,
+     "tokens": 29,
+     "facts": []
+    }
+   ],
+   "paged_tokens": 737,
+   "prompt_tokens": 4032,
+   "reply_tokens": 17,
+   "says_memories": true,
+   "keyword": "blueheron",
+   "recalled": true,
+   "relevant_distances": [
+    0.821,
+    1.434
+   ]
+  },
+  {
+   "kind": "probe",
+   "message": "Which database did I say we must never use?",
+   "answer": "According to the memories, you mentioned that the vault must use ChromaDB, never SQLite.",
+   "seconds": 5.7,
+   "paged": [
+    {
+     "distance": 1.206,
+     "tokens": 52,
+     "facts": [
+      "blueheron",
+      "sqlite"
+     ]
+    },
+    {
+     "distance": 1.4,
+     "tokens": 26,
+     "facts": [
+      "neovim"
+     ]
+    },
+    {
+     "distance": 1.432,
+     "tokens": 38,
+     "facts": [
+      "blueheron"
+     ]
+    },
+    {
+     "distance": 1.467,
+     "tokens": 113,
+     "facts": []
+    },
+    {
+     "distance": 1.529,
+     "tokens": 24,
+     "facts": [
+      "47"
+     ]
+    },
+    {
+     "distance": 1.538,
+     "tokens": 37,
+     "facts": [
+      "8001"
+     ]
+    },
+    {
+     "distance": 1.543,
+     "tokens": 35,
+     "facts": [
+      "30"
+     ]
+    },
+    {
+     "distance": 1.559,
+     "tokens": 31,
+     "facts": [
+      "pixel"
+     ]
+    },
+    {
+     "distance": 1.565,
+     "tokens": 88,
+     "facts": []
+    },
+    {
+     "distance": 1.598,
+     "tokens": 105,
+     "facts": []
+    },
+    {
+     "distance": 1.599,
+     "tokens": 26,
+     "facts": [
+      "rao"
+     ]
+    },
+    {
+     "distance": 1.604,
+     "tokens": 36,
+     "facts": [
+      "december"
+     ]
+    },
+    {
+     "distance": 1.623,
+     "tokens": 80,
+     "facts": []
+    },
+    {
+     "distance": 1.627,
+     "tokens": 94,
+     "facts": []
+    },
+    {
+     "distance": 1.641,
+     "tokens": 28,
+     "facts": [
+      "langgraph"
+     ]
+    },
+    {
+     "distance": 1.641,
+     "tokens": 31,
+     "facts": []
+    },
+    {
+     "distance": 1.683,
+     "tokens": 42,
+     "facts": [
+      "minilm"
+     ]
+    },
+    {
+     "distance": 1.789,
+     "tokens": 45,
+     "facts": [
+      "3050",
+      "30"
+     ]
+    }
+   ],
+   "paged_tokens": 931,
+   "prompt_tokens": 4355,
+   "reply_tokens": 20,
+   "says_memories": true,
+   "keyword": "sqlite",
+   "recalled": true,
+   "relevant_distances": [
+    1.206
+   ]
+  },
+  {
+   "kind": "probe",
+   "message": "Who owns the guardrails module?",
+   "answer": "According to the memories, your teammate Aman owns the guardrails module.",
+   "seconds": 3.0,
+   "paged": [
+    {
+     "distance": 0.554,
+     "tokens": 38,
+     "facts": [
+      "aman"
+     ]
+    }
+   ],
+   "paged_tokens": 38,
+   "prompt_tokens": 2094,
+   "reply_tokens": 16,
+   "says_memories": true,
+   "keyword": "aman",
+   "recalled": true,
+   "relevant_distances": [
+    0.554
+   ]
+  },
+  {
+   "kind": "probe",
+   "message": "On which date is our final demo?",
+   "answer": "According to the memories, our final demo is scheduled for 14 December.",
+   "seconds": 5.3,
+   "paged": [
+    {
+     "distance": 0.509,
+     "tokens": 36,
+     "facts": [
+      "december"
+     ]
+    },
+    {
+     "distance": 1.764,
+     "tokens": 38,
+     "facts": [
+      "blueheron"
+     ]
+    },
+    {
+     "distance": 1.835,
+     "tokens": 80,
+     "facts": []
+    },
+    {
+     "distance": 1.839,
+     "tokens": 52,
+     "facts": [
+      "blueheron",
+      "sqlite"
+     ]
+    },
+    {
+     "distance": 1.847,
+     "tokens": 26,
+     "facts": [
+      "rao"
+     ]
+    },
+    {
+     "distance": 1.866,
+     "tokens": 42,
+     "facts": [
+      "minilm"
+     ]
+    },
+    {
+     "distance": 1.887,
+     "tokens": 37,
+     "facts": [
+      "8001"
+     ]
+    },
+    {
+     "distance": 1.902,
+     "tokens": 35,
+     "facts": [
+      "30"
+     ]
+    },
+    {
+     "distance": 1.912,
+     "tokens": 88,
+     "facts": []
+    },
+    {
+     "distance": 1.915,
+     "tokens": 28,
+     "facts": [
+      "langgraph"
+     ]
+    },
+    {
+     "distance": 1.916,
+     "tokens": 26,
+     "facts": [
+      "neovim"
+     ]
+    },
+    {
+     "distance": 1.919,
+     "tokens": 24,
+     "facts": [
+      "47"
+     ]
+    },
+    {
+     "distance": 1.921,
+     "tokens": 103,
+     "facts": []
+    },
+    {
+     "distance": 1.927,
+     "tokens": 45,
+     "facts": [
+      "3050",
+      "30"
+     ]
+    },
+    {
+     "distance": 1.93,
+     "tokens": 94,
+     "facts": []
+    },
+    {
+     "distance": 1.936,
+     "tokens": 20,
+     "facts": []
+    },
+    {
+     "distance": 1.945,
+     "tokens": 6,
+     "facts": []
+    },
+    {
+     "distance": 1.982,
+     "tokens": 92,
+     "facts": []
+    }
+   ],
+   "paged_tokens": 872,
+   "prompt_tokens": 4364,
+   "reply_tokens": 16,
+   "says_memories": true,
+   "keyword": "december",
+   "recalled": true,
+   "relevant_distances": [
+    0.509
+   ]
+  },
+  {
+   "kind": "probe",
+   "message": "Which port does the memory server run on?",
+   "answer": "According to the memories, the memory server runs on port 8001.",
+   "seconds": 3.1,
+   "paged": [
+    {
+     "distance": 0.471,
+     "tokens": 37,
+     "facts": [
+      "8001"
+     ]
+    }
+   ],
+   "paged_tokens": 37,
+   "prompt_tokens": 2160,
+   "reply_tokens": 16,
+   "says_memories": true,
+   "keyword": "8001",
+   "recalled": true,
+   "relevant_distances": [
+    0.471
+   ]
+  },
+  {
+   "kind": "probe",
+   "message": "Which GPU model does our laptop have?",
+   "answer": "According to the memories, your laptop's GPU is an NVIDIA GeForce RTX 3050 with 6 GB of video memory.",
+   "seconds": 5.9,
+   "paged": [
+    {
+     "distance": 0.531,
+     "tokens": 45,
+     "facts": [
+      "3050",
+      "30"
+     ]
+    },
+    {
+     "distance": 1.586,
+     "tokens": 42,
+     "facts": [
+      "minilm"
+     ]
+    },
+    {
+     "distance": 1.639,
+     "tokens": 37,
+     "facts": [
+      "8001"
+     ]
+    },
+    {
+     "distance": 1.694,
+     "tokens": 92,
+     "facts": []
+    },
+    {
+     "distance": 1.709,
+     "tokens": 38,
+     "facts": [
+      "blueheron"
+     ]
+    },
+    {
+     "distance": 1.726,
+     "tokens": 103,
+     "facts": []
+    },
+    {
+     "distance": 1.771,
+     "tokens": 31,
+     "facts": [
+      "pixel"
+     ]
+    },
+    {
+     "distance": 1.781,
+     "tokens": 103,
+     "facts": []
+    },
+    {
+     "distance": 1.783,
+     "tokens": 89,
+     "facts": []
+    },
+    {
+     "distance": 1.79,
+     "tokens": 38,
+     "facts": [
+      "aman"
+     ]
+    },
+    {
+     "distance": 1.79,
+     "tokens": 113,
+     "facts": []
+    },
+    {
+     "distance": 1.792,
+     "tokens": 36,
+     "facts": [
+      "december"
+     ]
+    },
+    {
+     "distance": 1.806,
+     "tokens": 35,
+     "facts": [
+      "30"
+     ]
+    },
+    {
+     "distance": 1.822,
+     "tokens": 26,
+     "facts": [
+      "neovim"
+     ]
+    },
+    {
+     "distance": 1.827,
+     "tokens": 36,
+     "facts": []
+    },
+    {
+     "distance": 1.828,
+     "tokens": 26,
+     "facts": [
+      "rao"
+     ]
+    }
+   ],
+   "paged_tokens": 890,
+   "prompt_tokens": 4253,
+   "reply_tokens": 27,
+   "says_memories": true,
+   "keyword": "3050",
+   "recalled": true,
+   "relevant_distances": [
+    0.531
+   ]
+  },
+  {
+   "kind": "probe",
+   "message": "What was the bug in pager_v3.py?",
+   "answer": "According to the memories, the bug in pager_v3.py was an off-by-one error in the eviction loop.",
+   "seconds": 4.0,
+   "paged": [
+    {
+     "distance": 0.417,
+     "tokens": 48,
+     "facts": [
+      "off by one"
+     ]
+    },
+    {
+     "distance": 1.036,
+     "tokens": 24,
+     "facts": []
+    },
+    {
+     "distance": 1.299,
+     "tokens": 92,
+     "facts": []
+    }
+   ],
+   "paged_tokens": 164,
+   "prompt_tokens": 2522,
+   "reply_tokens": 24,
+   "says_memories": true,
+   "keyword": "off by one",
+   "recalled": true,
+   "relevant_distances": [
+    0.417
+   ]
+  },
+  {
+   "kind": "probe",
+   "message": "Which library did we choose for orchestration?",
+   "answer": "According to the memories, you mentioned that you chose LangGraph for orchestration.",
+   "seconds": 14.8,
+   "paged": [
+    {
+     "distance": 0.886,
+     "tokens": 28,
+     "facts": [
+      "langgraph"
+     ]
+    },
+    {
+     "distance": 1.561,
+     "tokens": 26,
+     "facts": [
+      "neovim"
+     ]
+    },
+    {
+     "distance": 1.685,
+     "tokens": 38,
+     "facts": [
+      "blueheron"
+     ]
+    },
+    {
+     "distance": 1.693,
+     "tokens": 52,
+     "facts": [
+      "blueheron",
+      "sqlite"
+     ]
+    },
+    {
+     "distance": 1.713,
+     "tokens": 26,
+     "facts": [
+      "rao"
+     ]
+    },
+    {
+     "distance": 1.805,
+     "tokens": 25,
+     "facts": [
+      "jodhpur"
+     ]
+    },
+    {
+     "distance": 1.811,
+     "tokens": 36,
+     "facts": [
+      "december"
+     ]
+    },
+    {
+     "distance": 1.849,
+     "tokens": 42,
+     "facts": [
+      "minilm"
+     ]
+    },
+    {
+     "distance": 1.869,
+     "tokens": 128,
+     "facts": []
+    },
+    {
+     "distance": 1.881,
+     "tokens": 37,
+     "facts": [
+      "8001"
+     ]
+    },
+    {
+     "distance": 1.893,
+     "tokens": 20,
+     "facts": []
+    },
+    {
+     "distance": 1.905,
+     "tokens": 94,
+     "facts": []
+    },
+    {
+     "distance": 1.921,
+     "tokens": 6,
+     "facts": []
+    },
+    {
+     "distance": 1.931,
+     "tokens": 96,
+     "facts": []
+    },
+    {
+     "distance": 1.934,
+     "tokens": 24,
+     "facts": []
+    },
+    {
+     "distance": 1.937,
+     "tokens": 103,
+     "facts": []
+    },
+    {
+     "distance": 1.944,
+     "tokens": 49,
+     "facts": []
+    }
+   ],
+   "paged_tokens": 830,
+   "prompt_tokens": 4013,
+   "reply_tokens": 17,
+   "says_memories": true,
+   "keyword": "langgraph",
+   "recalled": true,
+   "relevant_distances": [
+    0.886
+   ]
+  },
+  {
+   "kind": "probe",
+   "message": "Who is my project supervisor?",
+   "answer": "According to the memories, your project supervisor is Dr. Rao.",
+   "seconds": 5.3,
+   "paged": [
+    {
+     "distance": 0.615,
+     "tokens": 26,
+     "facts": [
+      "rao"
+     ]
+    },
+    {
+     "distance": 1.159,
+     "tokens": 38,
+     "facts": [
+      "blueheron"
+     ]
+    },
+    {
+     "distance": 1.445,
+     "tokens": 38,
+     "facts": [
+      "aman"
+     ]
+    },
+    {
+     "distance": 1.507,
+     "tokens": 26,
+     "facts": [
+      "neovim"
+     ]
+    },
+    {
+     "distance": 1.523,
+     "tokens": 25,
+     "facts": [
+      "jodhpur"
+     ]
+    },
+    {
+     "distance": 1.619,
+     "tokens": 36,
+     "facts": [
+      "december"
+     ]
+    },
+    {
+     "distance": 1.626,
+     "tokens": 103,
+     "facts": []
+    },
+    {
+     "distance": 1.626,
+     "tokens": 94,
+     "facts": []
+    },
+    {
+     "distance": 1.631,
+     "tokens": 42,
+     "facts": []
+    },
+    {
+     "distance": 1.633,
+     "tokens": 28,
+     "facts": [
+      "langgraph"
+     ]
+    },
+    {
+     "distance": 1.635,
+     "tokens": 52,
+     "facts": [
+      "blueheron",
+      "sqlite"
+     ]
+    },
+    {
+     "distance": 1.648,
+     "tokens": 80,
+     "facts": []
+    },
+    {
+     "distance": 1.671,
+     "tokens": 128,
+     "facts": []
+    },
+    {
+     "distance": 1.675,
+     "tokens": 105,
+     "facts": []
+    },
+    {
+     "distance": 1.683,
+     "tokens": 89,
+     "facts": []
+    },
+    {
+     "distance": 1.734,
+     "tokens": 31,
+     "facts": [
+      "pixel"
+     ]
+    }
+   ],
+   "paged_tokens": 941,
+   "prompt_tokens": 4072,
+   "reply_tokens": 14,
+   "says_memories": true,
+   "keyword": "rao",
+   "recalled": true,
+   "relevant_distances": [
+    0.615
+   ]
+  },
+  {
+   "kind": "probe",
+   "message": "What is my favourite editor?",
+   "answer": "According to the memories, your favorite editor is indeed Neovim.",
+   "seconds": 5.2,
+   "paged": [
+    {
+     "distance": 0.512,
+     "tokens": 26,
+     "facts": [
+      "neovim"
+     ]
+    },
+    {
+     "distance": 1.52,
+     "tokens": 28,
+     "facts": [
+      "langgraph"
+     ]
+    },
+    {
+     "distance": 1.618,
+     "tokens": 26,
+     "facts": [
+      "rao"
+     ]
+    },
+    {
+     "distance": 1.679,
+     "tokens": 38,
+     "facts": [
+      "blueheron"
+     ]
+    },
+    {
+     "distance": 1.736,
+     "tokens": 52,
+     "facts": [
+      "blueheron",
+      "sqlite"
+     ]
+    },
+    {
+     "distance": 1.785,
+     "tokens": 25,
+     "facts": [
+      "jodhpur"
+     ]
+    },
+    {
+     "distance": 1.793,
+     "tokens": 42,
+     "facts": [
+      "minilm"
+     ]
+    },
+    {
+     "distance": 1.797,
+     "tokens": 31,
+     "facts": [
+      "pixel"
+     ]
+    },
+    {
+     "distance": 1.803,
+     "tokens": 94,
+     "facts": []
+    },
+    {
+     "distance": 1.808,
+     "tokens": 103,
+     "facts": []
+    },
+    {
+     "distance": 1.817,
+     "tokens": 36,
+     "facts": [
+      "december"
+     ]
+    },
+    {
+     "distance": 1.855,
+     "tokens": 31,
+     "facts": []
+    },
+    {
+     "distance": 1.865,
+     "tokens": 24,
+     "facts": [
+      "47"
+     ]
+    },
+    {
+     "distance": 1.865,
+     "tokens": 80,
+     "facts": []
+    },
+    {
+     "distance": 1.87,
+     "tokens": 120,
+     "facts": []
+    },
+    {
+     "distance": 1.875,
+     "tokens": 35,
+     "facts": [
+      "30"
+     ]
+    },
+    {
+     "distance": 1.876,
+     "tokens": 49,
+     "facts": []
+    },
+    {
+     "distance": 1.892,
+     "tokens": 20,
+     "facts": []
+    },
+    {
+     "distance": 1.914,
+     "tokens": 6,
+     "facts": []
+    }
+   ],
+   "paged_tokens": 866,
+   "prompt_tokens": 4263,
+   "reply_tokens": 15,
+   "says_memories": true,
+   "keyword": "neovim",
+   "recalled": true,
+   "relevant_distances": [
+    0.512
+   ]
+  },
+  {
+   "kind": "probe",
+   "message": "What is my lucky number?",
+   "answer": "According to the memories, your lucky number is indeed 47.",
+   "seconds": 4.9,
+   "paged": [
+    {
+     "distance": 0.442,
+     "tokens": 24,
+     "facts": [
+      "47"
+     ]
+    },
+    {
+     "distance": 1.679,
+     "tokens": 38,
+     "facts": [
+      "blueheron"
+     ]
+    },
+    {
+     "distance": 1.685,
+     "tokens": 31,
+     "facts": [
+      "pixel"
+     ]
+    },
+    {
+     "distance": 1.694,
+     "tokens": 36,
+     "facts": [
+      "december"
+     ]
+    },
+    {
+     "distance": 1.701,
+     "tokens": 52,
+     "facts": [
+      "blueheron",
+      "sqlite"
+     ]
+    },
+    {
+     "distance": 1.715,
+     "tokens": 25,
+     "facts": [
+      "jodhpur"
+     ]
+    },
+    {
+     "distance": 1.747,
+     "tokens": 113,
+     "facts": []
+    },
+    {
+     "distance": 1.759,
+     "tokens": 37,
+     "facts": [
+      "8001"
+     ]
+    },
+    {
+     "distance": 1.798,
+     "tokens": 73,
+     "facts": []
+    },
+    {
+     "distance": 1.815,
+     "tokens": 31,
+     "facts": []
+    },
+    {
+     "distance": 1.832,
+     "tokens": 20,
+     "facts": []
+    },
+    {
+     "distance": 1.838,
+     "tokens": 54,
+     "facts": []
+    },
+    {
+     "distance": 1.843,
+     "tokens": 42,
+     "facts": []
+    },
+    {
+     "distance": 1.845,
+     "tokens": 120,
+     "facts": []
+    },
+    {
+     "distance": 1.847,
+     "tokens": 36,
+     "facts": []
+    },
+    {
+     "distance": 1.867,
+     "tokens": 38,
+     "facts": [
+      "aman"
+     ]
+    }
+   ],
+   "paged_tokens": 770,
+   "prompt_tokens": 3947,
+   "reply_tokens": 14,
+   "says_memories": true,
+   "keyword": "47",
+   "recalled": true,
+   "relevant_distances": [
+    0.442
+   ]
+  },
+  {
+   "kind": "probe",
+   "message": "Which embedding model do we use?",
+   "answer": "According to the memories, the embedding model you are using is indeed the all-MiniLM-L6-v2.",
+   "seconds": 6.0,
+   "paged": [
+    {
+     "distance": 0.863,
+     "tokens": 42,
+     "facts": [
+      "minilm"
+     ]
+    },
+    {
+     "distance": 1.585,
+     "tokens": 26,
+     "facts": [
+      "neovim"
+     ]
+    },
+    {
+     "distance": 1.597,
+     "tokens": 28,
+     "facts": [
+      "langgraph"
+     ]
+    },
+    {
+     "distance": 1.655,
+     "tokens": 120,
+     "facts": []
+    },
+    {
+     "distance": 1.668,
+     "tokens": 45,
+     "facts": [
+      "3050",
+      "30"
+     ]
+    },
+    {
+     "distance": 1.764,
+     "tokens": 38,
+     "facts": [
+      "aman"
+     ]
+    },
+    {
+     "distance": 1.77,
+     "tokens": 26,
+     "facts": [
+      "rao"
+     ]
+    },
+    {
+     "distance": 1.779,
+     "tokens": 80,
+     "facts": []
+    },
+    {
+     "distance": 1.781,
+     "tokens": 31,
+     "facts": [
+      "pixel"
+     ]
+    },
+    {
+     "distance": 1.785,
+     "tokens": 42,
+     "facts": []
+    },
+    {
+     "distance": 1.787,
+     "tokens": 38,
+     "facts": [
+      "blueheron"
+     ]
+    },
+    {
+     "distance": 1.798,
+     "tokens": 24,
+     "facts": []
+    },
+    {
+     "distance": 1.802,
+     "tokens": 31,
+     "facts": []
+    },
+    {
+     "distance": 1.824,
+     "tokens": 36,
+     "facts": [
+      "december"
+     ]
+    },
+    {
+     "distance": 1.854,
+     "tokens": 35,
+     "facts": [
+      "30"
+     ]
+    },
+    {
+     "distance": 1.865,
+     "tokens": 96,
+     "facts": []
+    },
+    {
+     "distance": 1.884,
+     "tokens": 20,
+     "facts": []
+    },
+    {
+     "distance": 1.888,
+     "tokens": 52,
+     "facts": [
+      "blueheron",
+      "sqlite"
+     ]
+    },
+    {
+     "distance": 1.895,
+     "tokens": 37,
+     "facts": [
+      "8001"
+     ]
+    }
+   ],
+   "paged_tokens": 847,
+   "prompt_tokens": 4296,
+   "reply_tokens": 24,
+   "says_memories": true,
+   "keyword": "minilm",
+   "recalled": true,
+   "relevant_distances": [
+    0.863
+   ]
+  },
+  {
+   "kind": "probe",
+   "message": "What page limit did I give for the final report?",
+   "answer": "According to the memories, the final report must be under 30 pages.",
+   "seconds": 5.0,
+   "paged": [
+    {
+     "distance": 0.717,
+     "tokens": 35,
+     "facts": [
+      "30"
+     ]
+    },
+    {
+     "distance": 1.332,
+     "tokens": 48,
+     "facts": [
+      "off by one"
+     ]
+    },
+    {
+     "distance": 1.446,
+     "tokens": 24,
+     "facts": []
+    },
+    {
+     "distance": 1.511,
+     "tokens": 92,
+     "facts": []
+    },
+    {
+     "distance": 1.539,
+     "tokens": 36,
+     "facts": [
+      "december"
+     ]
+    },
+    {
+     "distance": 1.678,
+     "tokens": 113,
+     "facts": []
+    },
+    {
+     "distance": 1.692,
+     "tokens": 88,
+     "facts": []
+    },
+    {
+     "distance": 1.7,
+     "tokens": 89,
+     "facts": []
+    },
+    {
+     "distance": 1.703,
+     "tokens": 105,
+     "facts": []
+    },
+    {
+     "distance": 1.72,
+     "tokens": 45,
+     "facts": [
+      "3050",
+      "30"
+     ]
+    },
+    {
+     "distance": 1.742,
+     "tokens": 103,
+     "facts": []
+    },
+    {
+     "distance": 1.749,
+     "tokens": 103,
+     "facts": []
+    },
+    {
+     "distance": 1.752,
+     "tokens": 49,
+     "facts": []
+    },
+    {
+     "distance": 1.762,
+     "tokens": 37,
+     "facts": [
+      "8001"
+     ]
+    }
+   ],
+   "paged_tokens": 967,
+   "prompt_tokens": 4000,
+   "reply_tokens": 16,
+   "says_memories": true,
+   "keyword": "30",
+   "recalled": true,
+   "relevant_distances": [
+    0.717,
+    1.72
+   ]
+  },
+  {
+   "kind": "probe",
+   "message": "Which city do I live in?",
+   "answer": "According to the memories, you live in Jodhpur.",
+   "seconds": 5.1,
+   "paged": [
+    {
+     "distance": 1.148,
+     "tokens": 25,
+     "facts": [
+      "jodhpur"
+     ]
+    },
+    {
+     "distance": 1.827,
+     "tokens": 24,
+     "facts": [
+      "47"
+     ]
+    },
+    {
+     "distance": 1.865,
+     "tokens": 36,
+     "facts": [
+      "december"
+     ]
+    },
+    {
+     "distance": 1.868,
+     "tokens": 31,
+     "facts": [
+      "pixel"
+     ]
+    },
+    {
+     "distance": 1.889,
+     "tokens": 38,
+     "facts": [
+      "blueheron"
+     ]
+    },
+    {
+     "distance": 1.896,
+     "tokens": 25,
+     "facts": []
+    },
+    {
+     "distance": 1.897,
+     "tokens": 26,
+     "facts": [
+      "rao"
+     ]
+    },
+    {
+     "distance": 1.911,
+     "tokens": 26,
+     "facts": [
+      "neovim"
+     ]
+    },
+    {
+     "distance": 1.92,
+     "tokens": 40,
+     "facts": []
+    },
+    {
+     "distance": 1.936,
+     "tokens": 28,
+     "facts": []
+    },
+    {
+     "distance": 1.939,
+     "tokens": 28,
+     "facts": [
+      "langgraph"
+     ]
+    },
+    {
+     "distance": 1.939,
+     "tokens": 120,
+     "facts": []
+    },
+    {
+     "distance": 1.943,
+     "tokens": 37,
+     "facts": [
+      "8001"
+     ]
+    },
+    {
+     "distance": 1.956,
+     "tokens": 38,
+     "facts": [
+      "aman"
+     ]
+    },
+    {
+     "distance": 1.97,
+     "tokens": 20,
+     "facts": []
+    },
+    {
+     "distance": 1.978,
+     "tokens": 18,
+     "facts": []
+    },
+    {
+     "distance": 2.001,
+     "tokens": 29,
+     "facts": []
+    },
+    {
+     "distance": 2.007,
+     "tokens": 36,
+     "facts": []
+    },
+    {
+     "distance": 2.011,
+     "tokens": 20,
+     "facts": []
+    }
+   ],
+   "paged_tokens": 645,
+   "prompt_tokens": 4128,
+   "reply_tokens": 14,
+   "says_memories": true,
+   "keyword": "jodhpur",
+   "recalled": true,
+   "relevant_distances": [
+    1.148
+   ]
+  },
+  {
+   "kind": "probe",
+   "message": "What is our backup model?",
+   "answer": "According to the memories, the backup model is qwen3:8b.",
+   "seconds": 16.9,
+   "paged": [
+    {
+     "distance": 0.662,
+     "tokens": 31,
+     "facts": [
+      "qwen3"
+     ]
+    },
+    {
+     "distance": 1.46,
+     "tokens": 42,
+     "facts": [
+      "minilm"
+     ]
+    },
+    {
+     "distance": 1.474,
+     "tokens": 38,
+     "facts": [
+      "blueheron"
+     ]
+    },
+    {
+     "distance": 1.484,
+     "tokens": 36,
+     "facts": [
+      "december"
+     ]
+    },
+    {
+     "distance": 1.502,
+     "tokens": 88,
+     "facts": []
+    },
+    {
+     "distance": 1.521,
+     "tokens": 94,
+     "facts": []
+    },
+    {
+     "distance": 1.54,
+     "tokens": 52,
+     "facts": [
+      "blueheron",
+      "sqlite"
+     ]
+    },
+    {
+     "distance": 1.545,
+     "tokens": 80,
+     "facts": []
+    },
+    {
+     "distance": 1.609,
+     "tokens": 132,
+     "facts": []
+    },
+    {
+     "distance": 1.611,
+     "tokens": 38,
+     "facts": [
+      "aman"
+     ]
+    },
+    {
+     "distance": 1.63,
+     "tokens": 45,
+     "facts": [
+      "3050",
+      "30"
+     ]
+    },
+    {
+     "distance": 1.639,
+     "tokens": 31,
+     "facts": []
+    },
+    {
+     "distance": 1.641,
+     "tokens": 31,
+     "facts": [
+      "pixel"
+     ]
+    },
+    {
+     "distance": 1.647,
+     "tokens": 26,
+     "facts": [
+      "neovim"
+     ]
+    },
+    {
+     "distance": 1.654,
+     "tokens": 89,
+     "facts": []
+    },
+    {
+     "distance": 1.66,
+     "tokens": 92,
+     "facts": []
+    }
+   ],
+   "paged_tokens": 945,
+   "prompt_tokens": 3698,
+   "reply_tokens": 17,
+   "says_memories": true,
+   "keyword": "qwen3",
+   "recalled": true,
+   "relevant_distances": [
+    0.662
+   ]
+  }
+ ]
+}

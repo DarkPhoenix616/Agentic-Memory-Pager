@@ -115,47 +115,29 @@ function messageNode(role, content, status) {
   return node;
 }
 
-function renderResume() {
-  const box = $("resume");
-  const notes = state.resumed || [];
-  const restored = state.restored || 0;
-  const earlier = state.restored_messages || 0;
-  box.hidden = notes.length === 0 && restored === 0 && earlier === 0;
-  if (box.hidden) return;
-  if (earlier) {
-    // the old messages are shown below; the memories are what the model can recall from them
-    box.innerHTML = `<div class="resume-head">📂 Reopened this chat: its ${earlier} earlier ` +
-      `${earlier === 1 ? "message is" : "messages are"} below. Greyed ones were paged out to the vault.</div>`;
-    if (notes.length) {
-      const fold = document.createElement("details");
-      fold.innerHTML = `<summary>What the model remembers (latest ${notes.length} ` +
-        `${notes.length === 1 ? "memory" : "memories"}, newest first)</summary>`;
-      notes.forEach((m) => fold.appendChild(memoryCard(m)));
-      box.appendChild(fold);
-    }
-  } else {
-    box.innerHTML = `<div class="resume-head">📂 Reopened this chat.` + (notes.length ? ` Where it left off ` +
-      `(latest ${notes.length} ${notes.length === 1 ? "memory" : "memories"}, newest first):` : "") + `</div>`;
-    notes.forEach((m) => box.appendChild(memoryCard(m)));
-  }
-  if (restored) {
-    const back = document.createElement("div");
-    back.className = "note";
-    back.textContent = `The app stopped before this chat was left: its last ${restored} unsaved ` +
-      `${restored === 1 ? "chunk is" : "chunks are"} back in the context window.`;
-    box.appendChild(back);
-  }
-  const tail = document.createElement("div");
-  tail.className = "note";
-  tail.textContent = "Ask about anything from before: the relevant memories are paged back in.";
-  box.appendChild(tail);
+// A chat reopened from before chats saved their messages: show its saved summaries
+// instead, oldest first, so the old conversation is still on screen.
+function legacySummaries() {
+  if ((state.restored_messages || 0) > 0 || (state.resumed || []).length === 0) return [];
+  return [...(state.vault || [])].reverse();
+}
+
+function summaryNode(m) {
+  const node = document.createElement("div");
+  node.className = "msg assistant paged summary";
+  node.innerHTML = `<div class="bubble">${markdown(m.text)}</div>` +
+    `<div class="tag">📦 saved summary${m.engine === "AST" ? " of code" : ""}</div>`;
+  return node;
 }
 
 function renderMessages() {
   const box = $("messages");
   box.querySelectorAll(".msg").forEach((n) => n.remove());
-  renderResume();
-  $("empty").hidden = state.transcript.length > 0 || (state.resumed || []).length > 0 || state.restored > 0;
+  const legacy = legacySummaries();
+  // a new, empty chat shows only the greeting
+  $("empty").hidden = state.transcript.length > 0 || legacy.length > 0 || (state.resumed || []).length > 0 ||
+    state.restored > 0;
+  for (const m of legacy) box.appendChild(summaryNode(m));
   for (const m of state.transcript) box.appendChild(messageNode(m.role, m.content, m.status));
   box.scrollTop = box.scrollHeight;
 }
@@ -319,14 +301,18 @@ async function leave(path, body, message) {
   setComposer();
   $("error").hidden = true;
   showNotice(message);
+  let next = null;
   try {
-    state = await api(path, body);
-    render();
+    next = await api(path, body);
   } catch (err) {
     showError(err.message);
   } finally {
-    busy = false;
+    busy = false;               // first: render() skips the messages while busy
     showNotice("");
+    if (next) {
+      state = next;
+      render();                 // the new or reopened chat's messages replace the old ones
+    }
     setComposer();
     loadChats();
   }

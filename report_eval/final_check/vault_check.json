@@ -1,0 +1,18 @@
+{
+ "session_id": "chat-cc68a428",
+ "memories": 7,
+ "by_engine": {
+  "RLM": 6,
+  "AST": 1
+ },
+ "labels": [
+  "messages 1-2, ~36 tokens",
+  "messages 1-2, ~38 tokens",
+  "messages 1-2, ~67 tokens",
+  "messages 1-2, ~257 tokens",
+  "messages 1-2, ~158 tokens",
+  "chat/u3_1.py",
+  "messages 1-2, ~77 tokens"
+ ],
+ "ast_text": "chat/u3_1.py\ndef cart_total(items, tax_rate=0.18):"
+}
