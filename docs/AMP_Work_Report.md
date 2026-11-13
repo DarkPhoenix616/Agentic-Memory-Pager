@@ -21,6 +21,7 @@ in `BTP/report_eval/`, test venv `AgenticMemoryPager/.venv` (git-ignored).
 
 | Part | Branch | State |
 |---|---|---|
+| Final round, task 5: final check from a fresh clone | `feature/final-check` (merged, then deleted) | **Done.** Fresh clone + fresh venv: install 44 s, 439 passed + 1 skipped (the live test passes too). Full chat in the web app, in-process and over MCP: every recall right, tools work, reopen works, vault holds no readable text. Fixed: stale README Quickstart, `tiktoken` missing from requirements. Section 5m. |
 | Final round, task 4: live test of the tool guard (Layer 4) | `feature/layer4-live` (merged, then deleted) | **Done.** First live test of Layer 4. It found that calls written inside a sentence never reached the guard; fixed. Final run: the model wrote a planted call in 5 of 12 attack runs and all 5 were blocked; nothing planted ran; 0 false blocks. 439 tests pass. Section 5l. |
 | Final round, task 3: fact poisoning | `feature/fact-conflicts` (merged, then deleted) | **Done.** The server marks a new memory that contradicts an older one, and the chat model shows the user both versions. Red team now **13/13**, plus 2/2 more poisoning attacks; 0 false marks. 428 tests pass. Section 5k. |
 | Final round, task 2: auto-save | `feature/auto-save` (merged, then deleted) | **Done.** The unsaved part of a chat is kept in an encrypted file after every turn and compaction, and once more at shutdown; reopening brings it back. Live: Ctrl+C 3/3 facts, kill -9 4/4, without the file 0/3. 417 tests pass. Section 5j. |
@@ -85,7 +86,7 @@ Next steps:
    2. Auto-save: save the chat when the app shuts down, and every few turns. **Done**, see section 5j. Built as a save after every turn (not every few), because a save is 0.2 ms and needs no model.
    3. Fact poisoning (the 1 red-team attack that got through, section 5f): record where each fact came from, prefer the user's own words, flag a note that contradicts an older one; re-run the red team. **Done**, see section 5k. Built: the contradiction mark, the stored time on every memory, and the rule to ask the user. "Prefer the user's own words" was dropped: in this attack the true and the false note both came in through the user's paste, so the source cannot tell them apart.
    4. Live test of the tool guard (Layer 4) with the real model. **Done**, see section 5l. It found and fixed a gap: calls written inside a sentence never reached Layer 4.
-   5. Final check: fresh install from `requirements.txt`, all tests, one full chat in the web app, report and README updated. Not started.
+   5. Final check: fresh install from `requirements.txt`, all tests, one full chat in the web app, report and README updated. **Done**, see section 5m.
    6. Show the full old conversation when a chat is reopened (saved encrypted with the session key). Not started.
    7. Relevance cut-off in `page_context`, so unrelated memories are not paged in. Not started.
    8. A lighter code graph, so code memories grow by less than 33% (section 5g). Not started.
@@ -1007,6 +1008,66 @@ In the red team (5f) the model never asked for a tool, so Layer 4 had only been 
 - **The origin check is word-based.** A planted step that the model rewrites in the user's own words would pass. Words the user said are never counted as coming from memory.
 - **One retry.** Each blocked request costs one more model call (a few seconds).
 
+## 5m. Final round, task 5: final check from a fresh clone (2026-11-13)
+
+### 5m.1 How
+
+The aim was to test exactly what is on GitHub, the way a new user would.
+- **The clone:** a fresh clone of `akshaybranch` (`4339244`) into a scratch folder, with its own empty `storage/` and no `AMP_*` variables set.
+- **Install:** a new virtual environment (Python 3.14, Linux), then `pip install -r requirements.txt`.
+- **Tests:** `pytest`, and the opt-in live test.
+- **The chat:** `report_eval/final_check/final_check.py` drives the real web API with llama3.1:8b, the same conversation in both modes:
+  - A: `python -m app.server` (in-process);
+  - B: `python server/amp_memory_server.py` plus `python -m app.server --mcp-url …` (over MCP).
+- **The conversation**, with a 1,024-token window so compaction happens:
+  1. facts (name, cat Pixel, codename ZEBRAFISH);
+  2. a pasted Python function (`cart_total`);
+  3. a long question;
+  4. a recall question.
+- **A also tried:** a vault search, `run_memory_code`, *New chat*, reopening the first chat and asking again, encryption on disk, and Ctrl+C.
+- `vault_check.py` reopened chat A afterwards and listed its vault.
+
+### 5m.2 Results
+
+- **Install:** 44 s, no errors.
+- **Tests in the clone:** 439 passed, 1 skipped (28 s). The skipped one is the opt-in live summarizer test; with `AMP_RLM_LIVE=1` it passes too (13.6 s), so 440/440.
+
+| Check | A: in-process | B: over MCP |
+|---|---|---|
+| Status | "llama3.1:8b (local, Ollama)", "Memory in-process" | "Memory over MCP (http://localhost:8031/mcp)" |
+| Turn times | 3.1 / 7.9 / 13.6 / 3.7 s | 3.7 / 13.0 / 13.7 / 4.7 s |
+| Recall: Pixel, ZEBRAFISH, what `cart_total` does | 3/3 | 3/3 (after 1 RLM compaction) |
+| `search_vault` asked for by the user | ran (6.5 s), right answer | — |
+| `run_memory_code` asked for by the user | ran (8.3 s): "1 memory mentions Pixel" | — |
+| New chat, list, reopen | 200 / listed / 200, 5 "where it left off" notes | — |
+| Recall after reopening | 2/2, paged in from the vault | — |
+| Readable "ZEBRAFISH" / "Pixel" / "cart_total" in `storage/chroma_db` | 0 / 0 / 0 | — |
+| Key files | signing key, keyring, admin token: all 0600 | — |
+| Ctrl+C | 0.49 s; "its unsaved part is kept on disk" | 0.43 s (app), server stopped too |
+
+- **Chat A's vault afterwards:** 7 memories, 6 RLM summaries and 1 AST memory. The AST one is `chat/u3_1.py`, `def cart_total(items, tax_rate=0.18):`, the pasted function stored as its signature. So both compactors ran in the fresh install.
+- **The web page** and `app.js` were served.
+- **No audit log was created,** because nothing was refused or deleted. It is created on the first such event.
+- **Note on the A row:** its compaction count was read straight after the 4th answer, while background compaction was still running, so it showed 0. The vault listing above is the real result.
+
+### 5m.3 Found and fixed
+
+- **The README Quickstart (from week 1) did not work:**
+  - the clone URL was a placeholder (`<your-org>/agentic-memory-pager`);
+  - it pulled `llama3:8b`, `phi3:mini` and `nomic-embed-text`, but only `llama3.1:8b` is used;
+  - it ran `server/mcp_server.py`, which does not exist;
+  - a stray code fence broke the formatting.
+  
+  Rewritten with the commands checked above, including how to run the tests.
+- **The README tech-stack table** listed LiteLLM, Instructor, Langfuse, a SQLite metadata store and Phi-3 as if they were used. They are the optional extras (section 1, item 8, step 6), so they are now marked "planned, not used". Nothing was removed.
+- **`tiktoken`** is imported by the graph and the memory server but was not in `requirements.txt`; it only arrived because `litellm` depends on it. Added explicitly.
+
+### 5m.4 Not checked
+
+- Windows and macOS; Python versions other than 3.14.
+- Other hardware: the turn times are from this machine.
+- The unused packages (`instructor`, `litellm`, `langfuse`) are still in `requirements.txt`. Removing them would make the install smaller, but they are part of the planned stack, so they were left.
+
 ## 6. Decision log
 
 | Date | Decision | Why |
@@ -1049,6 +1110,7 @@ In the red team (5f) the model never asked for a tool, so Layer 4 had only been 
 | 2026-11-13 | Conflict threshold 0.7 with the first prompt | 12/12 contradictions, 1/12 agreeing pairs marked; 0.8 missed one contradiction. The clearer prompt made the groups overlap. |
 | 2026-11-13 | Layer 4 judges calls inside sentences but never runs them | The live test showed the model writes planted calls mid-sentence, and the cleaner dropped them unseen. Running them would change behaviour; judging them makes blocks visible and triggers the "nothing ran" retry. |
 | 2026-11-13 | A fixed line from AMP under answers with a blocked request | The 8B model described results of blocked steps in 2 of 5 runs despite the retry note; a deterministic line can't be ignored by the model. |
+| 2026-11-13 | Mark unused tech in the README as "planned, not used" instead of deleting it | It is the team's original design; the report lists these as optional extras. The README should not claim they are used. |
 
 ---
 
@@ -1113,4 +1175,8 @@ grep -r -a -c "some phrase" storage/chroma_db                      # check: 0 me
 .venv/bin/python -I ../report_eval/red_team.py                                # section 5k: red team again (stricter poisoning canary)
 .venv/bin/python -I ../report_eval/layer4_live/layer4_live.py                  # section 5l: Layer 4 live (6 scenarios x 3 runs)
 python3 ../report_eval/layer4_live/analyze.py ../report_eval/layer4_live/results.json   # its numbers
+# section 5m: fresh clone + fresh venv, then the full web-app chat (in-process and over MCP)
+git clone -b akshaybranch https://github.com/DarkPhoenix616/Agentic-Memory-Pager.git /tmp/amp && cd /tmp/amp
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/python -m pytest -q
+.venv/bin/python <BTP>/report_eval/final_check/final_check.py /tmp/amp
 ```
