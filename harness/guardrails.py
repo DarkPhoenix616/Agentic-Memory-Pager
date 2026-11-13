@@ -1152,6 +1152,8 @@ class PageContextResult(BaseModel):
         tokens_used  : Sum of token_cost over the selected memories.
         total_budget : The token budget that was requested.
         skipped      : How many matches were left out because they did not fit.
+        too_far      : How many matches were left out because they were not
+                       close enough to the query (the relevance cut-off).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -1173,6 +1175,11 @@ class PageContextResult(BaseModel):
         default=0,
         ge=0,
         description="Number of matches left out because they did not fit the budget.",
+    )
+    too_far: int = Field(
+        default=0,
+        ge=0,
+        description="Number of matches left out because their distance was above the relevance cut-off.",
     )
 
 

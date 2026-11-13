@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import sys
 import threading
 import uuid
@@ -51,6 +52,15 @@ HIGH_RISK_HEADROOM = 10   # extra matches fetched so that dropping high-risk one
 CONFLICT_CANDIDATES = 3   # a new text memory is checked against its 3 closest older ones...
 CONFLICT_DISTANCE = 1.2   # ...that are this close (squared L2; same topic ~0.4, unrelated ~1.75)
 MAX_CONFLICTS = 20
+PAGE_MAX_DISTANCE_ENV = "AMP_PAGE_MAX_DISTANCE"
+# page_context's relevance cut-off (report section 5o, report_eval/relevance_cutoff): in the 16-fact
+# chat the memory a question needed was at most 1.31 away, while general questions ("Explain the
+# CAP theorem") paged in ~650 tokens of unrelated memories. Questions about the user or the chat
+# itself ("What do you remember about me?") get no cut-off: their memories are 1.2-1.9 away.
+DEFAULT_PAGE_MAX_DISTANCE = 1.4
+_ABOUT_THE_CHAT = re.compile(
+    r"\b(i|me|my|mine|we|us|our|ours|remember|remind|recall|earlier|before|previous(?:ly)?|told|said|say|"
+    r"mentioned|discussed|talked|chat|conversation|again)\b", re.IGNORECASE)
 
 # Every delete_memory call (and every refused admin call) is appended here as one JSON line.
 AUDIT_LOG_ENV = "AMP_AUDIT_LOG"
@@ -524,9 +534,33 @@ def list_session_memories(session_id: str, session_key: str = "", limit: int = 0
     memories.sort(key=lambda m: m.timestamp, reverse=True)
     return memories[:limit] if limit > 0 else memories
 
+def _page_max_distance(requested: Optional[float] = None, query: str = "") -> Optional[float]:
+    """The relevance cut-off for page_context, or None for no cut-off:
+      - the caller's max_distance if given (0 = none);
+      - none when AMP_PAGE_MAX_DISTANCE is "off";
+      - none when the question is about the user or the chat ("my", "we",
+        "remember", "earlier", ...): their memories are not close in vector
+        space ("What do you remember about me?"), so they are paged as before;
+      - else AMP_PAGE_MAX_DISTANCE if it is a number, else DEFAULT_PAGE_MAX_DISTANCE."""
+    if requested is not None:
+        return requested if requested > 0 else None
+    raw = os.environ.get(PAGE_MAX_DISTANCE_ENV, "").strip().lower()
+    if raw in ("off", "none", "0"):
+        return None
+    if _ABOUT_THE_CHAT.search(query or ""):
+        return None
+    if raw:
+        try:
+            return float(raw)
+        except ValueError:
+            logger.warning("[page_context] %s=%r is not a number; using the default.", PAGE_MAX_DISTANCE_ENV, raw)
+    return DEFAULT_PAGE_MAX_DISTANCE
+
+
 @mcp.tool()
 def page_context(query: str, total_budget: int = 1000, session_id: str = "", candidate_pool: int = 20,
-                 session_key: str = "", ctx: Optional[Context] = None) -> PageContextResult:
+                 session_key: str = "", max_distance: Optional[float] = None,
+                 ctx: Optional[Context] = None) -> PageContextResult:
     """
     Retrieve context from one session's long-term memory for a query, limited by a token budget.
 
@@ -536,6 +570,12 @@ def page_context(query: str, total_budget: int = 1000, session_id: str = "", can
         session_id: The session to recall from (required)
         candidate_pool: How many top matches to consider before applying the budget (default: 20)
         session_key: That session's key (required)
+        max_distance: The relevance cut-off: matches farther from the query
+            than this are not paged in (squared L2 distance; smaller is
+            closer); 0 turns it off. By default 1.4 (AMP_PAGE_MAX_DISTANCE
+            changes it, "off" turns it off), and none for questions about the
+            user or the chat ("my", "we", "remember", "earlier", ...), whose
+            memories are not close to the question in vector space.
 
     Returns:
         A PageContextResult with:
@@ -543,6 +583,7 @@ def page_context(query: str, total_budget: int = 1000, session_id: str = "", can
           tokens_used: total token cost of the selected memories
           total_budget: the budget that was requested
           skipped: how many matches were left out because they did not fit
+          too_far: how many matches were left out by the relevance cut-off
         A memory's token cost is the token count of its searchable text (the
         text summary, or for code the file path, summary and signatures).
         High-risk memories are left out before the budget is applied, so they
@@ -558,10 +599,15 @@ def page_context(query: str, total_budget: int = 1000, session_id: str = "", can
     if not candidates:
         return PageContextResult(total_budget=total_budget)
 
+    cutoff = _page_max_distance(max_distance, query)
     selected = []
     used_budget = 0
     skipped = 0
+    too_far = 0
     for candidate in candidates:
+        if cutoff is not None and candidate.distance > cutoff:
+            too_far += 1           # not about this query: it would only cost tokens and distract the model
+            continue
         tokens = candidate.token_cost
 
         if used_budget + tokens > total_budget:
@@ -575,7 +621,8 @@ def page_context(query: str, total_budget: int = 1000, session_id: str = "", can
         memories=selected,
         tokens_used=used_budget,
         total_budget=total_budget,
-        skipped=skipped
+        skipped=skipped,
+        too_far=too_far,
     )
     
 
