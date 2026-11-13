@@ -206,6 +206,31 @@ async def _json_body(request: Request) -> Dict[str, Any]:
     return body if isinstance(body, dict) else {}
 
 
+class NoStalePages:
+    """ASGI middleware: the page and its static files are sent with
+    "Cache-Control: no-cache", so the browser checks for a newer version on
+    every load (a cheap 304 when nothing changed). Without it, browsers kept
+    an old app.js for a while and a fixed page showed only after a reload.
+    API responses, including the streamed chat, pass through untouched."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        path = scope.get("path", "")
+        if scope["type"] != "http" or not (path == "/" or path.startswith("/static/")):
+            await self.app(scope, receive, send)
+            return
+
+        async def send_no_cache(message):
+            if message["type"] == "http.response.start":
+                headers = [(k, v) for k, v in message.get("headers", []) if k.lower() != b"cache-control"]
+                message = dict(message, headers=headers + [(b"cache-control", b"no-cache")])
+            await send(message)
+
+        await self.app(scope, receive, send_no_cache)
+
+
 def create_app(graph: Any = None, shutdown_wait: float = SHUTDOWN_WAIT) -> Starlette:
     chat = ChatApp(graph, shutdown_wait)
 
@@ -337,7 +362,8 @@ def create_app(graph: Any = None, shutdown_wait: float = SHUTDOWN_WAIT) -> Starl
         Route("/api/chat", send, methods=["POST"]),
         Mount("/static", StaticFiles(directory=STATIC_DIR), name="static"),
     ]
-    middleware = [Middleware(TrustedHostMiddleware, allowed_hosts=[*LOCAL_HOSTS, "testserver"])]
+    middleware = [Middleware(TrustedHostMiddleware, allowed_hosts=[*LOCAL_HOSTS, "testserver"]),
+                  Middleware(NoStalePages)]
     app = Starlette(routes=routes, middleware=middleware, lifespan=lifespan)
     app.state.chat = chat
     return app

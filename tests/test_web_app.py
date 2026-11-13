@@ -47,6 +47,13 @@ def chat(web, message, **headers):
 # Page and status
 # ---------------------------------------------------------------------------
 
+def test_the_page_is_never_served_stale(web):
+    # without this the browser kept an old app.js, and fixes showed only after a reload (report 5r)
+    for path in ("/", "/static/app.js", "/static/style.css"):
+        assert web.get(path).headers["cache-control"] == "no-cache"
+    assert "cache-control" not in web.get("/api/state").headers
+
+
 def test_the_page_and_its_files_are_served(web):
     page = web.get("/")
     assert page.status_code == 200 and "<title>AMP Chat</title>" in page.text

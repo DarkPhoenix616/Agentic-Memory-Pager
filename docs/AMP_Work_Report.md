@@ -21,6 +21,7 @@ in `BTP/report_eval/`, test venv `AgenticMemoryPager/.venv` (git-ignored).
 
 | Part | Branch | State |
 |---|---|---|
+| Chat switching, made right (user request, 2026-11-13) | `fix/chat-switch-ui` (merged, then deleted) | **Done.** A new chat shows only "Hello! 👋 How can I help you today?"; older chats without saved messages show their saved summaries; the page is never served stale. Checked in headless Chrome. 461 tests pass. Section 5r. |
 | Fix: *New chat* did not clear the page (found by the user, 2026-11-13) | `fix/new-chat-redraw` (merged, then deleted) | **Done.** The page redrew while still marked busy, so the old messages stayed after *New chat* or opening a chat. Reproduced and confirmed fixed in headless Chrome; a regression test fails on the old code. 460 tests pass. Section 5q. |
 | Final round, task 8: a lighter code graph | `feature/lighter-code-graph` (merged, then deleted) | **Done.** Call lines are out of the search text (−26% tokens, search unchanged: they were mostly past the embedding model's 256-word-piece window); the model now *sees* the calls of a paged code memory (+3 tokens). Call questions: 3/9 → **8/9** right. 459 tests pass. Section 5p. |
 | Final round, task 7: relevance cut-off for paging | `feature/relevance-cutoff` (merged, then deleted) | **Done.** Memories farther than 1.4 from the question are not paged in, except for questions about the user or the chat. 16-fact chat: recall still 16/16; general questions 653 → 108 memory tokens (prompt −36%); no time change. 459 tests pass. Section 5o. |
@@ -1247,6 +1248,29 @@ Since step 4 (5g), each function of a code memory added a line to its search tex
   - **Before:** after *New chat* the page still showed 2 messages (the server was already on the new chat).
   - **After:** 0 messages and the empty-chat hint; reopening showed the 2 messages again.
 - **Regression test:** `tests/test_web_app.py::test_new_chat_redraws_the_messages_after_busy_is_cleared` runs the real `leave()` in Node with stand-ins. It fails on the old code and passes on the fix. Tests: 460 passed, 1 skipped.
+
+## 5r. Chat switching, made right (2026-11-13)
+
+The user asked:
+- *New chat* should clear the messages and start a plain chat with just a greeting;
+- clicking an old chat should show its messages, without a reload.
+
+- **Stale page:** the server sent `app.js` without `Cache-Control`, so the browser kept an old copy for a while. The 5q fix appeared only after a reload. The page and `/static/` are now sent with `Cache-Control: no-cache` (a small ASGI middleware in `app/server.py`; API responses and the streamed chat are untouched), so every load checks for a newer version.
+- **Greeting:** the long explanation in an empty chat is replaced by one bubble, "Hello! 👋 How can I help you today?". It is shown only while the chat is empty, and it is not a message: not saved, not sent to the model.
+- **Old chats without saved messages:** chats from before 5n have no saved messages, only memories. When one is reopened, its saved summaries are now shown as the conversation, oldest first, each tagged "📦 saved summary", with a line saying why. Before, the message area stayed empty apart from the "where it left off" cards.
+- **Checked in a real browser** (`report_eval/ui_check/new_chat_ui.py after_fix_2`: headless Chrome, port 8030, temporary folders, real llama3.1:8b):
+
+| Step | The page shows |
+|---|---|
+| Fresh page | only the greeting |
+| After one message | 2 messages |
+| *New chat* | 0 messages, only the greeting |
+| Reopen the first chat | its 2 messages, no greeting, no reload |
+| Reopen it with its saved-messages file removed (an older chat) | 1 saved summary and the explanation line |
+| `app.js` | `Cache-Control: no-cache` |
+
+- **Test:** `test_the_page_is_never_served_stale` checks the header on `/`, `app.js` and `style.css`, and that the API has none. Tests: 461 passed, 1 skipped.
+- **Cleanup:** the red-team script (5k) didn't set `AMP_CHATS_DIR`, so its run left 17 `rt-*.pending` files in the real `storage/chats/`. They belonged to test chats whose keys were in a throwaway keyring, so nothing listed or read them. They are removed, and `red_team.py` and `live_chat_history.py` now use a temporary chats folder.
 
 ## 6. Decision log
 
