@@ -181,7 +181,7 @@ Checked on 2026-11-13 from a fresh clone and a fresh virtual environment (Python
 
 ## 💬 AMP Chat: run the whole system as a local chatbot
 
-AMP Chat is a web app on top of the LangGraph harness. You chat with a local model. Behind the scenes, a side panel shows the memory pager at work:
+AMP Chat is a web app on top of the LangGraph harness. You chat with a local model. Your chats are listed on the left; the **📊 Behind the scenes** button opens a side panel on the right (closed by default, closed again with ✕) that shows the memory pager at work:
 
 - **Token meter:** how full the context window is, with a line at the 80% trigger.
 - **Compactions:** each one is shown as it happens. Code blocks go to the **AST compactor**, and question-and-answer exchanges go to the **RLM summarizer**. The result is stored in the ChromaDB vault.
@@ -202,7 +202,7 @@ Paging works like an operating system reclaiming memory:
 - **Working set:** the latest exchange is never paged out in the background.
 
 **Your chats.** When you leave a chat (*New chat*, or opening another one), whatever is still in its context window is saved to the vault first, so nothing you said is lost. If that fails, for example because the model is not running, you stay in the chat.
-- The side panel lists your saved chats, newest first: each one's title (its first message), how many messages and memories it has, and when it was last used.
+- The sidebar on the left lists your chats, newest first, by name only: the start of your first message (hover for the date).
 - Click one to reopen it. Its old messages are shown again, like in ChatGPT or Claude, greyed where they were paged out to the vault. *What the model remembers* (its latest memories) is one click away.
 - **The old messages are for display only.** The model sees its context window and the memories paged in for each question, exactly as before reopening, so paging still does the work.
 - **Saved messages:** `storage/chats/<chat id>.transcript`, rewritten after every answer, encrypted with the chat's key (AES-256-GCM, owner-only). Secrets are scrubbed first, the same way as in the vault, so a pasted API key is kept as `[REDACTED_SECRET]`. The file stays when you leave the chat.
@@ -211,7 +211,7 @@ Paging works like an operating system reclaiming memory:
 **Auto-save.** After every answer and every compaction, what is still only in the context window is also written to `storage/chats/<chat id>.pending`, encrypted with the chat's own key (AES-256-GCM, owner-only file, about 0.2 ms per save, no model needed).
 - **Ctrl+C or SIGTERM:** the app waits for a running answer or background compaction (up to 20 s each), saves one last time and prints that the chat is kept.
 - **A crash or `kill -9`:** only the turn in progress is lost; every finished turn is already on disk.
-- **Reopening such a chat** puts its unsaved part back into the context window, so it continues exactly where it stopped. The list marks it *unsaved part kept*.
+- **Reopening such a chat** puts its unsaved part back into the context window, so it continues exactly where it stopped. Nothing is lost.
 - **Leaving the chat normally** pages everything out to the vault and removes the file.
 
 ```bash

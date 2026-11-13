@@ -23,6 +23,7 @@ venv `AgenticMemoryPager/.venv` (git-ignored).
 | Part | Branch | State |
 |---|---|---|
 | The browser kept running the old page script (2026-11-13) | `fix/versioned-assets` (merged, then deleted) | **Done.** The page now loads `app.js` and `style.css` by version (`?v=<mtime>`), so a changed file always gets a new address. 462 tests pass. Section 5s. |
+| New layout: chat sidebar and a closable stats panel (user request, 2026-11-14) | `ui/sidebar-layout` (merged, then deleted) | **Done.** Chats in a left sidebar by name only; "Behind the scenes" is a right panel opened and closed with a button (closed by default, remembered); explanation text removed from the page. Checked in headless Chrome. 462 tests pass. Section 5u. |
 | Chat switching, made right (user request, 2026-11-13) | `fix/chat-switch-ui` (merged, then deleted) | **Done.** A new chat shows only "Hello! 👋 How can I help you today?"; older chats without saved messages show their saved summaries; the page is never served stale. Checked in headless Chrome. 461 tests pass. Section 5r. |
 | Fix: *New chat* did not clear the page (found by the user, 2026-11-13) | `fix/new-chat-redraw` (merged, then deleted) | **Done.** The page redrew while still marked busy, so the old messages stayed after *New chat* or opening a chat. Reproduced and confirmed fixed in headless Chrome; a regression test fails on the old code. 460 tests pass. Section 5q. |
 | Final round, task 8: a lighter code graph | `feature/lighter-code-graph` (merged, then deleted) | **Done.** Call lines are out of the search text (−26% tokens, search unchanged: they were mostly past the embedding model's 256-word-piece window); the model now *sees* the calls of a paged code memory (+3 tokens). Call questions: 3/9 → **8/9** right. 459 tests pass. Section 5p. |
@@ -1293,6 +1294,24 @@ On the user's request, the box shown at the top of a reopened chat is gone: "Reo
 - **Where the event still shows:** in the Activity panel.
 - `#resume`, `renderResume()` and its CSS were removed.
 - **Checked:** the real-browser check (`new_chat_ui.py after_box_removed`) passes, and the box is no longer in the page. Tests: 462 passed, 1 skipped.
+
+## 5u. New layout: chat sidebar and a closable stats panel (2026-11-14)
+
+The user found the page cluttered: the stats were always on screen, the chat names were long, and explanation text was everywhere.
+- **Layout:** three columns.
+  - **Left sidebar:** *New chat* and the chats by name only.
+  - **Middle:** the chat, with a small header (model, memory mode) and a **📊 Behind the scenes** button.
+  - **Right:** the stats panel (context meter, compactions, paged-in memories, activity, vault, settings). It opens with that button and closes with ✕ or the button. It is closed by default, and the choice is kept in the browser (`localStorage`, wrapped in try/catch).
+  - On narrow screens the panel slides over the chat.
+- **Chat names:** the title only. The date is shown on hover. The meta line (messages, memories, unsaved, date, "this chat") is gone. Titles of older chats taken from a memory now stop at "Assistant:" (`chat_session._title`), so "Hi My name is akshay Assistant: Nice to meet you…" becomes "Hi My name is akshay".
+- **Explanation text removed:**
+  - **Notes and hints:** the note under the chat list, the meter note ("Compaction starts at the dark line…"), the settings note, and the long empty-list hints are gone.
+  - **Paged-out tag:** "📦 paged out: compressed into the vault" became "📦 paged out".
+  - **Notices and status:** shorter (*Saving…*, *Opening…*, *Compacting…*). The input says *Message AMP…*, and the model pill shows just the model name (details on hover).
+- **Checked:**
+  - **Chat switching:** the real-browser check (`report_eval/ui_check/new_chat_ui.py after_sidebar`) passes: greeting, New chat clears, reopen shows the messages, older chats show their summaries.
+  - **The panel:** a headless-Chrome layout check confirmed it starts closed, opens with the button, closes with ✕, is remembered across reloads, and that none of the removed explanation text is left on the page.
+  - **Tests:** 462 passed, 1 skipped. The title test now expects the user's part only.
 
 ## 6. Decision log
 
