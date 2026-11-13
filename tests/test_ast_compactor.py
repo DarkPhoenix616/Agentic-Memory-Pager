@@ -369,13 +369,20 @@ def test_old_seals_still_verify_and_new_calls_are_sealed(monkeypatch):
     assert not signing.verify_memory(memory)                      # the graph is covered by the seal
 
 
-def test_the_code_graph_is_searchable():
+def test_the_code_graph_is_kept_for_run_memory_code_but_not_in_the_search_text():
     import server.amp_memory_server as server
+    from harness import graph
     from harness.guardrails import UnifiedMemory
     memory = UnifiedMemory(session_id="g", memory_type="code", compaction_source="ast", raw_token_count=50,
                            code_payload=compact_code(SHOP, file_path="shop.py"))
-    assert "checkout calls load_cart, pay" in server._embedding_text(memory)
-    assert server._sandbox_record(memory)["calls"]["checkout"] == ["load_cart", "pay"]
+    assert " calls " not in server._embedding_text(memory)          # lighter: no call lines (report 5p)
+    assert memory.code_payload.symbols[-1].calls == ["load_cart", "pay"]           # still in the memory
+    record = server._sandbox_record(memory)
+    assert record["calls"]["checkout"] == ["load_cart", "pay"] and "checkout calls load_cart, pay" in record["text"]
+    assert "calls: which function calls which" in graph._build_secure_system_prompt("ctx", "s1")
+    _, body, plain = graph._memory_view(memory)                       # what the model sees when it is paged in
+    assert "\nCalls: Cart.total -> Cart.prices; load_cart -> Cart; checkout -> load_cart, pay" in body
+    assert "checkout -> load_cart, pay" in plain                       # Layer 4 sees the same text
 
 
 # ---------------------------------------------------------------------------
