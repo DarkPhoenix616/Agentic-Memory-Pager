@@ -2,10 +2,7 @@
 
 Running log of what was built for the Agentic Memory Pager (AMP) BTP, why each
 choice was made, and the measured results. Since 2026-11-07 it lives in the
-repo at `docs/AMP_Work_Report.md` on the user's branch `akshaybranch` (the user
-moved it there; `main` has no `docs/` because PR #9 removed it). Since
-2026-11-09 PR #9 is already merged into `akshaybranch` with the report kept and
-`docs/` left out of `.gitignore`, so merging main again will not remove it.
+repo at `docs/AMP_Work_Report.md` on the user's branch `akshaybranch`.
 
 How to use this file:
 - New chat? Read this first; it is the source of truth for status and numbers.
@@ -20,10 +17,11 @@ in `BTP/report_eval/`, test venv `AgenticMemoryPager/.venv` (git-ignored).
 
 ---
 
-## 1. Status (last updated 2026-11-09)
+## 1. Status (last updated 2026-11-13)
 
 | Part | Branch | State |
 |---|---|---|
+| Final round, task 1: main's 3 small fixes brought into `akshaybranch` | `akshaybranch` (merge `f307446`) | **Done.** Main (PR #10) had the same code plus a sandbox test import fix, a macOS skip and 2 `.gitignore` lines. Plain `pytest` now passes: 409 passed, 1 skipped. Plan: section 1, item 9. |
 | Step 5: Tree-sitter for JavaScript, TypeScript, Java, C and C++ | `feature/tree-sitter` (merged, then deleted) | **Done.** Real syntax trees and the code graph for 5 more languages; line scan stays as the fallback. 409 tests pass. Section 5h. |
 | Step 4: code graph in the AST compactor | `feature/code-graph` (merged, then deleted) | **Done.** Each function records what it calls; 453 links in this repo; old seals still verify. Section 5g. |
 | Step 3: red-team test against the real model (Aman's Phase 5) | none (test script only) | **Done.** 12 of 13 attacks blocked with llama3.1:8b; fact poisoning got through. Section 5f. |
@@ -79,6 +77,16 @@ Next steps:
    5. **Tree-sitter**, so JavaScript/TypeScript, Java and C/C++ can be compacted too. Done, see section 5h.
    6. Optional, to agree with Aman: Phi-3 comparison, Instructor, LiteLLM, Langfuse, SQLite. Not started.
    - How each step is done: a branch from `akshaybranch`, build, test, live check with the real model, merge into `akshaybranch`, delete the branch, push, and update this report.
+9. **Final round before submission** (made 2026-11-13; the user asked for all 8 tasks, one at a time, waiting for a go-ahead after each):
+   1. Bring main's 3 small fixes (PR #10) into `akshaybranch`. **Done** (`f307446`). Before this, plain `pytest` stopped on `server/test_sandbox.py` (`from sandbox import ...`); only `pytest tests` passed. Now plain `pytest`: 409 passed, 1 skipped.
+   2. Auto-save: save the chat when the app shuts down, and every few turns. Not started.
+   3. Fact poisoning (the 1 red-team attack that got through, section 5f): record where each fact came from, prefer the user's own words, flag a note that contradicts an older one; re-run the red team. Not started.
+   4. Live test of the tool guard (Layer 4) with the real model. Not started.
+   5. Final check: fresh install from `requirements.txt`, all tests, one full chat in the web app, report and README updated. Not started.
+   6. Show the full old conversation when a chat is reopened (saved encrypted with the session key). Not started.
+   7. Relevance cut-off in `page_context`, so unrelated memories are not paged in. Not started.
+   8. A lighter code graph, so code memories grow by less than 33% (section 5g). Not started.
+   - Kept as known limits, not built: encrypting the search vectors, step 6 extras, connecting ChatGPT or claude.ai through a public link.
 
 ---
 
@@ -806,6 +814,7 @@ Aman's own tests (Phases 1–4) used a scripted fake model; this is the first te
 | 2026-11-09 | Save a chat when the user leaves it; stay on it if saving fails | A chat under 80% left nothing in the vault, so it could not be reopened. |
 | 2026-11-09 | Reopened chats show memories, not the old messages (user agreed for now) | AMP stores memories, not transcripts; a full encrypted transcript was discussed as a later option. |
 | 2026-11-09 | Rebuild the vault after encrypting old rows | ChromaDB's write-ahead log and free pages still held the old text; `chroma vacuum` alone did not remove it. |
+| 2026-11-13 | Merge main into `akshaybranch` instead of cherry-picking its 3 fixes | Main already held the same code (PR #10), so a merge keeps the two branches in step. In `.gitignore`, Danie's `.idea` and `Claude context.MD` lines were kept and `docs/` was left out, so the report stays tracked here. |
 
 ---
 
