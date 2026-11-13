@@ -15,7 +15,13 @@ anything runs, every requested call is checked here:
                  for the tool, otherwise the call is rejected.
 
 This is what makes Layer 3's execution levels binding: without it they are only
-text in the prompt. The module is pure Python (no LangGraph, no I/O) so it can be
+text in the prompt.
+
+Only a TOOL: line of its own can run. A small model also writes calls inside a
+sentence ("First, I'll run TOOL: search_vault("...") to find ..."); those never
+run, but they are checked too (parse_inline_tool_calls), so a call shaped by a
+planted note is blocked and logged instead of silently dropped (live test,
+report section 5l). The module is pure Python (no LangGraph, no I/O) so it can be
 unit-tested directly; graph.py does the wiring.
 """
 
@@ -55,6 +61,7 @@ class ToolCall:
     raw_args: str = ""
     query: Optional[str] = None   # first argument without quotes, when it is a quoted string
     code: Optional[str] = None    # run_memory_code: the Python to run
+    inline: bool = False          # written inside a sentence: checked, never run
 
     @property
     def text(self) -> str:
@@ -108,6 +115,33 @@ def parse_tool_calls(reply_text: str) -> List[ToolCall]:
             query=quoted.group(2) if quoted else None,
             code=code,
         ))
+    return calls
+
+
+# "TOOL: name(args)" anywhere in a line, for calls written inside a sentence. Upper-case
+# TOOL: only, as the system prompt writes it, so prose such as "the best tool: grep" is not a call.
+_INLINE_TOOL = re.compile(r"\bTOOL:[ \t]*([A-Za-z_]\w*)[ \t]*(?:\(([^)\n]*)\))?")
+_NEXT_CODE_BLOCK = re.compile(r"```[\w+-]*[^\n]*\n(.*?)(?:```|\Z)", re.DOTALL)
+_CODE_LOOKAHEAD = 600         # an inline run_memory_code takes the next code block within this many characters
+
+
+def parse_inline_tool_calls(reply_text: str) -> List[ToolCall]:
+    """TOOL: calls written inside a line of text (not at its start), in order.
+    They are never run; Layer 4 still judges them."""
+    calls: List[ToolCall] = []
+    text = reply_text or ""
+    for match in _INLINE_TOOL.finditer(text):
+        line_start = text.rfind("\n", 0, match.start()) + 1
+        if not text[line_start:match.start()].strip():
+            continue                                  # a TOOL: line of its own: parse_tool_calls has it
+        raw = (match.group(2) or "").strip()
+        quoted = _QUOTED_ARG.match(raw)
+        code = None
+        if match.group(1).lower() == CODE_TOOL:
+            block = _NEXT_CODE_BLOCK.search(text[match.end():match.end() + _CODE_LOOKAHEAD])
+            code = block.group(1) if block else (quoted.group(2) if quoted else raw)
+        calls.append(ToolCall(name=match.group(1), raw_args=raw, query=quoted.group(2) if quoted else None,
+                              code=code, inline=True))
     return calls
 
 
