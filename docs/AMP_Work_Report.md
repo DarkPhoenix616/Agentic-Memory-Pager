@@ -1285,6 +1285,14 @@ The user asked:
   - the real-browser check (`new_chat_ui.py after_fix_3`) passes again: greeting, *New chat* clears, reopen shows the messages, older chat shows its summary.
   - Tests: 462 passed, 1 skipped.
 
+## 5t. The reopen info box is removed (2026-11-13)
+
+On the user's request, the box shown at the top of a reopened chat is gone: "Reopened this chat: its N earlier messages are below…", the folded "What the model remembers (latest 5 memories)" and the note about paging.
+- **What stays:** the old messages, greyed where they were paged out, and the saved summaries of older chats (each tagged "📦 saved summary").
+- **Where the event still shows:** in the Activity panel.
+- `#resume`, `renderResume()` and its CSS were removed.
+- **Checked:** the real-browser check (`new_chat_ui.py after_box_removed`) passes, and the box is no longer in the page. Tests: 462 passed, 1 skipped.
+
 ## 6. Decision log
 
 | Date | Decision | Why |
