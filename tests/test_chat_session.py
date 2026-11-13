@@ -366,7 +366,7 @@ def test_only_chats_with_a_key_on_this_computer_are_listed(vault, client):
 def test_a_chat_title_is_the_start_of_its_oldest_memory():
     from harness.chat_session import TITLE_CHARS, _title
     assert _title({"text": "User: Hi, my name is Akshay.\n\nAssistant: Nice to meet you."}) == \
-        "Hi, my name is Akshay. Assistant: Nice to meet you."
+        "Hi, my name is Akshay."                                # the user's part only: a simple chat name
     long = _title({"text": "The user asked " + "about many things " * 20})
     assert len(long) <= TITLE_CHARS and long.endswith("…")
 
