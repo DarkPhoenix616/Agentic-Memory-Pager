@@ -586,8 +586,9 @@ def _blocked_note(blocked: List[Event]) -> str:
 # ---------------------------------------------------------------------------
 
 def _title(view: Dict[str, Any]) -> str:
-    """A short title for a chat: the start of its oldest memory."""
+    """A short title for a chat: the start of its oldest memory, the user's part only."""
     text = re.sub(r"^\s*(user|human)\s*:\s*", "", view.get("text", ""), flags=re.IGNORECASE)
+    text = re.split(r"\b(?:assistant|ai)\s*:", text, maxsplit=1, flags=re.IGNORECASE)[0]
     text = " ".join(text.split())
     return text if len(text) <= TITLE_CHARS else text[:TITLE_CHARS - 1].rstrip() + "…"
 

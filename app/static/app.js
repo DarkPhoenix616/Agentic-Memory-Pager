@@ -83,10 +83,11 @@ async function checkModel() {
   try {
     const status = await api("/api/status");
     ready = status.ready;
-    $("model").textContent = status.message;
+    $("model").textContent = ready ? status.model : status.message;
+    $("model").title = status.message;
     $("model").className = `pill ${ready ? "ok" : "bad"}`;
     const vault = status.vault || {};
-    $("vault-mode").textContent = vault.mode === "mcp" ? "Memory: over MCP" : "Memory: in-process";
+    $("vault-mode").textContent = vault.mode === "mcp" ? "Memory: MCP" : "Memory: in-process";
     $("vault-mode").title = vault.message || "";
     $("vault-mode").className = `pill ${vault.ok ? "ok" : "bad"}`;
     if (!vault.ok) {
@@ -111,7 +112,7 @@ function messageNode(role, content, status) {
   const paged = status && status !== "in context";
   node.className = `msg ${role}${paged ? " paged" : ""}`;
   node.innerHTML = `<div class="bubble">${markdown(content)}</div>` +
-    (paged ? `<div class="tag">📦 ${escapeHtml(status)}: compressed into the vault</div>` : "");
+    (paged ? `<div class="tag">📦 ${escapeHtml(status)}</div>` : "");
   return node;
 }
 
@@ -156,9 +157,6 @@ function renderMeter() {
   setMeter(c.tokens);
   $("meter-trigger").style.left = `${pct(c.trigger)}%`;
   $("meter-target").style.left = `${pct(c.reclaim_target)}%`;
-  $("meter-note").textContent =
-    `${c.chunks} chunks in the window (${c.chunks - c.code_chunks} text, ${c.code_chunks} code). ` +
-    `Compaction starts at the dark line (${fmt(c.trigger)}); background compaction stops at the light one (${fmt(c.reclaim_target)}).`;
   $("reclaiming").hidden = !state.reclaiming;
   $("stat-compactions").textContent = fmt(state.stats.compactions);
   $("stat-out").textContent = fmt(state.stats.tokens_paged_out);
@@ -211,7 +209,7 @@ function renderActivity() {
   box.replaceChildren();
   const turns = [...new Set(state.events.map((e) => e.turn))].sort((a, b) => b - a).slice(0, 8);
   if (!turns.length) {
-    box.innerHTML = '<div class="none">Each step of a turn shows up here.</div>';
+    box.innerHTML = '<div class="none">No activity yet</div>';
     return;
   }
   for (const turn of turns) {
@@ -237,11 +235,10 @@ function renderSettings() {
 function render() {
   if (!busy) renderMessages();
   renderMeter();
-  fillList("paged", state.last_paged, "Nothing yet: the vault fills once the window passes the trigger.",
-    (m) => memoryCard(m, m.distance));
+  fillList("paged", state.last_paged, "Nothing yet", (m) => memoryCard(m, m.distance));
   renderActivity();
-  $("vault-title").textContent = `Vault: ${state.vault.length} ${state.vault.length === 1 ? "memory" : "memories"} in this chat`;
-  fillList("vault", state.vault, "Empty.", (m) => memoryCard(m));
+  $("vault-title").textContent = `Vault (${state.vault.length})`;
+  fillList("vault", state.vault, "Empty", (m) => memoryCard(m));
   renderSettings();
 }
 
@@ -274,13 +271,9 @@ function chatNode(chat) {
   const node = document.createElement("button");
   node.type = "button";
   node.className = `chat-item${chat.current ? " current" : ""}`;
-  node.innerHTML = `<span class="chat-title">${escapeHtml(chat.title || chat.session_id)}</span>` +
-    `<span class="chat-meta">` +
-    (chat.messages ? `${fmt(chat.messages)} ${chat.messages === 1 ? "message" : "messages"} · ` : "") +
-    `${fmt(chat.memories)} ${chat.memories === 1 ? "memory" : "memories"}` +
-    (chat.unsaved ? " · unsaved part kept" : "") +
-    (chat.last_time ? ` · ${escapeHtml(when(chat.last_time))}` : "") +
-    (chat.current ? " · this chat" : "") + `</span>`;
+  const title = chat.title || "New chat";
+  node.textContent = title;
+  node.title = chat.last_time ? `${title} · ${when(chat.last_time)}` : title;
   node.disabled = busy || chat.current;
   node.addEventListener("click", () => openChat(chat.session_id));
   return node;
@@ -289,7 +282,7 @@ function chatNode(chat) {
 async function loadChats() {
   try {
     const data = await api("/api/sessions");
-    fillList("chats", data.chats, "No saved chats yet. A chat is kept after every message.", chatNode);
+    fillList("chats", data.chats, "No chats yet", chatNode);
   } catch (err) {
     fillList("chats", [], `Cannot list the chats: ${err.message}`, chatNode);
   }
@@ -319,7 +312,7 @@ async function leave(path, body, message) {
 }
 
 function openChat(sessionId) {
-  return leave("/api/open", { session_id: sessionId }, "Saving this chat to the vault, then opening the other one…");
+  return leave("/api/open", { session_id: sessionId }, "Opening…");
 }
 
 function showError(message) {
@@ -419,7 +412,21 @@ $("input").addEventListener("keydown", (event) => {
 });
 $("input").addEventListener("input", autoSize);
 
-$("new-chat").addEventListener("click", () => leave("/api/new", {}, "Saving this chat to the vault…"));
+$("new-chat").addEventListener("click", () => leave("/api/new", {}, "Saving…"));
+
+// Behind the scenes: a side panel that opens and closes (the choice is remembered in this browser)
+const PANEL_KEY = "amp-panel-open";
+function setPanel(open) {
+  $("app").classList.toggle("panel-closed", !open);
+  $("toggle-panel").classList.toggle("on", open);
+  $("toggle-panel").setAttribute("aria-expanded", String(open));
+  try { localStorage.setItem(PANEL_KEY, open ? "1" : "0"); } catch (err) { /* storage blocked: fine */ }
+}
+$("toggle-panel").addEventListener("click", () => setPanel($("app").classList.contains("panel-closed")));
+$("close-panel").addEventListener("click", () => setPanel(false));
+let panelOpen = false;
+try { panelOpen = localStorage.getItem(PANEL_KEY) === "1"; } catch (err) { /* storage blocked: start closed */ }
+setPanel(panelOpen);
 
 let settingsTimer = null;
 function saveSettings() {
