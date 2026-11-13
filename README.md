@@ -135,7 +135,7 @@ agentic-memory-pager/
 │   └── chat_session.py         # one chat, run through the graph
 ├── app/                        # AMP Chat: web server + static UI
 ├── tests/
-├── storage/                    # vault and local secrets (not in git)
+├── storage/                    # vault, chats' unsaved parts and local secrets (not in git)
 ├── requirements.txt
 └── README.md
 ```
@@ -190,6 +190,12 @@ Paging works like an operating system reclaiming memory:
 - The side panel lists your saved chats, newest first: each one's title (the start of its first memory), how many memories it has, and when it was last used.
 - Click one to reopen it. Its latest memories are shown as *where it left off*, and anything older is paged back in when you ask about it.
 - Only chats whose key is in this computer's keyring are listed, since their memories are encrypted with it.
+
+**Auto-save.** After every answer and every compaction, what is still only in the context window is also written to `storage/chats/<chat id>.pending`, encrypted with the chat's own key (AES-256-GCM, owner-only file, about 0.2 ms per save, no model needed).
+- **Ctrl+C or SIGTERM:** the app waits for a running answer or background compaction (up to 20 s each), saves one last time and prints that the chat is kept.
+- **A crash or `kill -9`:** only the turn in progress is lost; every finished turn is already on disk.
+- **Reopening such a chat** puts its unsaved part back into the context window, so it continues exactly where it stopped. The list marks it *unsaved part kept*.
+- **Leaving the chat normally** pages everything out to the vault and removes the file.
 
 ```bash
 ollama pull llama3.1:8b              # the chat model and the summarizer share it
@@ -328,5 +334,6 @@ The context window is small by default (3,072 tokens), so you can see paging aft
 | `AMP_RISK_MODEL` | the chat model | Model that scores memories for attacks: a model name, `llama-guard3:1b`, or `off` |
 | `AMP_AUDIT_LOG` | `storage/amp_audit.log` | Where deletions and refused calls are logged |
 | `AMP_SESSION_KEYS_FILE` | `storage/.amp_session_keys` | The chat app's keyring of session keys |
+| `AMP_CHATS_DIR` | `storage/chats` | Encrypted unsaved part of each chat (auto-save); tests use a temporary one |
 
 The core is `harness/chat_session.py` (`ChatSession.ask()`). It has no UI code, so it can also be used from scripts and tests.
