@@ -21,6 +21,7 @@ in `BTP/report_eval/`, test venv `AgenticMemoryPager/.venv` (git-ignored).
 
 | Part | Branch | State |
 |---|---|---|
+| Final round, task 8: a lighter code graph | `feature/lighter-code-graph` (merged, then deleted) | **Done.** Call lines are out of the search text (−26% tokens, search unchanged: they were mostly past the embedding model's 256-word-piece window); the model now *sees* the calls of a paged code memory (+3 tokens). Call questions: 3/9 → **8/9** right. 459 tests pass. Section 5p. |
 | Final round, task 7: relevance cut-off for paging | `feature/relevance-cutoff` (merged, then deleted) | **Done.** Memories farther than 1.4 from the question are not paged in, except for questions about the user or the chat. 16-fact chat: recall still 16/16; general questions 653 → 108 memory tokens (prompt −36%); no time change. 459 tests pass. Section 5o. |
 | Final round, task 6: full conversation when a chat is reopened | `feature/chat-transcript` (merged, then deleted) | **Done.** Every message is kept, secrets scrubbed and encrypted with the chat's key; a reopened chat shows them again (greyed where paged out), for display only. Live: 6/6 messages back, recall 2/2 through the vault, 0 readable words in the files. 444 tests pass. Section 5n. |
 | Final round, task 5: final check from a fresh clone | `feature/final-check` (merged, then deleted) | **Done.** Fresh clone + fresh venv: install 44 s, 439 passed + 1 skipped (the live test passes too). Full chat in the web app, in-process and over MCP: every recall right, tools work, reopen works, vault holds no readable text. Fixed: stale README Quickstart, `tiktoken` missing from requirements. Section 5m. |
@@ -91,8 +92,9 @@ Next steps:
    5. Final check: fresh install from `requirements.txt`, all tests, one full chat in the web app, report and README updated. **Done**, see section 5m.
    6. Show the full old conversation when a chat is reopened (saved encrypted with the session key). **Done**, see section 5n.
    7. Relevance cut-off in `page_context`, so unrelated memories are not paged in. **Done**, see section 5o.
-   8. A lighter code graph, so code memories grow by less than 33% (section 5g). Not started.
+   8. A lighter code graph, so code memories grow by less than 33% (section 5g). **Done**, see section 5p: the call lines no longer cost search-text tokens at all, and the model now sees the graph.
    - Kept as known limits, not built: encrypting the search vectors, step 6 extras, connecting ChatGPT or claude.ai through a public link.
+   - **All 8 tasks are done (2026-11-13)**, each merged into `akshaybranch` and pushed: sections 5j–5p, plus task 1 above.
 
 ---
 
@@ -722,7 +724,7 @@ Aman's own tests (Phases 1–4) used a scripted fake model; this is the first te
 - **This repo:** 25 files and 285 functions/methods give 453 call links. Example: `ChatSession.save_all` → `ChatSession.wait_for_reclaim`, `ChatSession._emitter`, `ChatSession._compact_oldest`.
 
 **Limits:**
-- **Cost:** the searchable text of code memories grows by 33% (8,023 → 10,677 tokens over the repo), so a code memory uses more of the 1,000-token paging budget.
+- **Cost:** the searchable text of code memories grows by 33% (8,023 → 10,677 tokens over the repo), so a code memory uses more of the 1,000-token paging budget. (Solved on 2026-11-13: the call lines left the search text, section 5p.)
 - **Unresolved calls:** a call on a local variable (`cart.total()`) is not linked, because the type of `cart` isn't known without running the code.
 - **Python only:** other languages come with Tree-sitter (step 5).
 
@@ -1184,6 +1186,52 @@ Run A and run B are the same chat, without and with the cut-off (`compare.py A_n
 - **One chat, one model:** the threshold comes from one 16-fact chat and the all-MiniLM-L6-v2 embedding model. Another embedding model would need its own number.
 - **Personal general questions** ("How do I reverse a list in Python?" contains "I") get no cut-off. That's safe (as before), but there is no saving there.
 
+## 5p. Final round, task 8: a lighter code graph (2026-11-13)
+
+### 5p.1 What the call lines cost, and what they bought
+
+Since step 4 (5g), each function of a code memory added a line to its search text: "ChatSession.save_all calls ChatSession.wait_for_reclaim, …". That text is both embedded for search and counted against the 1,000-token paging budget.
+
+**Measured** (`report_eval/code_graph/measure_graph.py`, no model): the 22 Python files of the repo, 619 functions and classes, 537 call links, compacted by the AST compactor. The search text was built four ways:
+
+| Search text | Tokens | "Which function calls X?" (78, callee from another file): right file 1st / top 3 | "Where is X defined?" (41): 1st / top 3 |
+|---|---|---|---|
+| no call lines | 8,851 | 8 / 20 | 16 / 24 |
+| one line per function (until now) | 11,944 (+35%) | 9 / 20 | 15 / 25 |
+| the same, without the caller's own class | 11,852 (+34%) | 9 / 20 | 15 / 25 |
+| one "Calls:" line per file | 10,250 (+16%) | 9 / 21 | 15 / 24 |
+
+- **Why they barely help:** the embedding model (all-MiniLM-L6-v2) reads only the first **256 word pieces**, and 15 of the 22 files are longer than that, so call lines at the end are cut off before they are read.
+- **The model never saw them either.** A paged code memory showed only `Signatures:` of its first 5 symbols (`graph._memory_view`).
+- **So the graph cost budget and helped neither search nor answers.** Live, before the change, the model answered call questions right 3 of 9 times, mostly by guessing from names ("refund is called by charge").
+
+### 5p.2 What was changed (branch `feature/lighter-code-graph`, merged, then deleted)
+
+- **Search text** (`server._embedding_text`): no call lines. New code memories are embedded without them, and every code memory's budget cost drops at once. The cost is computed at search time; old rows keep their old vectors, which is harmless.
+- **What the model sees** (`graph._memory_view`): a paged code memory now shows, after its first 5 signatures, `Calls: checkout -> load_cart, charge; cancel_order -> refund` for those 5. That's 41 → 44 tokens on average over the repo's files. Layer 4 sees the same text.
+- **`run_memory_code`:** each record keeps `calls`, and its `text` keeps the call lines. Records cost no paging budget. The system prompt now lists `calls` among the record fields; it didn't before, so the model didn't know the field existed. `calls` was added to Layer 4's field-name list, so using it isn't read as words from a memory.
+- **The graph itself is unchanged:** stored, sealed and validated as in 5g.
+
+### 5p.3 Results
+
+- **Live, real llama3.1:8b** (`report_eval/code_graph/live_who_calls.py`): two code memories (`shop.py` calls `payments.charge` / `refund`), 3 questions × 3 runs, each in a fresh chat. The old code was run from a worktree of `akshaybranch` before this task.
+
+| Question | Old code | Call lines only removed | Final (calls shown) |
+|---|---|---|---|
+| "Use run_memory_code to find which function in my code calls charge." | 1/3 | 0/3 | **3/3** |
+| "Which function in my shop code calls refund?" (no tool asked) | 1/3 | 0/3 | **3/3** |
+| "Use run_memory_code to list what checkout calls." | 1/3 | 1/3 | **2/3** |
+| **Total** | 3/9 | 1/9 | **8/9** |
+
+- The middle column shows that just removing the lines (with the model still unable to see the graph) was not enough. Making the graph visible is what made it useful.
+- **Tests:** 459 passed, 1 skipped. Changed: the code-graph test now checks that the search text has no call lines, that the memory, `run_memory_code`'s record and the model's view do, and that the prompt documents `calls`.
+
+### 5p.4 Limits and one finding
+
+- **Only the shown functions' calls are visible.** The model sees the calls of the first 5 functions of a code memory, as it sees only their signatures. A caller further down a big file is found only through `run_memory_code`.
+- **Small live test:** 9 questions per version, one pair of files.
+- **Finding, not changed here:** a code memory is charged its whole search text against the paging budget (~400 tokens per repo file), but the model is shown only its first 5 signatures (~44 tokens). Chat code blocks are small, so this matters mostly for whole files. A follow-up could charge what is shown, or show more.
+
 ## 6. Decision log
 
 | Date | Decision | Why |
@@ -1230,6 +1278,7 @@ Run A and run B are the same chat, without and with the cut-off (`compare.py A_n
 | 2026-11-13 | Saved messages are for display only, never sent to the model | Sending the old messages would refill the window and undo paging; the vault already gives the model what is relevant. |
 | 2026-11-13 | Scrub secrets before saving messages | The vault never keeps secrets; the message file should not be the place where they survive. |
 | 2026-11-13 | Relevance cut-off 1.4, but none for questions about the user or the chat | Run A: relevant memories ≤ 1.31; vague memory questions have their facts 1.2–1.9 away, as far as the noise, so distance alone would drop them. The wording separates "explain X" from "what do you remember". Recall stayed 16/16. |
+| 2026-11-13 | Take the call lines out of the search text, and show the calls in the paged code memory instead | They cost 35% of a code memory's search text and changed search by 1/78 (cut off by the 256-word-piece window); the model never saw them. Shown to the model they cost ~3 tokens and lifted call questions from 3/9 to 8/9. |
 
 ---
 
@@ -1302,4 +1351,6 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/
 AMP_PAGE_MAX_DISTANCE=off .venv/bin/python -I ../report_eval/relevance_cutoff/recall_cutoff_eval.py A_no_cutoff  # section 5o, no cut-off
 .venv/bin/python -I ../report_eval/relevance_cutoff/recall_cutoff_eval.py B_cutoff_1p4  # section 5o, the default cut-off
 python3 ../report_eval/relevance_cutoff/compare.py ../report_eval/relevance_cutoff/{A_no_cutoff,B_cutoff_1p4}.json
+.venv/bin/python -I ../report_eval/code_graph/measure_graph.py                 # section 5p: cost and search value of call lines (no model)
+.venv/bin/python -I ../report_eval/code_graph/live_who_calls.py new_code_calls_shown 3   # section 5p: call questions, real model
 ```
