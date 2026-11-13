@@ -130,6 +130,8 @@ details.memory > summary { cursor: pointer; }
 .resume { align-self: stretch; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px dashed var(--border);
   border-radius: var(--radius); background: var(--surface); font-size: 0.9em; }
 .resume-head { font-weight: 600; }
+.resume details { display: flex; flex-direction: column; gap: 6px; }
+.resume summary { cursor: pointer; color: var(--muted); }
 
 .chat-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; text-align: left;
   padding: 7px 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); cursor: pointer; }

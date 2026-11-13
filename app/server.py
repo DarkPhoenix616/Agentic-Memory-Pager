@@ -102,6 +102,7 @@ def state_view(session: ChatSession) -> Dict[str, Any]:
         "last_paged": session.last_paged,
         "resumed": session.resumed,
         "restored": session.restored,
+        "restored_messages": session.restored_messages,
         "events": [event_view(e) for e in session.events[-MAX_EVENTS:]],
         "vault": session.vault(),
     }

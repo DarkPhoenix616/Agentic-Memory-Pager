@@ -199,8 +199,10 @@ Paging works like an operating system reclaiming memory:
 - **Working set:** the latest exchange is never paged out in the background.
 
 **Your chats.** When you leave a chat (*New chat*, or opening another one), whatever is still in its context window is saved to the vault first, so nothing you said is lost. If that fails, for example because the model is not running, you stay in the chat.
-- The side panel lists your saved chats, newest first: each one's title (the start of its first memory), how many memories it has, and when it was last used.
-- Click one to reopen it. Its latest memories are shown as *where it left off*, and anything older is paged back in when you ask about it.
+- The side panel lists your saved chats, newest first: each one's title (its first message), how many messages and memories it has, and when it was last used.
+- Click one to reopen it. Its old messages are shown again, like in ChatGPT or Claude, greyed where they were paged out to the vault. *What the model remembers* (its latest memories) is one click away.
+- **The old messages are for display only.** The model sees its context window and the memories paged in for each question, exactly as before reopening, so paging still does the work.
+- **Saved messages:** `storage/chats/<chat id>.transcript`, rewritten after every answer, encrypted with the chat's key (AES-256-GCM, owner-only). Secrets are scrubbed first, the same way as in the vault, so a pasted API key is kept as `[REDACTED_SECRET]`. The file stays when you leave the chat.
 - Only chats whose key is in this computer's keyring are listed, since their memories are encrypted with it.
 
 **Auto-save.** After every answer and every compaction, what is still only in the context window is also written to `storage/chats/<chat id>.pending`, encrypted with the chat's own key (AES-256-GCM, owner-only file, about 0.2 ms per save, no model needed).
