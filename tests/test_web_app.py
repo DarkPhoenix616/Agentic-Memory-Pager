@@ -54,6 +54,17 @@ def test_the_page_is_never_served_stale(web):
     assert "cache-control" not in web.get("/api/state").headers
 
 
+def test_the_page_loads_its_script_by_version(web):
+    # a normal reload keeps a cached script it thinks is fresh: a new version gets a new address
+    import os
+    from app.server import STATIC_DIR
+    page = web.get("/").text
+    for name in ("app.js", "style.css"):
+        stamp = int(os.path.getmtime(os.path.join(STATIC_DIR, name)))
+        assert f'"/static/{name}?v={stamp}"' in page
+        assert web.get(f"/static/{name}?v={stamp}").status_code == 200
+
+
 def test_the_page_and_its_files_are_served(web):
     page = web.get("/")
     assert page.status_code == 200 and "<title>AMP Chat</title>" in page.text
