@@ -536,3 +536,9 @@ def test_the_chat_list_uses_the_first_message_as_title_and_counts_messages(vault
     listed = next(c for c in list_chats() if c["session_id"] == "chat-listed")
     assert listed["title"] == "How do I paginate a SQL query?" and listed["messages"] == 4
     assert listed["memories"] == 2 and not listed["unsaved"]
+
+
+def test_a_save_error_is_reported_not_raised(vault, client):
+    chat = session(session_id="not a valid.id", token_limit=4000)
+    assert chat.ask("Hello.")                                          # the turn still answers
+    assert any(e.kind == "error" and "Could not save this chat's messages" in e.title for e in chat.events)
