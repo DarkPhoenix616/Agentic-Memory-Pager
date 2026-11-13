@@ -18,10 +18,11 @@ venv `AgenticMemoryPager/.venv` (git-ignored).
 
 ---
 
-## 1. Status (last updated 2026-11-13)
+## 1. Status (last updated 2026-11-14)
 
 | Part | Branch | State |
 |---|---|---|
+| AMP for Claude Code (user request, 2026-11-14) | `feature/claude-code-memory` | **Done.** Hooks save the conversation to the vault (RLM/AST, signed, encrypted) before Claude Code compacts, and page the matching notes in on every prompt; a `recall` MCP tool; a one-command installer. Real Claude Code, 8 facts buried in long pastes, then `/compact`: **8/8 with AMP, 5/8 without**. 491 tests pass. Section 5v. |
 | The browser kept running the old page script (2026-11-13) | `fix/versioned-assets` (merged, then deleted) | **Done.** The page now loads `app.js` and `style.css` by version (`?v=<mtime>`), so a changed file always gets a new address. 462 tests pass. Section 5s. |
 | New layout: chat sidebar and a closable stats panel (user request, 2026-11-14) | `ui/sidebar-layout` (merged, then deleted) | **Done.** Chats in a left sidebar by name only; "Behind the scenes" is a right panel opened and closed with a button (closed by default, remembered); explanation text removed from the page. Checked in headless Chrome. 462 tests pass. Section 5u. |
 | Chat switching, made right (user request, 2026-11-13) | `fix/chat-switch-ui` (merged, then deleted) | **Done.** A new chat shows only "Hello! 👋 How can I help you today?"; older chats without saved messages show their saved summaries; the page is never served stale. Checked in headless Chrome. 461 tests pass. Section 5r. |
@@ -1313,6 +1314,102 @@ The user found the page cluttered: the stats were always on screen, the chat nam
   - **The panel:** a headless-Chrome layout check confirmed it starts closed, opens with the button, closes with ✕, is remembered across reloads, and that none of the removed explanation text is left on the page.
   - **Tests:** 462 passed, 1 skipped. The title test now expects the user's part only.
 
+## 5v. AMP for Claude Code (2026-11-14)
+
+### 5v.1 The problem
+
+The goal is AMP under real LLM apps, not only our local chat model (Aman's idea in section 7). Claude Code is the closest real target:
+- **What its compaction does.** When a Claude Code conversation fills its window, Claude Code compacts it. The whole conversation becomes one summary, and the details leave the window. The full log stays on disk as a JSONL file, but nothing brings it back.
+- **How much it squeezes.** In the chat where this was built, one compaction went from 651,814 to 13,926 tokens (`compactMetadata` in the chat file).
+- **Why MCP alone isn't enough.** An MCP server alone can't page: it can't see or change the app's window (section 7). Claude Code has two supported ways in: **hooks** (scripts it runs at fixed moments, with the chat file's path) and **MCP tools**.
+
+### 5v.2 What was built (branch `feature/claude-code-memory`)
+
+A new folder, `integrations/claude_code/`, that reuses AMP and changes none of its existing code:
+
+| File | Job |
+|---|---|
+| `project.py` | One project folder = one AMP session (`cc-` + SHA-256 of the path). It has its own keyring (`storage/.amp_cc_session_keys`), so projects don't show up as chats in AMP Chat. Saved progress per project, a lock, and a log. |
+| `transcript.py` | Reads Claude Code's chat file from a byte offset, complete lines only, and groups it into turns: the prompt (system reminders and IDE context removed), the replies (no thinking), one line per tool call ("edited app/db.py", "ran: Run the tests"), and the project's code files Claude wrote, edited or read in full, as they are after the change. Tool output, subagents, injected context and Claude Code's own summaries are skipped. |
+| `store.py` | **Page-out.** One memory per turn (turns under 300 tokens join the next; long turns are split into ~1,800-token parts). Text goes through the RLM, code through the AST compactor (files with no functions or classes are skipped). Exact names are added next to the summary (`backticked` terms and changed files, up to 15). Then: secrets scrubbed, Layer 2 score, Layer 3 signature, and the memory server stores it encrypted. Progress is saved after every chunk; a turn already stored, for example in a resumed or forked chat file, is skipped. |
+| `page_in.py` | **Page-in.** `page_context` on the prompt (1,000-token budget, the 1.4 relevance cut-off). The notes are wrapped in `<amp_memory>` as data, not instructions, with the time stored, `verified`, the risk level and `conflicts_with`. High-risk notes are hidden. Text inside a note can't close the block. |
+| `hooks.py` | `Stop` (save once ~3,000 tokens are new), `PreCompact` and `SessionEnd` (save everything) start `store.py` as a detached process and return at once. `UserPromptSubmit` pages in. `SessionStart` (after a compaction or a resume) pages in for the last request. Errors are logged, and the hook exits 0: it never blocks Claude Code. |
+| `recall_server.py` | A stdio MCP server with one tool, `recall(query)`. It holds the key, so Claude never sees it. There is no save tool: saving is automatic, and Claude can't write notes into the vault. |
+| `install.py` | Adds the five hooks to `.claude/settings.local.json` and `amp-memory` to `.mcp.json`. Other settings are kept, installing twice changes nothing, and `--uninstall` restores the files. |
+
+Switches: `AMP_CC_DISABLE=1` (all hooks off) and `AMP_CC_READ_ONLY=1` (page in, save nothing).
+
+### 5v.3 Results
+
+**Speed.** One prompt's page-in is a fresh Python process plus one MCP call: **0.69–0.74 s**. Page-out runs in the background on the RTX 3050 (llama3.1:8b for the RLM, the risk score and the contradiction check):
+- 10 turns of this chat (24,134 tokens): 10 text and 8 code memories in 252 s;
+- the evaluation chat (33,856 tokens): 23 memories in 325 s.
+
+**Live check on this chat.** The 10 real turns since "How are storing the user chats" were saved to a throwaway vault. Then 7 questions about them went through the real hook script:
+- **First version: 6/7.** Two problems showed up:
+  - Turns were grouped two per memory, so a turn's topic got buried under the other's summary.
+  - The RLM summary kept "create a new branch" but dropped the name `feature/claude-code-memory`.
+  - Empty `__init__.py` files and a temp script outside the project also became code memories and ranked high.
+- **The fixes:** one memory per turn, the exact-names line, functions shown first, and empty or outside files skipped.
+- **After the fixes: 7/7.**
+
+**Real Claude Code, smoke test** (CLI 2.1.323, Haiku): the tool `mcp__amp-memory__recall` is offered to Claude, and the `Stop` hook saved the turn. Cost: $0.003.
+
+**The comparison** (`report_eval/claude_code/compact_recall.py`, model `claude-haiku-5-5`). Eight real turns, each pasting a long document (33k tokens in all) and asking for its 3 key points. One small fact is buried in the middle of each document. Then `/compact`, and for each fact a question in a fresh fork of the compacted session, with AMP and without. File, shell and web tools are blocked, so the answer can only come from memory.
+
+The compaction went from 78,239 to 6,883 tokens. An answer that starts "I don't know" counts as wrong.
+
+| Fact (buried in) | In Claude Code's summary | Paged in by AMP | With AMP | Without AMP |
+|---|---|---|---|---|
+| API gateway on port 7421 (deploy log) | yes | no | ✅ | ✅ |
+| No deploys on Thursdays after 4 pm (meeting notes) | "Thursday" only* | yes | ✅ | ❌ "I don't know the time" |
+| Flaky `test_refund_rounding`, fix: Decimal (incident report) | the words, not the link | yes | ✅ | ❌ "I don't know which test was flaky" |
+| Flag `checkout_v2_canary` (config) | yes | yes | ✅ | ✅ |
+| Page Meera for the production database (email thread) | no | yes | ✅ | ❌ "I don't know" |
+| Uploads over 25 MB rejected (API spec) | yes | yes | ✅ | ✅ |
+| Idempotency keys start with PAY-77 (code review) | yes | yes | ✅ | ✅ |
+| Staging database `orchid_stage` (migration plan) | yes | yes | ✅ | ✅ |
+| **Total** | | **7/8** | **8/8** | **5/8** |
+
+\* The keyword check counted it as kept because of an unrelated "4". The answer without AMP shows the hour was lost.
+
+- **The two memories cover each other:**
+  - The port was lost in AMP's summary of the 6,500-token log, but kept in Claude Code's summary.
+  - "Page Meera" and the 4 pm rule were lost in Claude Code's summary, but paged in by AMP.
+  - Together they cover 8/8.
+- **The recall tool:** Claude called it in all 8 runs with AMP.
+- **Cost:** $0.52 of Claude usage for the run.
+
+**The first run was wrong, and it taught two things** (`compact_recall_results_run1_contaminated.json`, lenient scoring, 8/8 vs 7/8):
+- **The baseline was contaminated.** The hooks were on while the session was built and compacted:
+  - `SessionStart` added AMP notes to the main session right after `/compact`, and the build turns' page-ins went into what Claude Code summarised.
+  - So the "without AMP" forks inherited AMP notes. One answered the Thursday question "from the planning-meeting notes saved earlier in this project".
+  - Fix: build and compact as plain Claude Code, then run AMP's page-out on the same chat file (what `PreCompact` does).
+- **Too many CONFLICT marks.** The contradiction check (tuned in 5k on short facts) flagged almost every note: parts of one long log hold different numbers, and plans change. With "show the user both versions" on each note, Claude answered "I don't know… the notes conflict" while naming Meera.
+  - Fix: `conflicts_with` stays as a mark, and Claude is told the check is strict and to compare the notes itself. It still must never pick one of two different values silently.
+
+**Tests:** 491 passed, 1 skipped (29 new, `tests/test_claude_code_memory.py`). They use fakes and temporary folders. They cover:
+- the transcript reader (skipped records, partial lines, edits);
+- chunking;
+- signed and scrubbed memories;
+- progress after a failure, and stop mode;
+- forked copies and unchanged files;
+- the rendering (high-risk hidden, conflicts, no early close);
+- the hooks' output and failures;
+- a real stdio MCP session with the recall server;
+- the installer's merge and uninstall.
+
+### 5v.4 Limits (honest)
+
+- **Not full paging.** Claude Code owns its window. AMP can't take messages out of it or stop its compaction, so it is the safety net and the page-in half. Full paging needs the harness in front of the model API (section 7).
+- **AMP's summaries lose details too.** The port line in the long log is the example. The names line only keeps `backticked` names.
+- **Small test.** One synthetic session, one model, 8 facts. In real sessions many details come from tool output, which AMP doesn't store (only the files and the conversation).
+- **The contradiction check over-flags long notes.** Only the wording for Claude Code was changed. Tuning the check for long notes is open.
+- **Saves are slow.** ~10–14 s per chunk on this GPU. A save started just before quitting lands minutes later.
+- **Queued saves in scripted runs.** Each `claude -p` run is a session, so `SessionEnd` queues a save each time; up to 10 waited on the lock in the first run. An interactive session fires it once.
+- **The chat-file format is Claude Code's own** (read here as of 2.1.323). It is read defensively, but it may change.
+- **`.mcp.json` holds this computer's paths.** Keep it out of shared commits, or use the local settings.
+
 ## 6. Decision log
 
 | Date | Decision | Why |
@@ -1360,6 +1457,14 @@ The user found the page cluttered: the stats were always on screen, the chat nam
 | 2026-11-13 | Scrub secrets before saving messages | The vault never keeps secrets; the message file should not be the place where they survive. |
 | 2026-11-13 | Relevance cut-off 1.4, but none for questions about the user or the chat | Run A: relevant memories ≤ 1.31; vague memory questions have their facts 1.2–1.9 away, as far as the noise, so distance alone would drop them. The wording separates "explain X" from "what do you remember". Recall stayed 16/16. |
 | 2026-11-13 | Take the call lines out of the search text, and show the calls in the paged code memory instead | They cost 35% of a code memory's search text and changed search by 1/78 (cut off by the 256-word-piece window); the model never saw them. Shown to the model they cost ~3 tokens and lifted call questions from 3/9 to 8/9. |
+| 2026-11-14 | AMP for Claude Code through its hooks and one MCP tool, in a new folder `integrations/claude_code/` | Claude Code owns its context window, so an MCP server alone can't page. Hooks are Claude Code's own extension points: nothing in Claude Code or in AMP's existing code is changed. |
+| 2026-11-14 | Saving is automatic (hooks); Claude gets only a `recall` tool, no "save" tool | The model can't forget to save, and can't write notes into the vault itself (one less way to plant a fact). |
+| 2026-11-14 | One memory per turn; turns under 300 tokens join the next | Grouping ~2 turns per memory buried a topic under the other one's summary (live check: the "how are chats stored" turn was not found). |
+| 2026-11-14 | Keep `backticked` names and changed files word for word next to the RLM summary | The RLM summary kept "create a new branch" but dropped the name `feature/claude-code-memory`; with the names line the live check went from 6/7 to 7/7. |
+| 2026-11-14 | Claude Code projects get their own keyring (`storage/.amp_cc_session_keys`) | Otherwise every project would show up as a chat in AMP Chat's sidebar. |
+| 2026-11-14 | Page-out runs as a detached process; the hook returns at once | The RLM takes seconds per chunk. Claude Code keeps the conversation file after compacting, so the save can finish after the compaction, even after Claude Code exits. |
+| 2026-11-14 | For Claude Code, `conflicts_with` is a mark plus a note that the check is strict; Claude compares the notes and never picks one of two different values silently | The server's contradiction check (tuned on short facts) flagged almost every long note. With "show both versions" on each, Claude answered "I don't know… the notes conflict" with the right note in front of it (first comparison run). |
+| 2026-11-14 | The comparison builds and compacts the session as plain Claude Code, then runs AMP's page-out on the same file | In the first run the hooks were on during the build: AMP's notes reached the compacted session that the "without AMP" forks came from, so the baseline was not clean. |
 
 ---
 
@@ -1375,7 +1480,7 @@ The user found the page cluttered: the stats were always on screen, the chat nam
 - Code tool: llama3.1:8b's programs over the memories are not always right (counted 2 of 3 bugs). Try a stronger coder: qwen3:8b with `think=False`, or a bigger model.
 - The secret scrubber's regexes need a word boundary before a key (`\bsk-...`). A key glued to letters (`xxxsk-...`) is not detected. Rare in real text.
 - Chat: answer quality is limited by the 8B model. For example, it described LangGraph wrongly as an NLP tool. Could compare `qwen3:8b`.
-- **Aman's idea (2026-11-07): real LLM apps (ChatGPT, Claude) use our MCP server, and use it at 80% context.** Checked, not built:
+- **Aman's idea (2026-11-07): real LLM apps (ChatGPT, Claude) use our MCP server, and use it at 80% context.** The Claude Code part is built now (2026-11-14, section 5v): hooks plus a `recall` MCP tool. The notes below were the check before building:
   - **Connecting: possible.** Claude Code reaches `http://localhost:8001/mcp` directly. claude.ai and ChatGPT (Developer mode, paid plans) only connect to a **public HTTPS** URL, so they need a tunnel (ngrok / cloudflared) and auth.
   - **The 80% trigger: not through MCP alone.** An MCP server only sees the tool calls; the app owns the chat and its token count. In AMP Chat it works because our LangGraph harness holds the chat.
   - **Closest real option: Claude Code hooks.** `PreCompact` runs just before Claude Code compacts and gets `transcript_path`, so a script can run AST/RLM on the transcript and store it. A `UserPromptSubmit` hook can page memories back in each turn. ChatGPT / claude.ai have no hooks; there the model only calls our tools when it decides to.
@@ -1435,4 +1540,6 @@ python3 report_eval/relevance_cutoff/compare.py report_eval/relevance_cutoff/{A_
 .venv/bin/python -I report_eval/code_graph/measure_graph.py                 # section 5p: cost and search value of call lines (no model)
 .venv/bin/python -I report_eval/code_graph/live_who_calls.py new_code_calls_shown 3   # section 5p: call questions, real model
 .venv/bin/python -I report_eval/ui_check/new_chat_ui.py after_fix               # section 5q: New chat in a real browser
+.venv/bin/python -m pytest tests/test_claude_code_memory.py -q              # section 5v: AMP for Claude Code (fakes, no model)
+.venv/bin/python -I report_eval/claude_code/compact_recall.py --model haiku   # section 5v: real Claude Code, /compact, with vs without AMP
 ```

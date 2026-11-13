@@ -20,6 +20,7 @@ Every number in `docs/AMP_Work_Report.md` comes from a script in this folder, an
 | `relevance_cutoff/` | The 16-fact chat without and with the relevance cut-off; vague questions | 5o |
 | `code_graph/` | Cost and search value of call lines; call questions with the real model | 5p |
 | `ui_check/` | The chat page in headless Chrome: greeting, New chat, reopening | 5q–5t |
+| `claude_code/` | Real Claude Code: 8 facts buried in long pastes, `/compact`, then recall with and without AMP (needs the `claude` CLI and a Claude login) | 5v |
 
 Examples:
 

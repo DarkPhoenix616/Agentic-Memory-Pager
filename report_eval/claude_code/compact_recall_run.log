@@ -1,0 +1,19 @@
+turn 1: '- Dozens of steps FAILED, worst in orders and auth, with shipping, catalog, notifications,'
+turn 2: '- Agreed rule: no deploys on Thursdays after 4 pm, because the weekly billing run starts t'
+turn 3: '- Root cause: the flaky `test_refund_rounding` exposed float rounding in `refund_amount()`'
+turn 4: '- Many values have the wrong type for their setting, such as timeouts set to `true`/`false'
+turn 5: '- For production database issues, page Meera, who is on call until the end of the month (p'
+turn 6: '- Several endpoints are defined more than once with different rate limits and cache times '
+turn 7: '- `payments/client.py:88` requires every idempotency key to start with `PAY-77` so the led'
+turn 8: '- The note says staging is `orchid_stage` and the migration must never point at `prod_main'
+compacted: 78239 -> 6883 tokens
+AMP page-out took 325.1s: {'code': 0, 'raw_tokens': 33856, 'text': 23}; AMP text in the compacted session: False
+OK  with AMP | OK  without | Which port does our API gateway listen on?
+OK  with AMP | NO  without | On which day, and from what time, are deploys not allowed?
+OK  with AMP | NO  without | Which test was flaky in the refund incident, and what was the fix?
+OK  with AMP | OK  without | What is the name of the feature flag for the new checkout?
+OK  with AMP | NO  without | Who should I page for a production database problem?
+OK  with AMP | OK  without | What is the maximum upload size in our API?
+OK  with AMP | OK  without | What prefix must payment idempotency keys start with?
+OK  with AMP | OK  without | What is the staging database called?
+{"with_amp": 8, "without_amp": 5, "mentions_with_amp": 8, "mentions_without_amp": 6, "in_claude_summary": 7, "in_amp_page_in": 7, "of": 8} cost $0.516

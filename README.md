@@ -135,6 +135,8 @@ agentic-memory-pager/
 │   ├── chat_model.py           # local Ollama chat model
 │   └── chat_session.py         # one chat, run through the graph
 ├── app/                        # AMP Chat: web server + static UI
+├── integrations/
+│   └── claude_code/            # AMP memory for Claude Code: hooks + a recall tool (see the last section)
 ├── tests/
 ├── storage/                    # vault, chats' unsaved parts and local secrets (not in git)
 ├── requirements.txt
@@ -383,3 +385,66 @@ The context window is small by default (3,072 tokens), so you can see paging aft
 | `AMP_CHATS_DIR` | `storage/chats` | Encrypted unsaved part of each chat (auto-save); tests use a temporary one |
 
 The core is `harness/chat_session.py` (`ChatSession.ask()`). It has no UI code, so it can also be used from scripts and tests.
+
+---
+
+## 🔌 AMP for Claude Code
+
+AMP Chat shows the idea with a local model. `integrations/claude_code/` puts the same memory under a real coding agent, **Claude Code**, without changing Claude Code itself.
+
+**The problem.** When a Claude Code conversation fills its context window, Claude Code compacts it: the whole conversation becomes one summary, and the details (a port number, a flag name, why a test was flaky) are gone from the window. The full log stays on disk, but nothing brings it back.
+
+**What AMP adds.** Claude Code can run scripts at fixed moments (*hooks*), and it can use MCP tools. AMP uses both:
+
+| Moment (hook) | What AMP does |
+|---|---|
+| After a reply (`Stop`) | Once ~3,000 new tokens have built up, saves them to the vault in the background |
+| Just before a compaction (`PreCompact`) | Saves everything not yet saved, so nothing is lost |
+| When the session ends (`SessionEnd`) | Saves the rest |
+| Each prompt (`UserPromptSubmit`) | Adds the saved notes that match the prompt to Claude's context (`page_context`: 1,000-token budget, relevance cut-off) |
+| After a compaction or a resume (`SessionStart`) | Adds the notes that match the last request, and tells Claude AMP is on |
+| Any time (MCP tool `recall`) | Claude searches the vault itself when the notes it got are not enough |
+
+How a save works:
+- **Same pipeline as AMP Chat.** Each turn of the conversation goes through the RLM summarizer. Each code file Claude wrote, edited or read goes through the AST compactor, using its content after the change.
+- **Exact names kept.** `Backticked` names and changed files are kept word for word, because summaries tend to drop them.
+- **Checked, signed, encrypted.** Secrets are scrubbed, and each memory is risk scored, signed, and stored encrypted with the project's own key.
+- **Never stored twice.** Progress is saved after every chunk.
+
+The notes reach Claude as marked data, never instructions:
+- high-risk notes are hidden;
+- contradicting notes are flagged;
+- each note shows when it was stored and whether its signature verifies.
+
+One project folder is one AMP session, so what was decided yesterday is there today.
+
+**Set up:**
+
+```bash
+python server/amp_memory_server.py                                   # the memory server (keep it running)
+.venv/bin/python -m integrations.claude_code.install /path/to/project  # hooks + recall tool for that folder
+# then start a new Claude Code session in that folder
+.venv/bin/python -m integrations.claude_code.install /path/to/project --uninstall
+```
+
+What the installer writes:
+- **`.claude/settings.local.json`:** the five hooks. Your other settings and hooks are kept.
+- **`.mcp.json`:** the `amp-memory` server.
+
+Nothing in Claude Code is modified. If the memory server is down, the hooks do nothing and Claude Code works as before (errors go to `storage/claude_code/amp_cc.log`).
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `AMP_CC_MCP_URL` | `http://localhost:8001/mcp` | Memory server the hooks and the recall tool use |
+| `AMP_CC_KEYS_FILE` | `storage/.amp_cc_session_keys` | Keyring of the Claude Code projects (separate from AMP Chat's) |
+| `AMP_CC_STATE_DIR` | `storage/claude_code` | Saved progress per project, and the log |
+| `AMP_CC_STOP_MIN_TOKENS` | `3000` | New tokens needed before a save after a reply |
+| `AMP_CC_PAGE_BUDGET` | `1000` | Tokens of notes added per prompt |
+| `AMP_CC_READ_ONLY` | not set | `1`: add notes, save nothing |
+| `AMP_CC_DISABLE` | not set | `1`: every AMP hook does nothing |
+
+**Measured with real Claude Code** (`report_eval/claude_code/compact_recall.py`, Claude Haiku):
+- **The setup:** 8 facts buried in 33k tokens of pasted documents. Claude Code's `/compact` squeezed the chat from 78,239 to 6,883 tokens.
+- **The result:** asked afterwards, Claude answered **8/8 with AMP** and **5/8 without**. Plain Claude Code lost a deploy-freeze time, which test was flaky, and who to page for the database.
+
+**What it can't do.** Claude Code owns its context window, so AMP can't take messages out of it or stop its compaction. Here AMP is the safety net and the paging-in half. Full paging, where AMP owns the window, needs the harness in front of the model API, as in AMP Chat.
