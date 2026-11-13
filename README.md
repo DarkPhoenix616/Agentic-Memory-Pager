@@ -99,12 +99,12 @@ Modern AI coding agents (Claude Code, Cursor, Aider) suffer from **Context Rot**
 | Layer | Technology | Purpose |
 | :--- | :--- | :--- |
 | **Protocol** | `FastMCP` (Python) | Model Context Protocol server implementation |
-| **Orchestration** | `LangGraph` + `LiteLLM` | Stateful agent execution and multi-model routing |
-| **Code Parsing** | `Tree-sitter` / `ast` | Abstract Syntax Tree extraction for code compaction |
-| **Inference (Local)** | `Ollama` (`Llama-3`, `Phi-3`) | Free local execution for summarization & reasoning |
-| **Storage** | `ChromaDB` + `SQLite` | Vector embeddings and structured relational metadata |
-| **Guardrails** | `Instructor` + `Pydantic` | Deterministic schema validation and output bounding |
-| **Observability** | `Langfuse` / web UI (`app/`) | Trace visualization and real-time memory monitoring |
+| **Orchestration** | `LangGraph` (`LiteLLM`: planned, not used) | Stateful agent execution (multi-model routing was planned) |
+| **Code Parsing** | `ast` (Python) + `Tree-sitter` (JS/TS, Java, C/C++) | Abstract Syntax Tree extraction for code compaction |
+| **Inference (Local)** | `Ollama` (`llama3.1:8b`; a `Phi-3` comparison was planned, not done) | Free local execution for chat, summaries, risk scoring and contradiction checks |
+| **Storage** | `ChromaDB` (a separate `SQLite` metadata store: planned, not built) | Vector embeddings, with each memory encrypted per session |
+| **Guardrails** | `Pydantic` + 4 guard layers (`Instructor`: planned, not used) | Schema validation, screening, risk scores, signatures, tool guard |
+| **Observability** | web UI (`app/`) + audit log (`Langfuse`: planned, not used) | Real-time memory monitoring and a record of refused calls |
 
 ---
 
@@ -143,29 +143,40 @@ agentic-memory-pager/
 
 ---
 
-## 🚀 Quickstart (Week 1 Setup)
+## 🚀 Quickstart
 
-1. **Clone & Virtual Environment:**
+Checked on 2026-11-13 from a fresh clone and a fresh virtual environment (Python 3.14, Linux).
+
+1. **Clone and install:**
    ```bash
-   git clone https://github.com/<your-org>/agentic-memory-pager.git
-   cd agentic-memory-pager
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   git clone https://github.com/DarkPhoenix616/Agentic-Memory-Pager.git
+   cd Agentic-Memory-Pager
+   python -m venv .venv
+   source .venv/bin/activate        # On Windows: .venv\Scripts\activate
    pip install -r requirements.txt
    ```
 
-2. **Pull Local Models via Ollama:**
+2. **Pull the local model** ([Ollama](https://ollama.com) must be running). One model does the chat, the summaries, the risk score and the contradiction check; search uses ChromaDB's built-in embedding model, so nothing else is needed:
    ```bash
-   ollama pull llama3:8b
-   ollama pull phi3:mini
-   ollama pull nomic-embed-text
+   ollama pull llama3.1:8b
    ```
 
-3. **Run the MCP Server:**
+3. **Run AMP Chat**, then open http://127.0.0.1:8000:
    ```bash
-   python server/mcp_server.py
+   python -m app.server
    ```
-```
+   Or with the memory server as its own process, over MCP:
+   ```bash
+   python server/amp_memory_server.py                          # terminal 1
+   python -m app.server --mcp-url http://localhost:8001/mcp     # terminal 2
+   ```
+
+4. **Run the tests** (no model needed; they use temporary folders, never `storage/`):
+   ```bash
+   python -m pytest -q
+   AMP_RLM_LIVE=1 python -m pytest -q tests/test_rlm_summarizer.py -k live   # one extra test with the real model
+   ```
+
 ---
 
 ## 💬 AMP Chat: run the whole system as a local chatbot
