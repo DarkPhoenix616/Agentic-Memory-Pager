@@ -268,6 +268,7 @@ class ChatSession:
             "search_query": "",
             "code_request": "",
             "audit_requested": False,
+            "blocked_tools": [],
         }
 
     def ask(self, text: str, on_event: Optional[Callable[[Event], None]] = None) -> str:
@@ -312,10 +313,11 @@ class ChatSession:
 
         reply = next((m.content for m in reversed(values["messages"]) if isinstance(m, AIMessage)), "")
         user_id, reply_id = self._new_id("user"), self._new_id("assistant")
-        new_chunks = turn_to_chunks(text, user_id, reply, reply_id)
+        new_chunks = turn_to_chunks(text, user_id, reply, reply_id)       # memory keeps the model's words only
         self.chunks += new_chunks
         self._latest_ids = {user_id, reply_id}
-        for msg_id, role, content in ((user_id, "user", text), (reply_id, "assistant", reply)):
+        shown = reply + _blocked_note([e for e in self.events if e.turn == self.turn and e.kind == "blocked"])
+        for msg_id, role, content in ((user_id, "user", text), (reply_id, "assistant", shown)):
             owned = sum(1 for c in new_chunks if msg_id in c["msg_ids"])
             self.transcript.append({"id": msg_id, "role": role, "content": content,
                                     "chunks": owned, "turn": self.turn})
@@ -325,7 +327,7 @@ class ChatSession:
             self._reclaimer = threading.Thread(target=self._reclaim, args=(self.turn,),
                                                name="amp-reclaim", daemon=True)
             self._reclaimer.start()
-        return reply
+        return shown
 
     # -- background reclaim ---------------------------------------------------
 
@@ -462,6 +464,11 @@ class ChatSession:
             self._record_compaction(self.turn, live[0] if live else {}, seconds, emit, when="before answering")
             return list(update["context_chunks"])
         elif node == "llm_reasoning_node":
+            for block in update.get("blocked_tools") or []:
+                where = " (written inside a sentence)" if block.get("inline") else ""
+                emit(Event(self.turn, "blocked", f"Layer 4 blocked a tool request: {block['tool']}{where}",
+                           "; ".join(block.get("reasons") or []) + (f"\n{block['args']}" if block.get("args") else ""),
+                           0.0, {"blocked": block}))
             if update.get("code_request"):
                 emit(Event(self.turn, "code", "Model wrote Python to run over the vault",
                            update["code_request"].strip()[:600], seconds))
@@ -508,6 +515,17 @@ class ChatSession:
                        f"Paged in {len(self.last_paged)} memor{'y' if len(self.last_paged) == 1 else 'ies'} "
                        f"({paged.tokens_used:,} tokens) for this answer", "", 0.0,
                        {"memories": self.last_paged}))
+
+
+def _blocked_note(blocked: List[Event]) -> str:
+    """A line from AMP under an answer in which Layer 4 blocked a tool request. The
+    model may still describe results of the blocked step (seen live with llama3.1:8b,
+    report section 5l); this says plainly that none exist."""
+    if not blocked:
+        return ""
+    tools = ", ".join(sorted({e.data.get("blocked", {}).get("tool", "a tool") for e in blocked}))
+    return (f"\n\n🛡️ AMP: the safety monitor blocked a tool request in this answer ({tools}). "
+            "Nothing was run, so any results described above did not come from it.")
 
 
 # ---------------------------------------------------------------------------
