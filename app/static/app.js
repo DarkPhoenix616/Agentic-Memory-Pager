@@ -133,10 +133,12 @@ function renderResume() {
       notes.forEach((m) => fold.appendChild(memoryCard(m)));
       box.appendChild(fold);
     }
+  } else if (notes.length) {
+    // saved before chats kept their messages: its summaries are shown below as the conversation
+    box.innerHTML = `<div class="resume-head">📂 Reopened this chat. It is older than saved messages, ` +
+      `so its saved summaries are shown below.</div>`;
   } else {
-    box.innerHTML = `<div class="resume-head">📂 Reopened this chat.` + (notes.length ? ` Where it left off ` +
-      `(latest ${notes.length} ${notes.length === 1 ? "memory" : "memories"}, newest first):` : "") + `</div>`;
-    notes.forEach((m) => box.appendChild(memoryCard(m)));
+    box.innerHTML = `<div class="resume-head">📂 Reopened this chat.</div>`;
   }
   if (restored) {
     const back = document.createElement("div");
@@ -151,11 +153,30 @@ function renderResume() {
   box.appendChild(tail);
 }
 
+// A chat reopened from before chats saved their messages: show its saved summaries
+// instead, oldest first, so the old conversation is still on screen.
+function legacySummaries() {
+  if ((state.restored_messages || 0) > 0 || (state.resumed || []).length === 0) return [];
+  return [...(state.vault || [])].reverse();
+}
+
+function summaryNode(m) {
+  const node = document.createElement("div");
+  node.className = "msg assistant paged summary";
+  node.innerHTML = `<div class="bubble">${markdown(m.text)}</div>` +
+    `<div class="tag">📦 saved summary${m.engine === "AST" ? " of code" : ""}</div>`;
+  return node;
+}
+
 function renderMessages() {
   const box = $("messages");
   box.querySelectorAll(".msg").forEach((n) => n.remove());
   renderResume();
-  $("empty").hidden = state.transcript.length > 0 || (state.resumed || []).length > 0 || state.restored > 0;
+  const legacy = legacySummaries();
+  // a new, empty chat shows only the greeting
+  $("empty").hidden = state.transcript.length > 0 || legacy.length > 0 || (state.resumed || []).length > 0 ||
+    state.restored > 0;
+  for (const m of legacy) box.appendChild(summaryNode(m));
   for (const m of state.transcript) box.appendChild(messageNode(m.role, m.content, m.status));
   box.scrollTop = box.scrollHeight;
 }
