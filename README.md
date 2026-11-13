@@ -258,7 +258,7 @@ Over MCP, the chat app is not the only client. Anything that can reach the serve
 | Tool | What the server does |
 |---|---|
 | `store_memory` | Scores the payload again (word rules plus the risk model) and keeps the higher of the caller's score and its own. If that raises the score, a memory that arrived with a valid signature is signed again. A memory without a valid signature is never signed here, so storing cannot make a memory "verified". A text memory is also compared with its closest older memories of the same chat; if it contradicts one, both are marked (`conflicts_with`, see *Contradictions* below). |
-| `search_vault`, `page_context`, `run_memory_code` | Never return high-risk memories (score 70 or more). `page_context` drops them before the token budget, so they use none of it. `search_vault` and `page_context` return each memory's `conflicts_with`. |
+| `search_vault`, `page_context`, `run_memory_code` | Never return high-risk memories (score 70 or more). `page_context` drops them before the token budget, so they use none of it. `search_vault` and `page_context` return each memory's `conflicts_with`. `page_context` also leaves out memories that are far from the question (see *Relevance cut-off* below). |
 | Every session tool | Needs that session's key; a missing or wrong key is refused and logged. |
 | `delete_memory`, `list_all_memories`, `list_sessions` | Need the admin token. `list_all_memories` and `list_sessions` show what exists (IDs, sessions, times, risk scores, counts), never what it says. Every deletion and every refused call is written to `storage/amp_audit.log` with the time, the memory and session ID and the caller. |
 
@@ -299,6 +299,15 @@ The 2 normal memories hidden in every row are skeletons of this repo's `graph.py
   - Red team: fact poisoning now blocked, so 13/13 attacks; 2/2 more poisoning attacks also blocked; 0 false marks on the 11 other attack notes and on the control.
 - **The cost:** a real change ("we switched from PostgreSQL to MongoDB today") is also questioned once.
 - `AMP_CONFLICT_MODEL=off` turns the check off.
+
+**Relevance cut-off** (`page_context`). Before each answer, memories are paged in up to a 1,000-token budget. Without a cut-off, a general question ("Explain the CAP theorem") also got ~7 unrelated memories (~650 tokens).
+- **The rule:** a memory farther than **1.4** from the question (squared L2 distance) is now left out.
+- **The exception:** questions about the user or the chat ("my", "our", "we", "I", "remember", "earlier", "told", ...) get no cut-off. Their memories are not close in vector space ("What do you remember about me?" is 1.2–1.9 from the facts it should find), so they are paged as before.
+- **Measured** (the 16-fact chat, llama3.1:8b):
+  - recall stayed **16/16**;
+  - general questions got 1.1 memories instead of 7.4, and 108 memory tokens instead of 653 (prompt 3,060 → 1,973 tokens);
+  - answer times did not change.
+- **Settings:** `AMP_PAGE_MAX_DISTANCE` sets the cut-off (`off` turns it off); a caller can pass `max_distance` (0 = none).
 
 **Memories stored before encryption or risk scoring.** The server does not serve rows stored before encryption. `server/backfill.py` updates them:
 - it encrypts them with their session's key from the keyring, making a new key for a session that has none;
@@ -365,6 +374,7 @@ The context window is small by default (3,072 tokens), so you can see paging aft
 | `AMP_ADMIN_TOKEN` | `storage/.amp_admin_token` (created once) | Admin token for `delete_memory` and `list_all_memories` |
 | `AMP_RISK_MODEL` | the chat model | Model that scores memories for attacks: a model name, `llama-guard3:1b`, or `off` |
 | `AMP_CONFLICT_MODEL` | the chat model | Model that checks whether a new memory contradicts an older one, or `off` |
+| `AMP_PAGE_MAX_DISTANCE` | `1.4` | Relevance cut-off for paging memories in (not applied to questions about the user or the chat), or `off` |
 | `AMP_AUDIT_LOG` | `storage/amp_audit.log` | Where deletions and refused calls are logged |
 | `AMP_SESSION_KEYS_FILE` | `storage/.amp_session_keys` | The chat app's keyring of session keys |
 | `AMP_CHATS_DIR` | `storage/chats` | Encrypted unsaved part of each chat (auto-save); tests use a temporary one |

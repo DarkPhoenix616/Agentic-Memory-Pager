@@ -21,6 +21,7 @@ in `BTP/report_eval/`, test venv `AgenticMemoryPager/.venv` (git-ignored).
 
 | Part | Branch | State |
 |---|---|---|
+| Final round, task 7: relevance cut-off for paging | `feature/relevance-cutoff` (merged, then deleted) | **Done.** Memories farther than 1.4 from the question are not paged in, except for questions about the user or the chat. 16-fact chat: recall still 16/16; general questions 653 → 108 memory tokens (prompt −36%); no time change. 459 tests pass. Section 5o. |
 | Final round, task 6: full conversation when a chat is reopened | `feature/chat-transcript` (merged, then deleted) | **Done.** Every message is kept, secrets scrubbed and encrypted with the chat's key; a reopened chat shows them again (greyed where paged out), for display only. Live: 6/6 messages back, recall 2/2 through the vault, 0 readable words in the files. 444 tests pass. Section 5n. |
 | Final round, task 5: final check from a fresh clone | `feature/final-check` (merged, then deleted) | **Done.** Fresh clone + fresh venv: install 44 s, 439 passed + 1 skipped (the live test passes too). Full chat in the web app, in-process and over MCP: every recall right, tools work, reopen works, vault holds no readable text. Fixed: stale README Quickstart, `tiktoken` missing from requirements. Section 5m. |
 | Final round, task 4: live test of the tool guard (Layer 4) | `feature/layer4-live` (merged, then deleted) | **Done.** First live test of Layer 4. It found that calls written inside a sentence never reached the guard; fixed. Final run: the model wrote a planted call in 5 of 12 attack runs and all 5 were blocked; nothing planted ran; 0 false blocks. 439 tests pass. Section 5l. |
@@ -89,7 +90,7 @@ Next steps:
    4. Live test of the tool guard (Layer 4) with the real model. **Done**, see section 5l. It found and fixed a gap: calls written inside a sentence never reached Layer 4.
    5. Final check: fresh install from `requirements.txt`, all tests, one full chat in the web app, report and README updated. **Done**, see section 5m.
    6. Show the full old conversation when a chat is reopened (saved encrypted with the session key). **Done**, see section 5n.
-   7. Relevance cut-off in `page_context`, so unrelated memories are not paged in. Not started.
+   7. Relevance cut-off in `page_context`, so unrelated memories are not paged in. **Done**, see section 5o.
    8. A lighter code graph, so code memories grow by less than 33% (section 5g). Not started.
    - Kept as known limits, not built: encrypting the search vectors, step 6 extras, connecting ChatGPT or claude.ai through a public link.
 
@@ -375,7 +376,7 @@ The baseline's one hit was the last fact, still in its window. For the other 15 
 - Keyword scoring.
 - Every AMP answer also ended with an invented `TOOL: recall_fact(...)` line. That line is now stripped (commit `58b87cf`), and it doesn't affect the scores.
 
-**Decision on the relevance cut-off (idea 3):** not added. Retrieval already found the right memory 16/16 times. The ~16 memories per probe cost ~700 prompt tokens, which is negligible in time. A cut-off could only lower recall.
+**Decision on the relevance cut-off (idea 3):** not added. Retrieval already found the right memory 16/16 times. The ~16 memories per probe cost ~700 prompt tokens, which is negligible in time. A cut-off could only lower recall. (Revisited on 2026-11-13: section 5o adds a cut-off that skips questions about the user or the chat; recall stayed 16/16, and time indeed did not change.)
 
 **Decision on speed (idea 2):**
 - Measured: 18.9 / 20.0 / 23.4 tok/s at `num_ctx` 8192 / 6144 / 4096. The model doesn't fit fully on the GPU even at 4096 (14% CPU).
@@ -1113,6 +1114,76 @@ A reopened chat showed only its latest memories ("where it left off"), not its m
 - **No delete-a-chat button yet.** Deleting `storage/chats/<id>.*` removes the messages, and the admin tools delete its memories.
 - **The file is rewritten after every answer.** That's fine for chats of hundreds of messages; a very long chat would want an append-only log.
 
+## 5o. Final round, task 7: relevance cut-off for paging (2026-11-13)
+
+### 5o.1 The problem
+
+Before every answer, `page_context` pages in the closest memories up to a 1,000-token budget, however far they are.
+- **The screenshot in 5n:** one relevant memory at distance 0.55 came with three unrelated ones (1.82–1.91).
+- **In the 16-fact chat (run A):**
+  - a recall question paged in 15.6 memories (822 tokens) to use one;
+  - a general question ("Explain the CAP theorem") paged in 7.4 (653 tokens) to use none.
+- **Earlier decision:** on 2026-11-05 a cut-off was rejected because "it could only lower recall" (5.3b). So the rule here had to keep recall.
+
+### 5o.2 Measuring first
+
+`report_eval/relevance_cutoff/recall_cutoff_eval.py` reruns the 16-fact chat of 5.3b (AMP only, real llama3.1:8b, 2,048-token window). It records, on every turn, which memories were paged in, their distance and tokens. It uses temporary folders: the old `chat_recall_eval.py` did not set them.
+
+- **Run A (no cut-off):**
+  - **Recall:** 16/16.
+  - **The memory each recall question needed:** 0.39–1.31 away (median 0.61). The farthest was "Which database did I say we must never use?" against "…must use ChromaDB, never SQLite", at 1.31.
+  - **Unrelated memories:** on recall questions, from 1.18 (median 1.73); on general questions, from 0.95 (median 1.61).
+- **Vague questions** (`vague_queries.py`, run A's vault, no model). Their facts are as far away as the noise:
+  - "What do you remember about me?": facts from 1.22;
+  - "What did we talk about earlier?": from 1.61;
+  - "Tell me everything you know about our setup.": from 1.64.
+  
+  A cut-off of 1.4 would page in 2, 0 and 0 facts, where they used to get up to the whole budget.
+- **So distance alone can't tell** "Explain the CAP theorem" (page in nothing) from "What do you remember about me?" (page in a lot). The wording can.
+
+### 5o.3 What was built (branch `feature/relevance-cutoff`, merged, then deleted)
+
+- **`page_context` gets a relevance cut-off:** matches farther than **1.4** are left out and counted (`PageContextResult.too_far`).
+  - 1.4 is above every relevant distance in run A (1.31), and under most noise.
+- **No cut-off for questions about the user or the chat:** words such as *I, me, my, we, our, remember, remind, earlier, before, told, said, mentioned, discussed, chat, again*.
+  - They are paged exactly as before, so the 16/16 recall and vague questions are safe.
+  - The check is in the memory server (it sees the question), so the in-process app and MCP clients behave the same.
+- **Overrides:** `AMP_PAGE_MAX_DISTANCE` sets the cut-off for the server (`off` turns it off); a caller can pass `max_distance` (0 = none).
+- **Also fixed:** saving a chat's messages (5n) raised an error for a chat ID that can't be a file name (seen when the first run B used a label with a dot). It is now reported like the other save errors and the turn goes on.
+
+### 5o.4 Results
+
+Run A and run B are the same chat, without and with the cut-off (`compare.py A_no_cutoff.json B_cutoff_1p4.json`):
+
+| Per turn | Run A (no cut-off) | Run B (cut-off 1.4) |
+|---|---|---|
+| **Recall** | **16/16** | **16/16** |
+| General questions: memories / memory tokens | 7.4 / 653 | **1.1 / 108** |
+| General questions: prompt tokens | 3,060 | **1,973** (−36%) |
+| Recall questions: memories / memory tokens | 15.6 / 822 | 14.2 / 687 |
+| Fact statements: memory tokens | 574 | 423 |
+| General / recall question time | 37.2 s / 6.7 s | 39.9 s / 7.2 s |
+
+- **The three recall questions without "my/our/we/I"** got the cut-off and still answered right, with far less:
+  - "Which port does the memory server run on?": 1 memory, 37 tokens (was ~14 memories);
+  - "Who owns the guardrails module?": 1 memory, 38 tokens;
+  - "What was the bug in pager_v3.py?": 3 memories, 164 tokens.
+- **Time did not change.** Answer length sets the time (as measured in 5.3b), not the prompt. The gain is fewer tokens and less unrelated text in the prompt. That also means fewer chances for a planted note to reach the model on an unrelated question.
+- **Correction:** I first read run A's "According to the memories…" on 14/16 general questions as the model crediting memories it didn't have. Looking at the answers, it is a closing habit: "According to the memories, you asked me to explain the CAP theorem." It appears 14/16 in both runs, even with no memory paged in. The cut-off neither causes nor fixes it.
+- **Tests:** 459 passed, 1 skipped (15 new). They cover:
+  - the cut-off, and the count of what it left out;
+  - its order: caller, then env, then default;
+  - the wording that turns it off;
+  - a general question paging nothing while a personal one pages as before;
+  - nothing relevant means nothing paged;
+  - the save-error fix.
+
+### 5o.5 Limits (honest)
+
+- **The chat check is a word list.** A question about the chat without those words ("Which database is the vault on?") gets the cut-off. That is fine when its memory is close, as in all three such questions here. But a vague question in impersonal words would lose memories.
+- **One chat, one model:** the threshold comes from one 16-fact chat and the all-MiniLM-L6-v2 embedding model. Another embedding model would need its own number.
+- **Personal general questions** ("How do I reverse a list in Python?" contains "I") get no cut-off. That's safe (as before), but there is no saving there.
+
 ## 6. Decision log
 
 | Date | Decision | Why |
@@ -1158,6 +1229,7 @@ A reopened chat showed only its latest memories ("where it left off"), not its m
 | 2026-11-13 | Mark unused tech in the README as "planned, not used" instead of deleting it | It is the team's original design; the report lists these as optional extras. The README should not claim they are used. |
 | 2026-11-13 | Saved messages are for display only, never sent to the model | Sending the old messages would refill the window and undo paging; the vault already gives the model what is relevant. |
 | 2026-11-13 | Scrub secrets before saving messages | The vault never keeps secrets; the message file should not be the place where they survive. |
+| 2026-11-13 | Relevance cut-off 1.4, but none for questions about the user or the chat | Run A: relevant memories ≤ 1.31; vague memory questions have their facts 1.2–1.9 away, as far as the noise, so distance alone would drop them. The wording separates "explain X" from "what do you remember". Recall stayed 16/16. |
 
 ---
 
@@ -1167,7 +1239,7 @@ A reopened chat showed only its latest memories ("where it left off"), not its m
 - Compare `qwen3:8b` (installed) with `llama3.1:8b` on the same chat: recall, precision and time.
 - Measure precision on a real chat log instead of the synthetic one.
 - Phi-3 (named in the README) isn't installed; it would need `ollama pull phi3`.
-- Chat: the vault returns memories up to the 1,000-token budget whatever their distance (`page_context` has no relevance cut-off), so unrelated memories are paged in too. A distance threshold could help; not measured.
+- ~~Chat: the vault returns memories up to the 1,000-token budget whatever their distance (`page_context` has no relevance cut-off), so unrelated memories are paged in too. A distance threshold could help; not measured.~~ Done 2026-11-13: section 5o.
 - Chat: after a very long answer, the working-set rule leaves the context above 70%, so the next message may still trigger direct reclaim (~8 s inside the turn).
 - ~~Chat: the graph calls the MCP server's tool functions in-process.~~ Done: real MCP via `AMP_MCP_URL` (PR #6).
 - Code tool: llama3.1:8b's programs over the memories are not always right (counted 2 of 3 bugs). Try a stronger coder: qwen3:8b with `think=False`, or a bigger model.
@@ -1227,4 +1299,7 @@ git clone -b akshaybranch https://github.com/DarkPhoenix616/Agentic-Memory-Pager
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/python -m pytest -q
 .venv/bin/python <BTP>/report_eval/final_check/final_check.py /tmp/amp
 .venv/bin/python ../report_eval/chat_transcript/live_transcript.py            # section 5n: reopen shows the messages (real model, screenshot)
+AMP_PAGE_MAX_DISTANCE=off .venv/bin/python -I ../report_eval/relevance_cutoff/recall_cutoff_eval.py A_no_cutoff  # section 5o, no cut-off
+.venv/bin/python -I ../report_eval/relevance_cutoff/recall_cutoff_eval.py B_cutoff_1p4  # section 5o, the default cut-off
+python3 ../report_eval/relevance_cutoff/compare.py ../report_eval/relevance_cutoff/{A_no_cutoff,B_cutoff_1p4}.json
 ```

@@ -452,20 +452,20 @@ class ChatSession:
         """Keep every message of this chat on disk (secrets scrubbed, encrypted).
         A chat that already has saved messages but was not reopened with resume()
         never overwrites them."""
-        if self._transcript == "new":
-            if os.path.exists(chat_store._path(self.session_id, chat_store.TRANSCRIPT_SUFFIX)):
-                self._transcript = "locked"
-                self.events.append(Event(self.turn, "error", "This chat already has saved messages; reopen it "
-                                         "to add to them", "The new messages are not saved."))
-                return
-            self._transcript = "owned"
-        if self._transcript != "owned":
-            return
-        messages = [{"id": m["id"], "role": m["role"], "content": _scrub_secrets(m["content"]),
-                     "turn": m.get("turn", 0), "chunks": m.get("chunks", 1)} for m in self.transcript]
         try:
+            if self._transcript == "new":
+                if os.path.exists(chat_store._path(self.session_id, chat_store.TRANSCRIPT_SUFFIX)):
+                    self._transcript = "locked"
+                    self.events.append(Event(self.turn, "error", "This chat already has saved messages; reopen "
+                                             "it to add to them", "The new messages are not saved."))
+                    return
+                self._transcript = "owned"
+            if self._transcript != "owned":
+                return
+            messages = [{"id": m["id"], "role": m["role"], "content": _scrub_secrets(m["content"]),
+                         "turn": m.get("turn", 0), "chunks": m.get("chunks", 1)} for m in self.transcript]
             chat_store.save_transcript(self.session_id, messages)
-        except Exception as exc:
+        except Exception as exc:                          # e.g. a chat ID that cannot be a file name
             self.events.append(Event(self.turn, "error", "Could not save this chat's messages", str(exc)))
 
     def _restore_transcript(self) -> int:
