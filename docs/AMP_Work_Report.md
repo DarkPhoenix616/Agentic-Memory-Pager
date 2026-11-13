@@ -21,6 +21,7 @@ in `BTP/report_eval/`, test venv `AgenticMemoryPager/.venv` (git-ignored).
 
 | Part | Branch | State |
 |---|---|---|
+| Final round, task 2: auto-save | `feature/auto-save` (merged, then deleted) | **Done.** The unsaved part of a chat is kept in an encrypted file after every turn and compaction, and once more at shutdown; reopening brings it back. Live: Ctrl+C 3/3 facts, kill -9 4/4, without the file 0/3. 417 tests pass. Section 5j. |
 | Final round, task 1: main's 3 small fixes brought into `akshaybranch` | `akshaybranch` (merge `f307446`) | **Done.** Main (PR #10) had the same code plus a sandbox test import fix, a macOS skip and 2 `.gitignore` lines. Plain `pytest` now passes: 409 passed, 1 skipped. Plan: section 1, item 9. |
 | Step 5: Tree-sitter for JavaScript, TypeScript, Java, C and C++ | `feature/tree-sitter` (merged, then deleted) | **Done.** Real syntax trees and the code graph for 5 more languages; line scan stays as the fallback. 409 tests pass. Section 5h. |
 | Step 4: code graph in the AST compactor | `feature/code-graph` (merged, then deleted) | **Done.** Each function records what it calls; 453 links in this repo; old seals still verify. Section 5g. |
@@ -79,7 +80,7 @@ Next steps:
    - How each step is done: a branch from `akshaybranch`, build, test, live check with the real model, merge into `akshaybranch`, delete the branch, push, and update this report.
 9. **Final round before submission** (made 2026-11-13; the user asked for all 8 tasks, one at a time, waiting for a go-ahead after each):
    1. Bring main's 3 small fixes (PR #10) into `akshaybranch`. **Done** (`f307446`). Before this, plain `pytest` stopped on `server/test_sandbox.py` (`from sandbox import ...`); only `pytest tests` passed. Now plain `pytest`: 409 passed, 1 skipped.
-   2. Auto-save: save the chat when the app shuts down, and every few turns. Not started.
+   2. Auto-save: save the chat when the app shuts down, and every few turns. **Done**, see section 5j. Built as a save after every turn (not every few), because a save is 0.2 ms and needs no model.
    3. Fact poisoning (the 1 red-team attack that got through, section 5f): record where each fact came from, prefer the user's own words, flag a note that contradicts an older one; re-run the red team. Not started.
    4. Live test of the tool guard (Layer 4) with the real model. Not started.
    5. Final check: fresh install from `requirements.txt`, all tests, one full chat in the web app, report and README updated. Not started.
@@ -649,8 +650,7 @@ Test set: 12 exchanges where the user states small facts and asks for a ~150-wor
 
 - **No full transcript.** Only memories are stored. A reopened chat shows its saved notes, not the old messages; the model still recalls them through paging.
   - Showing the full message history, as ChatGPT and Claude do, would need the message list saved too, encrypted with the session key. Discussed with the user, not built.
-- **No save on close.** A chat is saved only when the user leaves it in the app. Closing the tab or stopping the server loses what was not yet paged out.
-  - Saving on shutdown and every few minutes was proposed, not built.
+- ~~**No save on close.** A chat is saved only when the user leaves it in the app. Closing the tab or stopping the server loses what was not yet paged out.~~ Solved on 2026-11-13: auto-save, section 5j.
 
 ## 5f. Step 3: red-team test against the real model (2026-11-10)
 
@@ -778,6 +778,51 @@ Aman's own tests (Phases 1–4) used a scripted fake model; this is the first te
 
 ---
 
+## 5j. Final round, task 2: auto-save (2026-11-13)
+
+### 5j.1 The problem
+
+A chat was saved only when the user left it (*New chat* or opening another chat). If the app was stopped with Ctrl+C, the terminal was closed or the app crashed, everything still in the context window was lost: up to 80% of the window, that is the most recent part of the chat. Section 5e.3 listed this as open.
+
+### 5j.2 What was built (branch `feature/auto-save`, merged, then deleted)
+
+- **Why not "save every few turns" to the vault:** paging out means compacting, which empties the context window and needs the model (about 5 s per chunk). Doing that every few turns would make the model forget the recent turns it should still see word for word.
+- **What it does instead:** after every turn and every compaction, the chunks still in the context window are written to `storage/chats/<chat id>.pending`.
+  - New module `harness/chat_store.py`.
+  - The file is encrypted with the chat's own session key: AES-256-GCM, the same scheme as the vault, with the chat ID and a record name bound in.
+  - Writes are atomic (temp file, fsync, rename) and owner-only (0600).
+  - No model is needed. One save takes **0.19 ms** for a 49 KB state.
+- **Reopening:** `ChatSession.resume()` reads the file back into the context window, with the turn number and message counter, so new message IDs don't clash with the old chunks.
+  - The web page says how many unsaved chunks came back.
+  - The chat list marks such chats *unsaved part kept*. A chat that never reached the vault (nothing paged out yet) is now listed too, titled from its first exchange.
+- **Shutdown:** the web server's lifespan hook (`ChatApp.shutdown`) waits for a running answer or background compaction (up to 20 s each), saves once more and prints that the chat is kept.
+- **Leaving normally** is unchanged: everything is paged out to the vault and the file is removed.
+- **Safety:**
+  - A file that does not decrypt (wrong key, damaged) is reported and left in place; it is only replaced if the user goes on chatting in that chat.
+  - Chat IDs are checked before they become file names.
+  - Tests use their own folder (`AMP_CHATS_DIR`, a fresh one per test); `storage/chats/` is git-ignored.
+
+### 5j.3 Results
+
+- **Tests:** 417 passed, 1 skipped (8 new).
+  - The new tests cover: the file after each turn, encrypted and 0600; removed after leaving; a "crashed" chat continues with the same chunks and new IDs; background compaction keeps the file current; a chat with only an unsaved part is listed; an unreadable file is kept; bad IDs; and in the web app, the shutdown waiting for a running answer and a restarted app reopening the chat.
+  - One old test changed: it made two chats on this computer and expected only one to have a key. Now a chat gets its key at its first message (as in the real app), so the test removes the second chat's key to stand for a chat from another computer.
+- **Live, real llama3.1:8b, the real app as its own process on temporary folders** (`report_eval/auto_save/live_auto_save.py`, results in `results.json`):
+
+| Phase | What happened | Recall question | Facts recalled |
+|---|---|---|---|
+| A | 2 turns (cat Pixel, colour teal, codename ZEBRAFISH), then Ctrl+C | — | The app stopped in **0.53 s** and printed that the chat is kept. File 0600; none of the 3 facts readable in it; 0 memories in the vault. |
+| B | App started again, chat reopened from the list (listed as *unsaved part kept*, 0 memories) | cat, colour, codename? | **3/3**. 2 chunks restored. |
+| C | One more turn (dog Bruno), then `kill -9`, app started again, reopened | the same + dog? | **4/4**. 4 chunks restored. |
+| D | Control: the same chat with its file removed (= before this task) | cat, colour, codename? | **0/3**: "I don't have any information about your cat's name …". The chat wasn't listed. |
+
+### 5j.4 Limits (honest)
+
+- **The turn in progress is lost** on a crash: a message is saved once its answer is done.
+- **A crash during a background compaction** can store that memory in the vault and still leave its chunk in the file, so it would be compacted again after reopening (a duplicate memory). The window is the few milliseconds between the vault write and the file write.
+- **Unsaved parts are not in the vault** until the chat is reopened and left, so the admin tools and searches don't see them. They are on disk, encrypted.
+- **Only AMP Chat** does this. Other MCP clients own their chats.
+
 ## 6. Decision log
 
 | Date | Decision | Why |
@@ -815,6 +860,7 @@ Aman's own tests (Phases 1–4) used a scripted fake model; this is the first te
 | 2026-11-09 | Reopened chats show memories, not the old messages (user agreed for now) | AMP stores memories, not transcripts; a full encrypted transcript was discussed as a later option. |
 | 2026-11-09 | Rebuild the vault after encrypting old rows | ChromaDB's write-ahead log and free pages still held the old text; `chroma vacuum` alone did not remove it. |
 | 2026-11-13 | Merge main into `akshaybranch` instead of cherry-picking its 3 fixes | Main already held the same code (PR #10), so a merge keeps the two branches in step. In `.gitignore`, Danie's `.idea` and `Claude context.MD` lines were kept and `docs/` was left out, so the report stays tracked here. |
+| 2026-11-13 | Auto-save the unsaved part to an encrypted file after every turn, not to the vault every few turns | Paging out empties the context window and needs the model (~5 s per chunk); a file save is 0.19 ms and keeps the recent turns word for word. Reopening restores them as they were. |
 
 ---
 
@@ -874,4 +920,5 @@ grep -r -a -c "some phrase" storage/chroma_db                      # check: 0 me
 .venv/bin/python -I ../report_eval/user_facts_eval/eval_guard_only.py         # the guard with the old prompts
 .venv/bin/python -I ../report_eval/live_chat_history.py                       # chat, leave, reopen, recall (real model)
 .venv/bin/python -I ../report_eval/red_team.py                                # section 5f: 13 attacks vs the real model
+.venv/bin/python -I ../report_eval/auto_save/live_auto_save.py                 # section 5j: Ctrl+C, kill -9, reopen (real model)
 ```
