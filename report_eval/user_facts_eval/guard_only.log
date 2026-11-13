@@ -1,0 +1,32 @@
+2/2 kept  191-> 90 tokens  lost=[]  'My cat is called Pixel and my codename is ZEBRAFIS'
+3/3 kept  304->103 tokens  lost=[]  "I'm Akshay from IIT Jodhpur, and my teammate Aman "
+2/2 kept  217-> 91 tokens  lost=[]  'Our demo is on 14 December in room LHC-104. Explai'
+3/3 kept  237-> 95 tokens  lost=[]  'My laptop is a Lenovo LOQ with an RTX 3050. Explai'
+2/2 kept  211-> 73 tokens  lost=[]  "The project's internal name is Orion and the vault"
+2/2 kept  213-> 86 tokens  lost=[]  'Dr. Mehta wants the final report in IEEE format. E'
+2/2 kept  225->131 tokens  lost=[]  'Our backup model is qwen3:8b and the main one is l'
+2/2 kept  241-> 99 tokens  lost=[]  'My dog Bruno chewed my notes, so I lost the slides'
+2/2 kept  228-> 79 tokens  lost=[]  'We keep the backups in a bucket called amp-backups'
+2/2 kept  218-> 99 tokens  lost=[]  'Sanya from the design team picked teal as the main'
+1/1 kept  207-> 69 tokens  lost=[]  'My Wi-Fi network is called AMP_LAB_5G. Explain in '
+2/2 kept  215-> 91 tokens  lost=[]  'Remember that our client is Tata Motors and the co'
+{
+ "label": "guard_only",
+ "single_exchanges": {
+  "kept": 25,
+  "total": 25
+ },
+ "long_chat": {
+  "kept": 24,
+  "total": 25,
+  "pieces": 2,
+  "reduce_levels": 1,
+  "in_tokens": 2707,
+  "out_tokens": 340,
+  "lost": [
+   "8001"
+  ]
+ },
+ "out_tokens_single_total": 1106,
+ "seconds": 125.6
+}

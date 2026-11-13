@@ -1,0 +1,61 @@
+{
+ "before_leaving": {
+  "compactions": 0,
+  "statuses": [
+   "in context",
+   "in context",
+   "in context",
+   "in context",
+   "in context",
+   "in context"
+  ]
+ },
+ "listed": {
+  "session_id": "chat-bdc2899d",
+  "title": "Hi! My cat is called Pixel and my project codename is ZEBRAFISH.",
+  "messages": 6,
+  "memories": 4,
+  "last_time": "2026-11-13T12:27:58.802830+00:00",
+  "unsaved": false,
+  "current": false
+ },
+ "after_reopen": {
+  "restored_messages": 6,
+  "statuses": [
+   "paged out",
+   "paged out",
+   "paged out",
+   "paged out",
+   "paged out",
+   "paged out"
+  ],
+  "first_message": "Hi! My cat is called Pixel and my project codename is ZEBRAFISH.",
+  "resumed_notes": 4
+ },
+ "recall_reply": "According to the memories, your cat's name is Pixel. As for your project codename, it's ZEBRAFISH.",
+ "recall": {
+  "pixel": true,
+  "zebrafish": true
+ },
+ "transcript_after_recall": 8,
+ "ids_after_recall": [
+  "u1",
+  "a2",
+  "u3",
+  "a4",
+  "u5",
+  "a6",
+  "u7",
+  "a8"
+ ],
+ "plaintext_in_chat_files": {
+  "ZEBRAFISH": 0,
+  "Pixel": 0,
+  "cart_total": 0
+ },
+ "chat_files": [
+  "chat-bdc2899d.pending",
+  "chat-bdc2899d.transcript"
+ ],
+ "screenshot": "report_eval/chat_transcript/reopened_chat.png"
+}

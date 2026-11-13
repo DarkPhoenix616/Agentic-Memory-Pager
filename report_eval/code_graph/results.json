@@ -1,0 +1,50 @@
+{
+ "files": 22,
+ "symbols": 619,
+ "links": 537,
+ "who_calls_queries": 78,
+ "where_queries": 41,
+ "variants": {
+  "none": {
+   "tokens": 8851,
+   "who_calls_top1": 8,
+   "who_calls_top3": 20,
+   "where_top1": 16,
+   "where_top3": 24,
+   "texts_longer_than_embedding_window": 15,
+   "growth_vs_none": 0.0
+  },
+  "full": {
+   "tokens": 11944,
+   "who_calls_top1": 9,
+   "who_calls_top3": 20,
+   "where_top1": 15,
+   "where_top3": 25,
+   "texts_longer_than_embedding_window": 16,
+   "growth_vs_none": 34.9
+  },
+  "short": {
+   "tokens": 11852,
+   "who_calls_top1": 9,
+   "who_calls_top3": 20,
+   "where_top1": 15,
+   "where_top3": 25,
+   "texts_longer_than_embedding_window": 16,
+   "growth_vs_none": 33.9
+  },
+  "file": {
+   "tokens": 10250,
+   "who_calls_top1": 9,
+   "who_calls_top3": 21,
+   "where_top1": 15,
+   "where_top3": 24,
+   "texts_longer_than_embedding_window": 16,
+   "growth_vs_none": 15.8
+  }
+ },
+ "shown_to_model": {
+  "signatures_only": 905,
+  "with_calls": 957,
+  "files": 22
+ }
+}

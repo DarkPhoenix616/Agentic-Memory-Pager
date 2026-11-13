@@ -1,0 +1,90 @@
+[amp] planted 1/16 | context 600 | compactions 0
+[amp] planted 2/16 | context 1212 | compactions 0
+[amp] planted 3/16 | context 2056 | compactions 0
+[11/05/26 11:42:10] INFO     [RLMSummarizer] Stored: mem_b2b0167a | graph.py:275
+[11/05/26 11:42:26] INFO     [RLMSummarizer] Stored: mem_5c3eea62 | graph.py:275
+[amp] planted 4/16 | context 2118 | compactions 3
+[11/05/26 11:43:03] INFO     [RLMSummarizer] Stored: mem_5b2585fa | graph.py:275
+[11/05/26 11:43:15] INFO     [RLMSummarizer] Stored: mem_8642cbba | graph.py:275
+[amp] planted 5/16 | context 1844 | compactions 6
+[11/05/26 11:44:06] INFO     [RLM] 31 tokens -> 31   recursive_summarizer.py:909
+[11/05/26 11:44:13] INFO     [ASTCompactor] Stored: mem_e6cb796f |  graph.py:227
+[11/05/26 11:44:16] INFO     [TokenMonitor] tokens=1506  limit=2048 graph.py:150
+[amp] planted 6/16 | context 2570 | compactions 9
+[11/05/26 11:45:14] INFO     [ASTCompactor] Stored: mem_8d392719 |  graph.py:227
+[amp] planted 7/16 | context 2116 | compactions 14
+[11/05/26 11:46:12] INFO     [ASTCompactor] Stored: mem_038859fc |  graph.py:227
+[amp] planted 8/16 | context 1532 | compactions 17
+[amp] planted 9/16 | context 3141 | compactions 17
+[11/05/26 11:48:11] INFO     [RLMSummarizer] Stored: mem_eb951280 | graph.py:275
+[11/05/26 11:48:24] INFO     [RLMSummarizer] Stored: mem_40176103 | graph.py:275
+[amp] planted 10/16 | context 2430 | compactions 22
+[11/05/26 11:49:43] INFO     [RLMSummarizer] Stored: mem_2664a470 | graph.py:275
+[amp] planted 11/16 | context 2220 | compactions 26
+[11/05/26 11:50:31] INFO     [ASTCompactor] Stored: mem_61c64994 |  graph.py:227
+[amp] planted 12/16 | context 1754 | compactions 33
+[11/05/26 11:51:32] INFO     [RLMSummarizer] Stored: mem_d60e3115 | graph.py:275
+[amp] planted 13/16 | context 1625 | compactions 35
+[11/05/26 11:52:19] INFO     [RLMSummarizer] Stored: mem_ac3e8eeb | graph.py:275
+[amp] planted 14/16 | context 1836 | compactions 37
+[11/05/26 11:53:18] INFO     [ASTCompactor] Stored: mem_871dbd6c |  graph.py:227
+[11/05/26 11:53:30] INFO     [TokenMonitor] tokens=901  limit=2048  graph.py:150
+[amp] planted 15/16 | context 1794 | compactions 40
+[11/05/26 11:54:21] INFO     [RLM] 40 tokens -> 40   recursive_summarizer.py:909
+[11/05/26 11:54:30] INFO     [RLMSummarizer] Stored: mem_8c82f695 | graph.py:275
+[amp] planted 16/16 | context 1646 | compactions 42
+[amp] OK  What is my cat's name? -> 'Your cat\'s name is Pixel. TOOL: recall_fact("<user\'s cat\'s name>") = Pixel'
+[amp] OK  What is our project codename? -> 'Our project codename is BLUEHERON. TOOL: recall_fact("<project codename>") = BLUEHERON'
+[amp] OK  Which database did I say we must never use? -> 'You specified that we must never use SQLite. TOOL: recall_fact("<database engine> = Chroma'
+[amp] OK  Who owns the guardrails module? -> 'Aman owns the guardrails module. TOOL: recall_fact("<guardrails module owner> = Aman")'
+[11/05/26 11:55:37] INFO     [TokenMonitor] tokens=1044  limit=2048 graph.py:150
+[amp] OK  On which date is our final demo? -> 'Our final demo is scheduled for 14 December. TOOL: recall_fact("<final demo date> = 14 Dec'
+[amp] OK  Which port does the memory server run on? -> 'The memory server runs on port 8001. TOOL: recall_fact("<memory server port> = 8001")'
+[amp] OK  Which GPU model does our laptop have? -> 'Our laptop GPU is an RTX 3050 with 6 GB of memory. TOOL: recall_fact("<laptop GPU model> ='
+[11/05/26 11:55:50] INFO     [TokenMonitor] tokens=1299  limit=2048 graph.py:150
+[amp] OK  What was the bug in pager_v3.py? -> 'The bug in pager_v3.py was an off-by-one error in the eviction loop. TOOL: recall_fact("<p'
+[amp] OK  Which library did we choose for orchestration? -> 'We chose LangGraph for orchestration. TOOL: recall_fact("<orchestration library> = LangGra'
+[amp] OK  Who is my project supervisor? -> 'Your project supervisor is Dr. Rao. TOOL: recall_fact("<project supervisor> = Dr. Rao")'
+[amp] OK  What is my favourite editor? -> 'Your favourite editor is Neovim. TOOL: recall_fact("<favourite editor> = Neovim")'
+[amp] OK  What is my lucky number? -> 'Your lucky number is 47. TOOL: recall_fact("<lucky number> = 47")'
+[amp] OK  Which embedding model do we use? -> 'We use the all-MiniLM-L6-v2 embedding model. TOOL: recall_fact("<embedding model> = all-Mi'
+[amp] OK  What page limit did I give for the final report? -> 'The final report must be under 30 pages. TOOL: recall_fact("<report length constraint> = u'
+[amp] OK  Which city do I live in? -> 'You live in Jodhpur. TOOL: recall_fact("<user location> = Jodhpur")'
+[amp] OK  What is our backup model? -> 'Our backup model is qwen3:8b. TOOL: recall_fact("<backup model> = qwen3:8b")'
+[11/05/26 11:56:38] INFO     [TokenMonitor] tokens=11  limit=2048   graph.py:150
+[baseline] planted 1/16 | context 449 | compactions 0
+[baseline] planted 2/16 | context 877 | compactions 0
+[baseline] planted 3/16 | context 1703 | compactions 0
+[baseline] planted 4/16 | context 2073 | compactions 2
+[baseline] planted 5/16 | context 1740 | compactions 6
+[baseline] planted 6/16 | context 2535 | compactions 8
+[baseline] planted 7/16 | context 2413 | compactions 13
+[baseline] planted 8/16 | context 2186 | compactions 17
+[baseline] planted 9/16 | context 2662 | compactions 19
+[baseline] planted 10/16 | context 2502 | compactions 23
+[baseline] planted 11/16 | context 2087 | compactions 27
+[baseline] planted 12/16 | context 1702 | compactions 32
+[baseline] planted 13/16 | context 1406 | compactions 35
+[baseline] planted 14/16 | context 2222 | compactions 35
+[baseline] planted 15/16 | context 2196 | compactions 37
+[baseline] planted 16/16 | context 1488 | compactions 41
+[baseline] MISS What is my cat's name? -> "I don't have any information about your cat's name. We didn't discuss it earlier, and I do"
+[baseline] MISS What is our project codename? -> "I don't have any information about a project codename. We didn't discuss it earlier, and I"
+[baseline] MISS Which database did I say we must never use? -> "I don't have any information about a specific database you mentioned. However, I do have a"
+[baseline] MISS Who owns the guardrails module? -> "I don't have any information about the guardrails module or its owner. However, I can try "
+[baseline] MISS On which date is our final demo? -> "I don't have any information about a final demo date. We didn't discuss it earlier, and I "
+[baseline] MISS Which port does the memory server run on? -> "Unfortunately, I don't have any information about the memory server or its port. We didn't"
+[baseline] MISS Which GPU model does our laptop have? -> "I don't have any information about the GPU model in your laptop. We didn't discuss it earl"
+[baseline] MISS What was the bug in pager_v3.py? -> "I don't have any information about a bug in pager_v3.py. However, I can try to search my m"
+[baseline] MISS Which library did we choose for orchestration? -> "I don't have any information about the library we chose for orchestration. However, I do h"
+[baseline] MISS Who is my project supervisor? -> "I don't have any information about your project supervisor. We didn't discuss it earlier, "
+[baseline] MISS What is my favourite editor? -> "I don't have any information about your favorite editor. We didn't discuss it earlier, and"
+[baseline] MISS What is my lucky number? -> "I don't have any information about your lucky number. We didn't discuss it earlier, and I "
+[baseline] MISS Which embedding model do we use? -> "I don't have any information about the embedding model we use. However, I do have a memory"
+[baseline] MISS What page limit did I give for the final report? -> "I don't have any information about a page limit for the final report. However, I do have a"
+[baseline] MISS Which city do I live in? -> "I don't have any information about the city you live in. We didn't discuss it earlier, and"
+[baseline] OK  What is our backup model? -> 'Our backup model is qwen3:8b.'
+amp       recalled 16/16 | compactions 46 | 11439 -> 2624 tokens | 964.0s total
+baseline  recalled 1/16 | compactions 45 | 11059 -> 0 tokens | 806.7s total
+
+[exited with code 0]

@@ -1,0 +1,111 @@
+[
+ {
+  "question": "My cat is called Pixel and my codename is ZEBRAFISH. Explain in about 150 words what a vector database is.",
+  "answer": "A vector database is a type of database that stores and manages data as dense vectors, rather than traditional tables or rows. This allows for efficient similarity search and retrieval of data, particularly useful for applications such as image and video analysis, natural language processing, and recommendation systems.\n\nThink of it like Pixel's favorite game of hide-and-seek. Imagine each object in the room is represented as a unique vector, with each dimension corresponding to a specific feature (e.g. color, shape, size). A vector database can quickly find all objects that are similar to Pixel's favorite toy, even if it's not in the exact same location.\n\nAs ZEBRAFISH, you might appreciate the scalability and performance benefits of vector databases, which can handle large amounts of data and provide fast query times.",
+  "facts": [
+   "Pixel",
+   "ZEBRAFISH"
+  ],
+  "tokens": 191
+ },
+ {
+  "question": "I'm Akshay from IIT Jodhpur, and my teammate Aman wrote the guardrails. Explain in about 150 words how HNSW indexing works.",
+  "answer": "Nice to meet you, Akshay! I'd be happy to explain HNSW indexing.\n\nHNSW (Hierarchical Navigable Small World) indexing is a type of graph-based indexing technique used in similarity search and nearest neighbor search applications. The basic idea is to construct a graph where each node represents a data point, and the edges between nodes represent the similarity between the corresponding data points.\n\nHere's a simplified overview of how HNSW indexing works:\n\n1. **Graph Construction**: The graph is constructed by connecting each data point to its k-nearest neighbors, where k is a parameter that controls the graph's density.\n2. **Hierarchical Structure**: The graph is organized into a hierarchical structure, where each node has a level assigned to it. Nodes at higher levels are more general, while nodes at lower levels are more specific.\n3. **Query Processing**: When a query is submitted, the algorithm traverses the graph to find the nearest neighbors. The traversal is guided by the hierarchical structure, allowing for efficient search.\n\nHNSW indexing has been shown to outperform traditional indexing techniques like k-d trees and ball trees in many applications, especially for high-dimensional data. Aman's guardrails implementation likely uses a variant of HNSW indexing to ensure efficient search and retrieval of nearest neighbors.",
+  "facts": [
+   "Akshay",
+   "Jodhpur",
+   "Aman"
+  ],
+  "tokens": 304
+ },
+ {
+  "question": "Our demo is on 14 December in room LHC-104. Explain in about 150 words what an embedding is.",
+  "answer": "Here's a 150-word explanation of an embedding:\n\nAn embedding is a way of representing one mathematical object or structure within another. In the context of geometry and topology, an embedding is a continuous map from one space to another that preserves the underlying structure. For example, an embedding of a circle into a plane is a continuous map that takes the circle to a subset of the plane, where the circle is \"drawn\" within the plane without intersecting itself.\n\nIn more abstract terms, an embedding is a way of \"placing\" one mathematical object inside another, while preserving its intrinsic properties. This can be useful in many areas of mathematics, such as topology, geometry, and algebra. Embeddings can also be used to study the properties of one object by relating it to another, more familiar object.\n\nIn our demo, we will likely be exploring embeddings in a more visual and interactive way, so come prepared to see some cool examples!",
+  "facts": [
+   "December",
+   "LHC-104"
+  ],
+  "tokens": 217
+ },
+ {
+  "question": "My laptop is a Lenovo LOQ with an RTX 3050. Explain in about 150 words what quantization of an LLM means.",
+  "answer": "I think there may be a small issue here. The Lenovo LOQ is not a real laptop model, and the RTX 3050 is a graphics card that is typically found in desktops, not laptops. However, I'll assume you meant to ask about a different laptop model.\n\nQuantization in the context of Large Language Models (LLMs) refers to the process of approximating a continuous-valued model with a discrete-valued one. In other words, it's the process of rounding the output of a model to the nearest integer or a fixed set of discrete values. This is done to reduce the computational cost and memory requirements of the model, as well as to improve its interpretability and efficiency.\n\nQuantization involves converting the model's weights and activations from floating-point numbers to lower-precision integer values, such as 8-bit or 16-bit integers. This can lead to a reduction in the model's accuracy, but also enables it to run on lower-power devices or with reduced memory requirements.",
+  "facts": [
+   "Lenovo",
+   "LOQ",
+   "RTX 3050"
+  ],
+  "tokens": 237
+ },
+ {
+  "question": "The project's internal name is Orion and the vault server runs on port 8001. Explain in about 150 words what JSON-RPC is.",
+  "answer": "Orion is an internal project name, and the vault server is accessible on port 8001.\n\nJSON-RPC (Remote Procedure Call) is a lightweight protocol for making remote procedure calls over the web. It allows clients to call methods on a server and receive the results, similar to how a client can call a function on a local server. JSON-RPC uses JSON (JavaScript Object Notation) to encode the requests and responses, making it easy to use and parse.\n\nIn the context of the Orion project, JSON-RPC is likely used to interact with the vault server, allowing clients to send requests to the server and receive responses in a standardized format. This enables clients to access the vault's functionality, such as storing and retrieving sensitive data, in a programmatic way. By using JSON-RPC, the project can provide a flexible and scalable interface for interacting with the vault server.",
+  "facts": [
+   "Orion",
+   "8001"
+  ],
+  "tokens": 211
+ },
+ {
+  "question": "Dr. Mehta wants the final report in IEEE format. Explain in about 150 words what a context window is.",
+  "answer": "Here is a 150-word explanation of a context window in IEEE format:\n\n**Context Window**\n\nA context window is a region of a document or a webpage that provides additional information or context to the user. It is a visual representation of the surrounding information that is relevant to the current topic or task. The context window typically appears as a small panel or overlay that displays related information, such as definitions, explanations, or suggestions.\n\nIn the context of a report or document, a context window can be used to provide additional information about a specific term or concept, allowing the reader to quickly understand the context and relevance of the information. The context window can be triggered by hovering over a specific term or by clicking on a link. By providing this additional context, the context window can enhance the user's understanding and engagement with the content.\n\n**References:**\n\n(Note: Since this is a short explanation, there are no references to provide)",
+  "facts": [
+   "Mehta",
+   "IEEE"
+  ],
+  "tokens": 213
+ },
+ {
+  "question": "Our backup model is qwen3:8b and the main one is llama3.1:8b. Explain in about 150 words what temperature does when sampling.",
+  "answer": "When sampling, temperature refers to the process of measuring the temperature of the environment or the system being sampled. In the context of your backup and main models (qwen3:8b and llama3.1:8b), temperature is likely related to the temperature at which the models were fine-tuned or trained.\n\nIn deep learning, temperature is a hyperparameter that controls the sharpness of the model's output distribution. When sampling from a model, temperature is used to control the exploration-exploitation trade-off. A high temperature means the model is more likely to explore different possibilities, while a low temperature means it is more likely to exploit the most likely option.\n\nIn practice, temperature is often used in sampling-based methods, such as sampling from a model's output distribution or using temperature scaling to adjust the model's confidence. The temperature value is typically a hyperparameter that needs to be tuned for the specific task and dataset.",
+  "facts": [
+   "qwen3:8b",
+   "llama3.1:8b"
+  ],
+  "tokens": 225
+ },
+ {
+  "question": "My dog Bruno chewed my notes, so I lost the slides for Friday. Explain in about 150 words what a transformer layer does.",
+  "answer": "The perils of having a furry friend who loves to chew!\n\nA transformer layer is a key component of the Transformer model, a popular architecture for natural language processing (NLP) tasks. It's designed to handle sequential data, such as text or speech, and is particularly effective for tasks like language translation, text summarization, and question answering.\n\nIn a transformer layer, the input sequence is split into two parts: the encoder and the decoder. The encoder processes the input sequence and generates a set of vectors, called \"attention weights,\" that represent the importance of each input element relative to the others. These attention weights are then used to compute a weighted sum of the input elements, which is the output of the transformer layer. This process is repeated multiple times, allowing the model to capture long-range dependencies and contextual relationships in the input sequence. The transformer layer is a self-attention mechanism, meaning it doesn't rely on recurrent neural networks (RNNs) or convolutional neural networks (CNNs), making it more efficient and scalable.",
+  "facts": [
+   "Bruno",
+   "Friday"
+  ],
+  "tokens": 241
+ },
+ {
+  "question": "We keep the backups in a bucket called amp-backups-2026 in Mumbai. Explain in about 150 words what cosine similarity is.",
+  "answer": "Cosine similarity is a measure of similarity between two vectors, typically used in text analysis, information retrieval, and machine learning. It calculates the cosine of the angle between two vectors in a multi-dimensional space. In essence, it measures how similar the direction of two vectors is.\n\nGiven two vectors A and B, the cosine similarity (CS) is calculated as:\n\nCS = (A \u00b7 B) / (|A| |B|)\n\nwhere A \u00b7 B is the dot product of the two vectors, and |A| and |B| are the magnitudes (lengths) of the vectors.\n\nCosine similarity ranges from -1 (completely dissimilar) to 1 (identical). A value close to 1 indicates that the vectors are highly similar, while a value close to 0 indicates they are not similar.\n\nIn the context of your backups, cosine similarity might be used to compare the similarity between different backups or to identify similar files across different backups.",
+  "facts": [
+   "amp-backups-2026",
+   "Mumbai"
+  ],
+  "tokens": 228
+ },
+ {
+  "question": "Sanya from the design team picked teal as the main colour of the UI. Explain in about 150 words what a REST API is.",
+  "answer": "A REST API (Application Programming Interface) is an architectural style for designing networked applications. It's based on the idea of resources, which are identified by URIs (Uniform Resource Identifiers), and can be manipulated using a fixed set of operations. Think of it like a library catalog system: you can request a book by its ID, and the system will return the book's details. You can also request to update or delete the book, and the system will perform the action.\n\nIn a REST API, each resource is represented by a unique identifier, and the client can use standard HTTP methods (GET, POST, PUT, DELETE) to interact with it. This allows for a flexible and scalable way to design APIs that can be used by multiple clients, such as web applications, mobile apps, or even other APIs.\n\nNow, if only we could design a UI that's as elegant as a well-crafted REST API...",
+  "facts": [
+   "Sanya",
+   "teal"
+  ],
+  "tokens": 218
+ },
+ {
+  "question": "My Wi-Fi network is called AMP_LAB_5G. Explain in about 150 words how tokenization works.",
+  "answer": "Tokenization is a security process that replaces sensitive information, such as credit card numbers or passwords, with a unique token or code. This token can be used to authenticate and authorize transactions or access to a system, without exposing the underlying sensitive data.\n\nIn the context of a Wi-Fi network, tokenization is often used to secure wireless connections. When a device connects to the AMP_LAB_5G network, it is assigned a unique token or session ID. This token is used to authenticate the device and grant access to the network, without requiring the device to provide its actual credentials.\n\nTokenization provides an additional layer of security by reducing the risk of unauthorized access to sensitive data. If a device is compromised or stolen, the token can be revoked, preventing the attacker from accessing the network or sensitive data. Tokenization is a common security practice used in many online systems, including Wi-Fi networks.",
+  "facts": [
+   "AMP_LAB_5G"
+  ],
+  "tokens": 207
+ },
+ {
+  "question": "Remember that our client is Tata Motors and the contract ends in March. Explain in about 150 words what a knowledge graph is.",
+  "answer": "As we approach the end of our contract with Tata Motors in March, I'd like to take a moment to explain a key concept that can benefit their business: the knowledge graph.\n\nA knowledge graph is a data structure that represents entities, their relationships, and the context in which they interact. It's a powerful tool for organizing and linking data from various sources, making it easily accessible and usable for various applications. Think of it as a digital map of your company's knowledge, where each entity (e.g., a product, a customer, or a supplier) is connected to others through relationships (e.g., \"Tata Motors manufactures the Tata Nexon\" or \"Tata Motors has a partnership with Jaguar Land Rover\").\n\nBy leveraging a knowledge graph, Tata Motors can unlock new insights, improve decision-making, and enhance customer experiences. We can help you explore the possibilities and create a tailored solution to meet your specific needs.",
+  "facts": [
+   "Tata Motors",
+   "March"
+  ],
+  "tokens": 215
+ }
+]
