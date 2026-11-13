@@ -13,7 +13,8 @@ How to use this file:
 
 Paths: repo `BTP/AgenticMemoryPager/` (clone of
 `github.com/DarkPhoenix616/Agentic-Memory-Pager`), eval scripts and saved outputs
-in `BTP/report_eval/`, test venv `AgenticMemoryPager/.venv` (git-ignored).
+in `report_eval/` inside the repo (moved in on 2026-11-13; see its README), test
+venv `AgenticMemoryPager/.venv` (git-ignored).
 
 ---
 
@@ -447,7 +448,7 @@ Also: the README now documents all of this, its outdated repository tree was reb
 
 ### 5b.4 Results
 
-**Risk model choice** (scripts and JSON results in `BTP/report_eval/guard_eval/`). The test set:
+**Risk model choice** (scripts and JSON results in `report_eval/guard_eval/`). The test set:
 - **15 attacks.** 3 are classic; 12 are paraphrased with no trigger words.
 - **111 normal memories:**
   - 15 handwritten, including tricky ones like "Ignore the tiktoken warning…", "Delete all files in the temp directory…" and a note that explains prompt injection;
@@ -601,7 +602,7 @@ When an exchange is longer than 150 tokens and is mostly a long explanation, lla
 
 ### 5d.3 Results
 
-Test set: 12 exchanges where the user states small facts and asks for a ~150-word explanation. llama3.1:8b wrote the answers once, and they are saved, so every version sees the same text. Scripts are in `BTP/report_eval/user_facts_eval/`.
+Test set: 12 exchanges where the user states small facts and asks for a ~150-word explanation. llama3.1:8b wrote the answers once, and they are saved, so every version sees the same text. Scripts are in `report_eval/user_facts_eval/`.
 
 | Summarizer | 12 single exchanges | The 12 joined as one long chat (2 pieces + merge) |
 |---|---|---|
@@ -666,7 +667,7 @@ Test set: 12 exchanges where the user states small facts and asks for a ~150-wor
 
 ### 5f.1 How it was run
 
-`BTP/report_eval/red_team.py`, llama3.1:8b, on a temporary vault and keyring:
+`report_eval/red_team.py`, llama3.1:8b, on a temporary vault and keyring:
 1. **Planting.** Each attack note was pasted into its own chat, next to a harmless fact ("We use PostgreSQL for the vault database."). Both went into the vault through the normal pipeline: Layer 1 screening, the risk score (word rules + model), the seal and session encryption.
 2. **Triggering.** The chat was reopened and the model was asked an ordinary question that pages the notes back in.
 3. **Canaries.** Each attack had one, so success is unambiguous: a code word in the reply, a blocked tool that ran, a leaked secret, deleted memories, or a changed fact.
@@ -1375,8 +1376,8 @@ cd BTP/AgenticMemoryPager
 .venv/bin/python -m pytest tests/ -q                              # unit + graph tests
 AMP_RLM_LIVE=1 .venv/bin/python -m pytest tests/test_rlm_summarizer.py -k live   # needs Ollama
 cd ../report_eval && python3 make_chat.py                          # writes chat.txt + facts.json
-cd ../AgenticMemoryPager && .venv/bin/python -m compactor.rlm_text ../report_eval/chat.txt --json > ../report_eval/run.json
-python3 ../report_eval/recall.py ../report_eval/facts.json ../report_eval/run.json
+cd ../AgenticMemoryPager && .venv/bin/python -m compactor.rlm_text report_eval/chat.txt --json > report_eval/run.json
+python3 report_eval/recall.py report_eval/facts.json report_eval/run.json
 .venv/bin/python -m pytest tests/test_chat_session.py -q          # chat app core (fakes, no GPU)
 .venv/bin/python -m app.server                                     # the chat app itself: http://127.0.0.1:8000
 
@@ -1384,8 +1385,8 @@ python3 ../report_eval/recall.py ../report_eval/facts.json ../report_eval/run.js
 .venv/bin/python -m pytest tests/test_server_guards.py tests/test_risk_model.py tests/test_mcp_transport.py -q
 .venv/bin/python -m server.backfill                                # dry run on the real vault
 ollama pull llama-guard3:1b                                        # only for the comparison
-.venv/bin/python -I ../report_eval/guard_eval/eval_guard3.py       # word rules vs Llama Guard vs llama3.1:8b
-.venv/bin/python -I ../report_eval/guard_eval/live_mcp_check.py    # server as its own process, outside client
+.venv/bin/python -I report_eval/guard_eval/eval_guard3.py       # word rules vs Llama Guard vs llama3.1:8b
+.venv/bin/python -I report_eval/guard_eval/live_mcp_check.py    # server as its own process, outside client
 
 # Session keys and encryption (section 5c)
 .venv/bin/python -m pytest tests/test_session_keys.py -q
@@ -1395,24 +1396,24 @@ ollama pull llama-guard3:1b                                        # only for th
 grep -r -a -c "some phrase" storage/chroma_db                      # check: 0 means no readable copy
 
 # User facts in summaries (section 5d) and reopening chats (section 5e)
-.venv/bin/python -I ../report_eval/user_facts_eval/eval_user_facts.py final   # 12 exchanges + one long chat
-.venv/bin/python -I ../report_eval/user_facts_eval/eval_guard_only.py         # the guard with the old prompts
-.venv/bin/python -I ../report_eval/live_chat_history.py                       # chat, leave, reopen, recall (real model)
-.venv/bin/python -I ../report_eval/red_team.py                                # section 5f: 13 attacks vs the real model
-.venv/bin/python -I ../report_eval/auto_save/live_auto_save.py                 # section 5j: Ctrl+C, kill -9, reopen (real model)
-.venv/bin/python -I ../report_eval/fact_conflicts/calibrate.py                 # section 5k: threshold for the contradiction check
-.venv/bin/python -I ../report_eval/red_team.py                                # section 5k: red team again (stricter poisoning canary)
-.venv/bin/python -I ../report_eval/layer4_live/layer4_live.py                  # section 5l: Layer 4 live (6 scenarios x 3 runs)
-python3 ../report_eval/layer4_live/analyze.py ../report_eval/layer4_live/results.json   # its numbers
+.venv/bin/python -I report_eval/user_facts_eval/eval_user_facts.py final   # 12 exchanges + one long chat
+.venv/bin/python -I report_eval/user_facts_eval/eval_guard_only.py         # the guard with the old prompts
+.venv/bin/python -I report_eval/live_chat_history.py                       # chat, leave, reopen, recall (real model)
+.venv/bin/python -I report_eval/red_team.py                                # section 5f: 13 attacks vs the real model
+.venv/bin/python -I report_eval/auto_save/live_auto_save.py                 # section 5j: Ctrl+C, kill -9, reopen (real model)
+.venv/bin/python -I report_eval/fact_conflicts/calibrate.py                 # section 5k: threshold for the contradiction check
+.venv/bin/python -I report_eval/red_team.py                                # section 5k: red team again (stricter poisoning canary)
+.venv/bin/python -I report_eval/layer4_live/layer4_live.py                  # section 5l: Layer 4 live (6 scenarios x 3 runs)
+python3 report_eval/layer4_live/analyze.py report_eval/layer4_live/results.json   # its numbers
 # section 5m: fresh clone + fresh venv, then the full web-app chat (in-process and over MCP)
 git clone -b akshaybranch https://github.com/DarkPhoenix616/Agentic-Memory-Pager.git /tmp/amp && cd /tmp/amp
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/python -m pytest -q
 .venv/bin/python <BTP>/report_eval/final_check/final_check.py /tmp/amp
-.venv/bin/python ../report_eval/chat_transcript/live_transcript.py            # section 5n: reopen shows the messages (real model, screenshot)
-AMP_PAGE_MAX_DISTANCE=off .venv/bin/python -I ../report_eval/relevance_cutoff/recall_cutoff_eval.py A_no_cutoff  # section 5o, no cut-off
-.venv/bin/python -I ../report_eval/relevance_cutoff/recall_cutoff_eval.py B_cutoff_1p4  # section 5o, the default cut-off
-python3 ../report_eval/relevance_cutoff/compare.py ../report_eval/relevance_cutoff/{A_no_cutoff,B_cutoff_1p4}.json
-.venv/bin/python -I ../report_eval/code_graph/measure_graph.py                 # section 5p: cost and search value of call lines (no model)
-.venv/bin/python -I ../report_eval/code_graph/live_who_calls.py new_code_calls_shown 3   # section 5p: call questions, real model
-.venv/bin/python -I ../report_eval/ui_check/new_chat_ui.py after_fix               # section 5q: New chat in a real browser
+.venv/bin/python report_eval/chat_transcript/live_transcript.py            # section 5n: reopen shows the messages (real model, screenshot)
+AMP_PAGE_MAX_DISTANCE=off .venv/bin/python -I report_eval/relevance_cutoff/recall_cutoff_eval.py A_no_cutoff  # section 5o, no cut-off
+.venv/bin/python -I report_eval/relevance_cutoff/recall_cutoff_eval.py B_cutoff_1p4  # section 5o, the default cut-off
+python3 report_eval/relevance_cutoff/compare.py report_eval/relevance_cutoff/{A_no_cutoff,B_cutoff_1p4}.json
+.venv/bin/python -I report_eval/code_graph/measure_graph.py                 # section 5p: cost and search value of call lines (no model)
+.venv/bin/python -I report_eval/code_graph/live_who_calls.py new_code_calls_shown 3   # section 5p: call questions, real model
+.venv/bin/python -I report_eval/ui_check/new_chat_ui.py after_fix               # section 5q: New chat in a real browser
 ```

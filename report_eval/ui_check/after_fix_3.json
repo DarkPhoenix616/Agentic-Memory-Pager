@@ -1,0 +1,30 @@
+{
+ "label": "after_fix_3",
+ "fresh_page": {
+  "shown": 0,
+  "greeting": "Hello! \ud83d\udc4b How can I help you today?"
+ },
+ "after_send": {
+  "shown": 2,
+  "session": "chat-78cdb7a6"
+ },
+ "after_new_chat": {
+  "shown": 0,
+  "session": "chat-8fdd5177",
+  "empty_hint_visible": true,
+  "greeting": "Hello! \ud83d\udc4b How can I help you today?"
+ },
+ "after_reopen": {
+  "shown": 2,
+  "session": "chat-78cdb7a6",
+  "greeting": ""
+ },
+ "old_chat_without_saved_messages": {
+  "summaries_shown": 1,
+  "shown": 1,
+  "greeting": "",
+  "header": "\ud83d\udcc2 Reopened this chat. It is older than saved messages, so its saved summaries are shown below."
+ },
+ "cache_control": "no-cache",
+ "page_switches_chats": true
+}

@@ -1,0 +1,17 @@
+{
+ "label": "before_fix",
+ "after_send": {
+  "shown": 2,
+  "session": "chat-f5444747"
+ },
+ "after_new_chat": {
+  "shown": 2,
+  "session": "chat-88ec7560",
+  "empty_hint_visible": false
+ },
+ "after_reopen": {
+  "shown": 2,
+  "session": "chat-f5444747"
+ },
+ "page_switches_chats": false
+}

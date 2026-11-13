@@ -1,0 +1,838 @@
+[11/13/26 18:04:39] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+                    INFO     [TokenMonitor] tokens=86  limit=2048   graph.py:199
+                             usage=4.2%                                         
+[11/13/26 18:05:09] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] planted 1/16 | compactions 0 | paged 0 tokens
+                    INFO     [TokenMonitor] tokens=707  limit=2048  graph.py:199
+                             usage=34.5%                                        
+[11/13/26 18:05:12] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+                    INFO     [TokenMonitor] tokens=784  limit=2048  graph.py:199
+                             usage=38.3%                                        
+[11/13/26 18:05:35] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] planted 2/16 | compactions 0 | paged 0 tokens
+                    INFO     [TokenMonitor] tokens=1208  limit=2048 graph.py:199
+                             usage=59.0%                                        
+[11/13/26 18:05:39] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+                    INFO     [TokenMonitor] tokens=1294  limit=2048 graph.py:199
+                             usage=63.2%                                        
+[11/13/26 18:06:22] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] planted 3/16 | compactions 0 | paged 0 tokens
+                    INFO     [RLM] 38 tokens -> 38  recursive_summarizer.py:1001
+                             (100.0%) | 1 piece(s),                             
+                             0 reduce level(s), 0                               
+                             LLM call(s), 0                                     
+                             fallback(s), 0.0s                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+[11/13/26 18:06:23] INFO     [RLMSummarizer] Stored: mem_a5c34314 | graph.py:341
+                             Evicted 38 tokens.                                 
+[11/13/26 18:06:33] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLM] 550 tokens ->    recursive_summarizer.py:1001
+                             107 (19.5%) | 1                                    
+                             piece(s), 0 reduce                                 
+                             level(s), 1 LLM                                    
+                             call(s), 0                                         
+                             fallback(s), 10.2s                                 
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+[11/13/26 18:06:34] INFO     [RLMSummarizer] Stored: mem_baca23aa | graph.py:341
+                             Evicted 550 tokens.                                
+                    INFO     [TokenMonitor] tokens=1343  limit=2048 graph.py:199
+                             usage=65.6%                                        
+[11/13/26 18:06:38] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+                    INFO     [TokenMonitor] tokens=1422  limit=2048 graph.py:199
+                             usage=69.4%                                        
+[11/13/26 18:07:00] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] planted 4/16 | compactions 2 | paged 145 tokens
+                    INFO     [RLM] 45 tokens -> 45  recursive_summarizer.py:1001
+                             (100.0%) | 1 piece(s),                             
+                             0 reduce level(s), 0                               
+                             LLM call(s), 0                                     
+                             fallback(s), 0.0s                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+[11/13/26 18:07:01] INFO     [RLMSummarizer] Stored: mem_2dc5a3a5 | graph.py:341
+                             Evicted 45 tokens.                                 
+[11/13/26 18:07:06] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLM] 360 tokens -> 73 recursive_summarizer.py:1001
+                             (20.3%) | 1 piece(s),                              
+                             0 reduce level(s), 1                               
+                             LLM call(s), 0                                     
+                             fallback(s), 5.9s                                  
+[11/13/26 18:07:07] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLMSummarizer] Stored: mem_65d59be4 | graph.py:341
+                             Evicted 360 tokens.                                
+                    INFO     [TokenMonitor] tokens=1367  limit=2048 graph.py:199
+                             usage=66.7%                                        
+[11/13/26 18:07:12] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+                    INFO     [TokenMonitor] tokens=1452  limit=2048 graph.py:199
+                             usage=70.9%                                        
+[11/13/26 18:07:43] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] planted 5/16 | compactions 4 | paged 263 tokens
+                    INFO     [RLM] 56 tokens -> 56  recursive_summarizer.py:1001
+                             (100.0%) | 1 piece(s),                             
+                             0 reduce level(s), 0                               
+                             LLM call(s), 0                                     
+                             fallback(s), 0.0s                                  
+[11/13/26 18:07:44] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLMSummarizer] Stored: mem_ffffbdc4 | graph.py:341
+                             Evicted 56 tokens.                                 
+[11/13/26 18:07:57] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLM] 662 tokens ->    recursive_summarizer.py:1001
+                             186 (28.1%) | 1                                    
+                             piece(s), 0 reduce                                 
+                             level(s), 1 LLM                                    
+                             call(s), 0                                         
+                             fallback(s), 12.4s                                 
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+[11/13/26 18:07:58] INFO     [RLMSummarizer] Stored: mem_498ef95b | graph.py:341
+                             Evicted 662 tokens.                                
+                    INFO     [TokenMonitor] tokens=1167  limit=2048 graph.py:199
+                             usage=57.0%                                        
+[11/13/26 18:08:02] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[11/13/26 18:08:03] INFO     [TokenMonitor] tokens=1250  limit=2048 graph.py:199
+                             usage=61.0%                                        
+[11/13/26 18:08:53] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] planted 6/16 | compactions 6 | paged 505 tokens
+[11/13/26 18:08:54] INFO     [RLM] 48 tokens -> 48  recursive_summarizer.py:1001
+                             (100.0%) | 1 piece(s),                             
+                             0 reduce level(s), 0                               
+                             LLM call(s), 0                                     
+                             fallback(s), 0.0s                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLMSummarizer] Stored: mem_c1637aa6 | graph.py:341
+                             Evicted 48 tokens.                                 
+[11/13/26 18:09:03] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLM] 275 tokens -> 99 recursive_summarizer.py:1001
+                             (36.0%) | 1 piece(s),                              
+                             0 reduce level(s), 1                               
+                             LLM call(s), 0                                     
+                             fallback(s), 8.2s                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+[11/13/26 18:09:04] INFO     [RLMSummarizer] Stored: mem_6e14e937 | graph.py:341
+                             Evicted 275 tokens.                                
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [ASTCompactor] Stored: mem_5201be06 |  graph.py:285
+                             Evicted 48 tokens.                                 
+                    INFO     [RLM] 46 tokens -> 46  recursive_summarizer.py:1001
+                             (100.0%) | 1 piece(s),                             
+                             0 reduce level(s), 0                               
+                             LLM call(s), 0                                     
+                             fallback(s), 0.0s                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLMSummarizer] Stored: mem_97433218 | graph.py:341
+                             Evicted 46 tokens.                                 
+[11/13/26 18:09:16] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLM] 470 tokens ->    recursive_summarizer.py:1001
+                             126 (26.8%) | 1                                    
+                             piece(s), 0 reduce                                 
+                             level(s), 1 LLM                                    
+                             call(s), 0                                         
+                             fallback(s), 12.0s                                 
+[11/13/26 18:09:17] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLMSummarizer] Stored: mem_7e2b59ac | graph.py:341
+                             Evicted 470 tokens.                                
+                    INFO     [TokenMonitor] tokens=970  limit=2048  graph.py:199
+                             usage=47.4%                                        
+[11/13/26 18:09:24] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+                    INFO     [TokenMonitor] tokens=1076  limit=2048 graph.py:199
+                             usage=52.5%                                        
+[11/13/26 18:10:07] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] planted 7/16 | compactions 11 | paged 844 tokens
+[11/13/26 18:10:08] INFO     [RLM] 48 tokens -> 48  recursive_summarizer.py:1001
+                             (100.0%) | 1 piece(s),                             
+                             0 reduce level(s), 0                               
+                             LLM call(s), 0                                     
+                             fallback(s), 0.0s                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+[11/13/26 18:10:09] INFO     [RLMSummarizer] Stored: mem_c5d9757d | graph.py:341
+                             Evicted 48 tokens.                                 
+[11/13/26 18:10:17] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLM] 769 tokens ->    recursive_summarizer.py:1001
+                             118 (15.3%) | 1                                    
+                             piece(s), 0 reduce                                 
+                             level(s), 1 LLM                                    
+                             call(s), 0                                         
+                             fallback(s), 8.8s                                  
+[11/13/26 18:10:18] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+[11/13/26 18:10:19] INFO     [RLMSummarizer] Stored: mem_64c56f39 | graph.py:341
+                             Evicted 769 tokens.                                
+                    INFO     [TokenMonitor] tokens=823  limit=2048  graph.py:199
+                             usage=40.2%                                        
+[11/13/26 18:10:24] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+                    INFO     [TokenMonitor] tokens=896  limit=2048  graph.py:199
+                             usage=43.8%                                        
+[11/13/26 18:10:57] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] planted 8/16 | compactions 13 | paged 954 tokens
+[11/13/26 18:10:58] INFO     [TokenMonitor] tokens=1434  limit=2048 graph.py:199
+                             usage=70.0%                                        
+[11/13/26 18:11:03] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+                    INFO     [TokenMonitor] tokens=1496  limit=2048 graph.py:199
+                             usage=73.0%                                        
+[11/13/26 18:12:18] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] planted 9/16 | compactions 13 | paged 962 tokens
+                    INFO     [RLM] 74 tokens -> 74  recursive_summarizer.py:1001
+                             (100.0%) | 1 piece(s),                             
+                             0 reduce level(s), 0                               
+                             LLM call(s), 0                                     
+                             fallback(s), 0.0s                                  
+[11/13/26 18:12:19] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLMSummarizer] Stored: mem_471d2e06 | graph.py:341
+                             Evicted 74 tokens.                                 
+[11/13/26 18:12:25] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLM] 614 tokens -> 58 recursive_summarizer.py:1001
+                             (9.4%) | 1 piece(s), 0                             
+                             reduce level(s), 1 LLM                             
+                             call(s), 0                                         
+                             fallback(s), 5.4s                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+[11/13/26 18:12:26] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLMSummarizer] Stored: mem_d55afcf8 | graph.py:341
+                             Evicted 614 tokens.                                
+                    INFO     [RLM] 46 tokens -> 46  recursive_summarizer.py:1001
+                             (100.0%) | 1 piece(s),                             
+                             0 reduce level(s), 0                               
+                             LLM call(s), 0                                     
+                             fallback(s), 0.0s                                  
+[11/13/26 18:12:27] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLMSummarizer] Stored: mem_a26982e0 | graph.py:341
+                             Evicted 46 tokens.                                 
+[11/13/26 18:12:35] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLM] 464 tokens -> 92 recursive_summarizer.py:1001
+                             (19.8%) | 1 piece(s),                              
+                             0 reduce level(s), 1                               
+                             LLM call(s), 0                                     
+                             fallback(s), 8.3s                                  
+[11/13/26 18:12:36] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+[11/13/26 18:12:37] INFO     [RLMSummarizer] Stored: mem_2572d23d | graph.py:341
+                             Evicted 464 tokens.                                
+                    INFO     [RLM] 25 tokens -> 25  recursive_summarizer.py:1001
+                             (100.0%) | 1 piece(s),                             
+                             0 reduce level(s), 0                               
+                             LLM call(s), 0                                     
+                             fallback(s), 0.0s                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLMSummarizer] Stored: mem_6b2063a2 | graph.py:341
+                             Evicted 25 tokens.                                 
+                    INFO     [TokenMonitor] tokens=1617  limit=2048 graph.py:199
+                             usage=79.0%                                        
+[11/13/26 18:12:43] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[11/13/26 18:12:54] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLM] 660 tokens ->    recursive_summarizer.py:1001
+                             130 (19.7%) | 1                                    
+                             piece(s), 0 reduce                                 
+                             level(s), 1 LLM                                    
+                             call(s), 0                                         
+                             fallback(s), 11.4s                                 
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+[11/13/26 18:12:55] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+[11/13/26 18:12:56] INFO     [RLMSummarizer] Stored: mem_8bc3569c | graph.py:341
+                             Evicted 660 tokens.                                
+                    INFO     [TokenMonitor] tokens=913  limit=2048  graph.py:199
+                             usage=44.6%                                        
+[11/13/26 18:13:22] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] planted 10/16 | compactions 19 | paged 984 tokens
+                    INFO     [TokenMonitor] tokens=1335  limit=2048 graph.py:199
+                             usage=65.2%                                        
+[11/13/26 18:13:27] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+                    INFO     [TokenMonitor] tokens=1400  limit=2048 graph.py:199
+                             usage=68.4%                                        
+[11/13/26 18:13:51] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] planted 11/16 | compactions 19 | paged 994 tokens
+[11/13/26 18:13:52] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [ASTCompactor] Stored: mem_78aea738 |  graph.py:285
+                             Evicted 58 tokens.                                 
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [ASTCompactor] Stored: mem_aa71f020 |  graph.py:285
+                             Evicted 64 tokens.                                 
+[11/13/26 18:13:53] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [ASTCompactor] Stored: mem_42e4fd68 |  graph.py:285
+                             Evicted 49 tokens.                                 
+                    INFO     [TokenMonitor] tokens=1440  limit=2048 graph.py:199
+                             usage=70.3%                                        
+[11/13/26 18:13:58] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+                    INFO     [TokenMonitor] tokens=1504  limit=2048 graph.py:199
+                             usage=73.4%                                        
+[11/13/26 18:14:38] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] planted 12/16 | compactions 22 | paged 930 tokens
+[11/13/26 18:14:39] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [ASTCompactor] Stored: mem_1834eabd |  graph.py:285
+                             Evicted 25 tokens.                                 
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [ASTCompactor] Stored: mem_95cd268e |  graph.py:285
+                             Evicted 32 tokens.                                 
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+[11/13/26 18:14:40] INFO     [ASTCompactor] Stored: mem_234fdab6 |  graph.py:285
+                             Evicted 47 tokens.                                 
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [ASTCompactor] Stored: mem_9cb8dbb4 |  graph.py:285
+                             Evicted 57 tokens.                                 
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [ASTCompactor] Stored: mem_14475c8c |  graph.py:285
+                             Evicted 32 tokens.                                 
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+[11/13/26 18:14:41] INFO     [ASTCompactor] Stored: mem_fda5403b |  graph.py:285
+                             Evicted 32 tokens.                                 
+                    INFO     [RLM] 25 tokens -> 25  recursive_summarizer.py:1001
+                             (100.0%) | 1 piece(s),                             
+                             0 reduce level(s), 0                               
+                             LLM call(s), 0                                     
+                             fallback(s), 0.0s                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLMSummarizer] Stored: mem_9e31f963 | graph.py:341
+                             Evicted 25 tokens.                                 
+[11/13/26 18:14:51] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLM] 381 tokens ->    recursive_summarizer.py:1001
+                             152 (39.9%) | 1                                    
+                             piece(s), 0 reduce                                 
+                             level(s), 1 LLM                                    
+                             call(s), 0                                         
+                             fallback(s), 10.1s                                 
+[11/13/26 18:14:52] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+[11/13/26 18:14:53] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLMSummarizer] Stored: mem_501ac905 | graph.py:341
+                             Evicted 381 tokens.                                
+                    INFO     [TokenMonitor] tokens=1118  limit=2048 graph.py:199
+                             usage=54.6%                                        
+[11/13/26 18:14:59] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+                    INFO     [TokenMonitor] tokens=1189  limit=2048 graph.py:199
+                             usage=58.1%                                        
+[11/13/26 18:15:27] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] planted 13/16 | compactions 30 | paged 977 tokens
+                    INFO     [TokenMonitor] tokens=1637  limit=2048 graph.py:199
+                             usage=79.9%                                        
+[11/13/26 18:15:33] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+                    INFO     [RLM] 26 tokens -> 26  recursive_summarizer.py:1001
+                             (100.0%) | 1 piece(s),                             
+                             0 reduce level(s), 0                               
+                             LLM call(s), 0                                     
+                             fallback(s), 0.0s                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+[11/13/26 18:15:34] INFO     [RLMSummarizer] Stored: mem_55ca6048 | graph.py:341
+                             Evicted 26 tokens.                                 
+[11/13/26 18:15:40] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLM] 310 tokens -> 82 recursive_summarizer.py:1001
+                             (26.5%) | 1 piece(s),                              
+                             0 reduce level(s), 1                               
+                             LLM call(s), 0                                     
+                             fallback(s), 6.2s                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+[11/13/26 18:15:41] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLMSummarizer] Stored: mem_58dba6fd | graph.py:341
+                             Evicted 310 tokens.                                
+                    INFO     [TokenMonitor] tokens=1276  limit=2048 graph.py:199
+                             usage=62.3%                                        
+[11/13/26 18:16:20] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] planted 14/16 | compactions 32 | paged 898 tokens
+[11/13/26 18:16:21] INFO     [RLM] 24 tokens -> 24  recursive_summarizer.py:1001
+                             (100.0%) | 1 piece(s),                             
+                             0 reduce level(s), 0                               
+                             LLM call(s), 0                                     
+                             fallback(s), 0.0s                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLMSummarizer] Stored: mem_f2a421d3 | graph.py:341
+                             Evicted 24 tokens.                                 
+[11/13/26 18:16:32] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLM] 552 tokens ->    recursive_summarizer.py:1001
+                             158 (28.6%) | 1                                    
+                             piece(s), 0 reduce                                 
+                             level(s), 1 LLM                                    
+                             call(s), 0                                         
+                             fallback(s), 10.7s                                 
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+[11/13/26 18:16:33] INFO     [RLMSummarizer] Stored: mem_a8a16c1b | graph.py:341
+                             Evicted 552 tokens.                                
+                    INFO     [TokenMonitor] tokens=1203  limit=2048 graph.py:199
+                             usage=58.7%                                        
+[11/13/26 18:16:38] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+                    INFO     [TokenMonitor] tokens=1267  limit=2048 graph.py:199
+                             usage=61.9%                                        
+[11/13/26 18:17:08] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] planted 15/16 | compactions 34 | paged 998 tokens
+                    INFO     [RLM] 43 tokens -> 43  recursive_summarizer.py:1001
+                             (100.0%) | 1 piece(s),                             
+                             0 reduce level(s), 0                               
+                             LLM call(s), 0                                     
+                             fallback(s), 0.0s                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+[11/13/26 18:17:09] INFO     [RLMSummarizer] Stored: mem_8610af39 | graph.py:341
+                             Evicted 43 tokens.                                 
+[11/13/26 18:17:18] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLM] 384 tokens ->    recursive_summarizer.py:1001
+                             131 (34.1%) | 1                                    
+                             piece(s), 0 reduce                                 
+                             level(s), 1 LLM                                    
+                             call(s), 0                                         
+                             fallback(s), 9.0s                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+[11/13/26 18:17:19] INFO     [RLMSummarizer] Stored: mem_bd80d1b2 | graph.py:341
+                             Evicted 384 tokens.                                
+                    INFO     [TokenMonitor] tokens=1215  limit=2048 graph.py:199
+                             usage=59.3%                                        
+[11/13/26 18:17:24] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+                    INFO     [TokenMonitor] tokens=1280  limit=2048 graph.py:199
+                             usage=62.5%                                        
+[11/13/26 18:17:58] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] planted 16/16 | compactions 36 | paged 988 tokens
+                    INFO     [RLM] 31 tokens -> 31  recursive_summarizer.py:1001
+                             (100.0%) | 1 piece(s),                             
+                             0 reduce level(s), 0                               
+                             LLM call(s), 0                                     
+                             fallback(s), 0.0s                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+[11/13/26 18:17:59] INFO     [RLMSummarizer] Stored: mem_25834ae9 | graph.py:341
+                             Evicted 31 tokens.                                 
+[11/13/26 18:18:07] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLM] 541 tokens ->    recursive_summarizer.py:1001
+                             101 (18.7%) | 1                                    
+                             piece(s), 0 reduce                                 
+                             level(s), 1 LLM                                    
+                             call(s), 0                                         
+                             fallback(s), 8.7s                                  
+[11/13/26 18:18:08] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLMSummarizer] Stored: mem_e1e6a201 | graph.py:341
+                             Evicted 541 tokens.                                
+                    INFO     [TokenMonitor] tokens=1156  limit=2048 graph.py:199
+                             usage=56.4%                                        
+[11/13/26 18:18:13] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] OK  What is my cat's name? | relevant at [0.779] | paged 17 (593 tokens)
+                    INFO     [TokenMonitor] tokens=1216  limit=2048 graph.py:199
+                             usage=59.4%                                        
+[11/13/26 18:18:18] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] OK  What is our project codename? | relevant at [0.752] | paged 17 (639 tokens)
+                    INFO     [TokenMonitor] tokens=1281  limit=2048 graph.py:199
+                             usage=62.5%                                        
+[11/13/26 18:18:24] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] OK  Which database did I say we must never use? | relevant at [1.308] | paged 16 (922 tokens)
+                    INFO     [TokenMonitor] tokens=1353  limit=2048 graph.py:199
+                             usage=66.1%                                        
+[11/13/26 18:18:29] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] OK  Who owns the guardrails module? | relevant at [0.543] | paged 16 (776 tokens)
+[11/13/26 18:18:30] INFO     [TokenMonitor] tokens=1417  limit=2048 graph.py:199
+                             usage=69.2%                                        
+[11/13/26 18:18:35] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] OK  On which date is our final demo? | relevant at [0.396] | paged 17 (954 tokens)
+                    INFO     [TokenMonitor] tokens=1482  limit=2048 graph.py:199
+                             usage=72.4%                                        
+[11/13/26 18:18:41] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] OK  Which port does the memory server run on? | relevant at [0.448] | paged 14 (932 tokens)
+                    INFO     [TokenMonitor] tokens=1546  limit=2048 graph.py:199
+                             usage=75.5%                                        
+[11/13/26 18:18:47] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] OK  Which GPU model does our laptop have? | relevant at [0.576] | paged 15 (889 tokens)
+                    INFO     [TokenMonitor] tokens=1623  limit=2048 graph.py:199
+                             usage=79.2%                                        
+[11/13/26 18:18:52] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] OK  What was the bug in pager_v3.py? | relevant at [0.393] | paged 14 (540 tokens)
+[11/13/26 18:18:53] INFO     [RLM] 25 tokens -> 25  recursive_summarizer.py:1001
+                             (100.0%) | 1 piece(s),                             
+                             0 reduce level(s), 0                               
+                             LLM call(s), 0                                     
+                             fallback(s), 0.0s                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+[11/13/26 18:18:54] INFO     [RLMSummarizer] Stored: mem_c7a789f7 | graph.py:341
+                             Evicted 25 tokens.                                 
+[11/13/26 18:19:02] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLM] 412 tokens ->    recursive_summarizer.py:1001
+                             118 (28.6%) | 1                                    
+                             piece(s), 0 reduce                                 
+                             level(s), 1 LLM                                    
+                             call(s), 0                                         
+                             fallback(s), 8.3s                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+[11/13/26 18:19:03] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLMSummarizer] Stored: mem_fd6b1cb1 | graph.py:341
+                             Evicted 412 tokens.                                
+                    INFO     [TokenMonitor] tokens=1165  limit=2048 graph.py:199
+                             usage=56.9%                                        
+[11/13/26 18:19:08] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] OK  Which library did we choose for orchestration? | relevant at [0.877] | paged 16 (852 tokens)
+                    INFO     [TokenMonitor] tokens=1225  limit=2048 graph.py:199
+                             usage=59.8%                                        
+[11/13/26 18:19:13] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] OK  Who is my project supervisor? | relevant at [0.565] | paged 16 (906 tokens)
+                    INFO     [TokenMonitor] tokens=1285  limit=2048 graph.py:199
+                             usage=62.7%                                        
+[11/13/26 18:19:18] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] OK  What is my favourite editor? | relevant at [0.512] | paged 17 (900 tokens)
+                    INFO     [TokenMonitor] tokens=1346  limit=2048 graph.py:199
+                             usage=65.7%                                        
+[11/13/26 18:19:23] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] OK  What is my lucky number? | relevant at [0.442] | paged 16 (791 tokens)
+                    INFO     [TokenMonitor] tokens=1407  limit=2048 graph.py:199
+                             usage=68.7%                                        
+[11/13/26 18:19:29] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] OK  Which embedding model do we use? | relevant at [0.853] | paged 15 (880 tokens)
+                    INFO     [TokenMonitor] tokens=1483  limit=2048 graph.py:199
+                             usage=72.4%                                        
+[11/13/26 18:19:34] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] OK  What page limit did I give for the final report? | relevant at [0.647, 1.791] | paged 11 (983 tokens)
+                    INFO     [TokenMonitor] tokens=1549  limit=2048 graph.py:199
+                             usage=75.6%                                        
+[11/13/26 18:19:39] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] OK  Which city do I live in? | relevant at [1.148] | paged 18 (645 tokens)
+                    INFO     [TokenMonitor] tokens=1609  limit=2048 graph.py:199
+                             usage=78.6%                                        
+[11/13/26 18:19:44] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [LLMReasoning] Answer generated.       graph.py:760
+[A_no_cutoff] OK  What is our backup model? | relevant at [] | paged 15 (942 tokens)
+[11/13/26 18:19:45] INFO     [RLM] 32 tokens -> 32  recursive_summarizer.py:1001
+                             (100.0%) | 1 piece(s),                             
+                             0 reduce level(s), 0                               
+                             LLM call(s), 0                                     
+                             fallback(s), 0.0s                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+[11/13/26 18:19:46] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLMSummarizer] Stored: mem_50aa9413 | graph.py:341
+                             Evicted 32 tokens.                                 
+[11/13/26 18:19:52] INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLM] 461 tokens -> 70 recursive_summarizer.py:1001
+                             (15.2%) | 1 piece(s),                              
+                             0 reduce level(s), 1                               
+                             LLM call(s), 0                                     
+                             fallback(s), 5.8s                                  
+                    INFO     HTTP Request: POST                  _client.py:1025
+                             http://127.0.0.1:11434/api/chat                    
+                             "HTTP/1.1 200 OK"                                  
+                    INFO     [RLMSummarizer] Stored: mem_26094f15 | graph.py:341
+                             Evicted 461 tokens.                                
+
+[A_no_cutoff] recalled 16/16 | compactions 42 | 916.0 s
+  fact  : paged    574 tokens/turn, prompt   3134 tokens/turn,  12.9 s/turn, 'according to the memories' 16/16
+  filler: paged    653 tokens/turn, prompt   3060 tokens/turn,  37.2 s/turn, 'according to the memories' 14/16
+  probe : paged    822 tokens/turn, prompt   3937 tokens/turn,   6.7 s/turn, 'according to the memories' 16/16
