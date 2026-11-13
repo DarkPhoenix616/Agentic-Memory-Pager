@@ -24,7 +24,7 @@ from tests.test_chat_session import LONG_REPLY, FakeClient, client, vault  # noq
 
 @pytest.fixture
 def web(vault, client):
-    app = create_app()
+    app = create_app(shutdown_wait=2)
     with TestClient(app) as test_client:
         test_client.amp = app.state.chat
         yield test_client
@@ -201,6 +201,40 @@ def test_a_chat_that_cannot_be_saved_stays_open(web, monkeypatch):
     assert response.status_code == 503 and "stays open" in response.json()["error"]
     after = web.get("/api/state").json()
     assert after["session_id"] == before["session_id"] and after["context"]["chunks"] == before["context"]["chunks"]
+
+
+def _pending_file(session_id):
+    import os
+    return os.path.join(os.environ["AMP_CHATS_DIR"], f"{session_id}.pending")
+
+
+def test_stopping_the_app_waits_for_the_answer_then_saves(vault, client):
+    import os
+    import threading
+    app = create_app(shutdown_wait=5)
+    with TestClient(app) as web:
+        chat(web, "My cat is called Pixel.")
+        path = _pending_file(web.get("/api/state").json()["session_id"])
+        os.remove(path)                                   # as if the last per-turn save had not happened
+        assert app.state.chat.turn_lock.acquire()         # an answer is still running...
+        threading.Timer(0.3, app.state.chat.turn_lock.release).start()     # ...and ends soon
+    assert os.path.exists(path)                           # the shutdown waited for it, then saved
+
+
+def test_a_chat_from_a_stopped_app_can_be_reopened_with_its_unsaved_part(vault, client):
+    with TestClient(create_app(shutdown_wait=1)) as web:
+        chat(web, "My cat is called Pixel.")
+        chat(web, "And my codename is ZEBRAFISH.")
+        before = web.get("/api/state").json()
+    assert vault.memories == []                           # never left: nothing went to the vault
+
+    with TestClient(create_app(shutdown_wait=1)) as web:  # the app is started again
+        listed = next(c for c in web.get("/api/sessions").json()["chats"]
+                      if c["session_id"] == before["session_id"])
+        assert listed["unsaved"] and listed["memories"] == 0 and "Pixel" in listed["title"]
+        state = web.post("/api/open", json={"session_id": before["session_id"]}).json()
+        assert state["restored"] == before["context"]["chunks"] == state["context"]["chunks"] == 2
+        assert state["context"]["tokens"] == before["context"]["tokens"]
 
 
 # ---------------------------------------------------------------------------

@@ -17,3 +17,4 @@ storage/amp_audit.log
 storage/.amp_session_keys
 .idea
 Claude context.MD
+storage/chats/

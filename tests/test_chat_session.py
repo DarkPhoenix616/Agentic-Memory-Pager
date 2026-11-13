@@ -348,12 +348,14 @@ def test_a_reopened_chat_shows_where_it_left_off(vault, client):
 
 def test_only_chats_with_a_key_on_this_computer_are_listed(vault, client):
     from harness.chat_session import list_chats
-    from harness.local_keys import session_key
+    from harness.local_keys import _write_keyring, keyring_path, known_sessions
     for sid in ("chat-mine", "chat-theirs"):
         chat = session(session_id=sid, token_limit=4000)
         chat.ask(f"User: Hello from {sid}, my dog is Bruno.")
         chat.save_all()
-    session_key("chat-mine")                         # only this chat's key is in the local keyring
+    keys = known_sessions()
+    keys.pop("chat-theirs")                          # its key is on another computer, not in this keyring
+    _write_keyring(keyring_path(), keys)
     chats = list_chats(current_id="chat-mine")
     assert [c["session_id"] for c in chats] == ["chat-mine"]
     assert chats[0]["current"] and chats[0]["memories"] == 1
@@ -366,3 +368,88 @@ def test_a_chat_title_is_the_start_of_its_oldest_memory():
         "Hi, my name is Akshay. Assistant: Nice to meet you."
     long = _title({"text": "The user asked " + "about many things " * 20})
     assert len(long) <= TITLE_CHARS and long.endswith("…")
+
+
+# ---------------------------------------------------------------------------
+# Auto-save: the unsaved part of a chat is kept on disk after every turn
+# ---------------------------------------------------------------------------
+
+def _pending_file(session_id):
+    import os
+    return os.path.join(os.environ["AMP_CHATS_DIR"], f"{session_id}.pending")
+
+
+def test_after_every_turn_the_unsaved_part_is_on_disk_encrypted(vault, client):
+    import os
+    import stat
+    from harness import chat_store
+    chat = session(session_id="chat-autosave", token_limit=4000)       # nothing is compacted while chatting
+    chat.ask("My cat is called Pixel.")
+    path = _pending_file("chat-autosave")
+    assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+    raw = open(path, encoding="ascii").read()
+    assert raw.startswith("aesgcm:v1:") and "Pixel" not in raw         # encrypted with the chat's key
+    saved = chat_store.load_pending("chat-autosave")
+    assert saved["chunks"] == chat.chunks and saved["turn"] == 1
+
+    chat.ask("And my codename is ZEBRAFISH.")
+    assert chat_store.load_pending("chat-autosave")["chunks"] == chat.chunks     # rewritten each turn
+    assert chat.save_all() is True and not os.path.exists(path)         # left normally: all in the vault
+
+
+def test_a_chat_whose_app_stopped_continues_where_it_was(vault, client):
+    first = session(session_id="chat-crash", token_limit=4000)
+    first.ask("My cat is called Pixel.")
+    first.ask("And my codename is ZEBRAFISH.")
+    # the app is killed here: no save_all(), nothing in the vault
+    assert vault.memories == []
+
+    again = ChatSession(session_id="chat-crash", token_limit=4000)
+    again.resume()
+    assert again.restored == 2 and again.chunks == first.chunks and again.turn == 2
+    assert "2 unsaved chunks back in the context window" in again.events[-1].title
+    again.ask("What is my cat called?")
+    assert any("Pixel" in m["content"] for m in client.calls[-1])      # the model sees the old turns again
+    assert again.transcript[0]["id"] == "u5"                           # new IDs don't clash with old chunks
+
+
+def test_background_compaction_keeps_the_file_current(vault, client):
+    from harness import chat_store
+    chat = session(session_id="chat-reclaim")
+    for n in range(4):
+        chat.ask(f"Question number {n}: tell me about topic {n}.")
+        chat.wait_for_reclaim()
+    assert chat.compactions >= 1
+    assert chat_store.load_pending("chat-reclaim")["chunks"] == chat.chunks
+
+
+def test_a_chat_with_only_an_unsaved_part_is_listed(vault, client):
+    from harness.chat_session import list_chats
+    chat = session(session_id="chat-unsaved", token_limit=4000)
+    chat.ask("User: Hi, my dog is called Bruno.")
+    listed = next(c for c in list_chats() if c["session_id"] == "chat-unsaved")
+    assert listed["memories"] == 0 and listed["unsaved"] and "Hi, my dog is called Bruno" in listed["title"]
+    assert listed["last_time"]
+
+
+def test_an_unreadable_file_is_kept_and_reported(vault, client):
+    import os
+    from harness.local_keys import _write_keyring, keyring_path, known_sessions
+    chat = session(session_id="chat-locked", token_limit=4000)
+    chat.ask("My cat is called Pixel.")
+    keys = known_sessions()
+    keys["chat-locked"] = "0" * 64                     # a different key than the one the file was written with
+    _write_keyring(keyring_path(), keys)
+
+    again = ChatSession(session_id="chat-locked")
+    again.resume()
+    assert again.restored == 0 and again.chunks == []
+    assert any(e.kind == "error" and "unsaved part" in e.title for e in again.events)
+    assert again.flush(0) is True and os.path.exists(_pending_file("chat-locked"))   # never deleted
+
+
+def test_bad_chat_ids_never_become_paths():
+    from harness import chat_store
+    for bad in ("../etc/passwd", "a/b", "", "x" * 65):
+        with pytest.raises(ValueError):
+            chat_store.load_pending(bad)

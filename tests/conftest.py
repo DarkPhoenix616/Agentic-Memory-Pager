@@ -2,7 +2,7 @@
 Shared test setup.
 
 No test touches the user's real vault (see the AMP_CHROMA_PATH line below) or
-the real key files under storage/ (AMP_ADMIN_TOKEN is set; tests that sign set
+the real key files or saved chats under storage/ (AMP_ADMIN_TOKEN is set; tests that sign set
 AMP_SIGNING_KEY themselves), no test calls the risk model (AMP_RISK_MODEL=off;
 tests/test_risk_model.py uses a fake Ollama client), and no test talks to a real
 Ollama chat model unless it sets one up itself:
@@ -25,6 +25,7 @@ os.environ["AMP_RISK_MODEL"] = "off"    # heuristic-only scores, as the existing
 os.environ["AMP_ADMIN_TOKEN"] = "test-admin-token"
 os.environ["AMP_AUDIT_LOG"] = os.path.join(tempfile.mkdtemp(prefix="amp-test-audit-"), "amp_audit.log")
 os.environ["AMP_SESSION_KEYS_FILE"] = os.path.join(tempfile.mkdtemp(prefix="amp-test-keys-"), ".amp_session_keys")
+os.environ["AMP_CHATS_DIR"] = tempfile.mkdtemp(prefix="amp-test-chats-")     # never storage/chats
 
 
 class _StubChatClient:
@@ -43,3 +44,9 @@ def _no_real_chat_model(monkeypatch):
     except ImportError:          # langchain-core not installed: nothing can reach the model anyway
         return
     monkeypatch.setattr(chat_model, "_client", lambda host: _StubChatClient())
+
+
+@pytest.fixture(autouse=True)
+def _fresh_chats_dir(monkeypatch, tmp_path):
+    """Each test gets its own folder for the chats' unsaved parts (harness/chat_store.py)."""
+    monkeypatch.setenv("AMP_CHATS_DIR", str(tmp_path / "chats"))

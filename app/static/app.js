@@ -118,11 +118,19 @@ function messageNode(role, content, status) {
 function renderResume() {
   const box = $("resume");
   const notes = state.resumed || [];
-  box.hidden = notes.length === 0;
+  const restored = state.restored || 0;
+  box.hidden = notes.length === 0 && restored === 0;
   if (box.hidden) return;
-  box.innerHTML = `<div class="resume-head">📂 Reopened this chat. Where it left off ` +
-    `(latest ${notes.length} ${notes.length === 1 ? "memory" : "memories"}, newest first):</div>`;
+  box.innerHTML = `<div class="resume-head">📂 Reopened this chat.` + (notes.length ? ` Where it left off ` +
+    `(latest ${notes.length} ${notes.length === 1 ? "memory" : "memories"}, newest first):` : "") + `</div>`;
   notes.forEach((m) => box.appendChild(memoryCard(m)));
+  if (restored) {
+    const back = document.createElement("div");
+    back.className = "note";
+    back.textContent = `The app stopped before this chat was left: its last ${restored} unsaved ` +
+      `${restored === 1 ? "chunk is" : "chunks are"} back in the context window.`;
+    box.appendChild(back);
+  }
   const tail = document.createElement("div");
   tail.className = "note";
   tail.textContent = "Ask about anything from before: the relevant memories are paged back in.";
@@ -133,7 +141,7 @@ function renderMessages() {
   const box = $("messages");
   box.querySelectorAll(".msg").forEach((n) => n.remove());
   renderResume();
-  $("empty").hidden = state.transcript.length > 0 || (state.resumed || []).length > 0;
+  $("empty").hidden = state.transcript.length > 0 || (state.resumed || []).length > 0 || state.restored > 0;
   for (const m of state.transcript) box.appendChild(messageNode(m.role, m.content, m.status));
   box.scrollTop = box.scrollHeight;
 }
@@ -272,6 +280,7 @@ function chatNode(chat) {
   node.className = `chat-item${chat.current ? " current" : ""}`;
   node.innerHTML = `<span class="chat-title">${escapeHtml(chat.title || chat.session_id)}</span>` +
     `<span class="chat-meta">${fmt(chat.memories)} ${chat.memories === 1 ? "memory" : "memories"}` +
+    (chat.unsaved ? " · unsaved part kept" : "") +
     (chat.last_time ? ` · ${escapeHtml(when(chat.last_time))}` : "") +
     (chat.current ? " · this chat" : "") + `</span>`;
   node.disabled = busy || chat.current;
@@ -282,7 +291,7 @@ function chatNode(chat) {
 async function loadChats() {
   try {
     const data = await api("/api/sessions");
-    fillList("chats", data.chats, "No saved chats yet. A chat is saved when you leave it.", chatNode);
+    fillList("chats", data.chats, "No saved chats yet. A chat is kept after every message.", chatNode);
   } catch (err) {
     fillList("chats", [], `Cannot list the chats: ${err.message}`, chatNode);
   }
