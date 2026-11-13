@@ -36,6 +36,7 @@ from harness.guardrails import (
     HIGH_RISK_THRESHOLD, MemoryInfo, PageContextResult, RetrievedMemory, SandboxResult, SessionInfo,
     UnifiedMemory, _scrub_secrets, risk_level_for_score, score_payload,
 )
+from harness import conflicts
 from harness.local_keys import ensure_admin_token, ensure_signing_key, is_admin
 from harness.signing import SIGNING_KEY_ENV, sign_memory, verify_memory
 from server import session_crypto
@@ -47,6 +48,9 @@ logger = logging.getLogger(__name__)
 SANDBOX_MAX_TIMEOUT = 10  # seconds; run_memory_code clamps the caller's timeout to 1..10
 MAX_TOP_K = 100           # search_vault / page_context never consider more matches than this
 HIGH_RISK_HEADROOM = 10   # extra matches fetched so that dropping high-risk ones does not shrink results
+CONFLICT_CANDIDATES = 3   # a new text memory is checked against its 3 closest older ones...
+CONFLICT_DISTANCE = 1.2   # ...that are this close (squared L2; same topic ~0.4, unrelated ~1.75)
+MAX_CONFLICTS = 20
 
 # Every delete_memory call (and every refused admin call) is appended here as one JSON line.
 AUDIT_LOG_ENV = "AMP_AUDIT_LOG"
@@ -75,7 +79,9 @@ collection = chroma_client.get_or_create_collection("amp_memory", embedding_func
 #                 risk_score in the clear (for filtering and the admin list),
 #                 plus encrypted=True, key_check (fingerprint of the session
 #                 key) and envelope_enc: the full UnifiedMemory as JSON,
-#                 encrypted with the session's key (server/session_crypto.py)
+#                 encrypted with the session's key (server/session_crypto.py),
+#                 and conflicts_with: the IDs of memories it contradicts,
+#                 comma-separated (IDs only, never what they say)
 # Rows stored before encryption keep a plain "envelope" and are not served
 # until python -m server.backfill --apply encrypts them.
 # ---------------------------------------------------------------------------
@@ -187,6 +193,47 @@ def _row_metadata(memory: UnifiedMemory, memory_id: str, session_key: str, check
     }
 
 
+def _conflict_ids(meta: Optional[dict]) -> List[str]:
+    return [i for i in str((meta or {}).get("conflicts_with", "")).split(",") if i]
+
+
+def _find_conflicts(memory: UnifiedMemory, session_key: str) -> List[str]:
+    """IDs of the older memories of the same session that this new text memory
+    contradicts: its closest few (CONFLICT_CANDIDATES within CONFLICT_DISTANCE)
+    are each checked by the conflict model (harness/conflicts.py). Code
+    memories and high-risk ones are not checked; with the model off, none."""
+    if memory.memory_type != "text" or conflicts.model_name() is None:
+        return []
+    existing = collection.get(where=_session_where(memory.session_id), limit=CONFLICT_CANDIDATES, include=[])
+    count = len(existing.get("ids") or [])         # 0..CONFLICT_CANDIDATES: never ask for more than exist
+    if count == 0:
+        return []
+    near = collection.query(query_embeddings=EMBED([_embedding_text(memory)]), n_results=min(CONFLICT_CANDIDATES, count),
+                            where=_session_where(memory.session_id), include=["metadatas", "distances"])
+    found = []
+    for chroma_id, meta, distance in zip(near["ids"][0], near["metadatas"][0], near["distances"][0]):
+        if distance > CONFLICT_DISTANCE:
+            continue
+        older = _open_row(chroma_id, meta, session_key)
+        if older is None or older.memory_type != "text" or _is_high_risk(older):
+            continue
+        probability = conflicts.contradicts(older.text_payload.factual_summary, memory.text_payload.factual_summary)
+        if probability is not None and probability >= conflicts.THRESHOLD:
+            found.append(chroma_id)
+    return found
+
+
+def _mark_conflict(chroma_id: str, other_id: str) -> None:
+    """Add other_id to one row's conflicts_with (ChromaDB merges metadata on update)."""
+    rows = collection.get(ids=[chroma_id], include=["metadatas"])
+    if not rows.get("ids"):
+        return
+    ids = _conflict_ids(rows["metadatas"][0])
+    if other_id not in ids:
+        ids = (ids + [other_id])[-MAX_CONFLICTS:]
+        collection.update(ids=[chroma_id], metadatas=[{"conflicts_with": ",".join(ids)}])
+
+
 def _caller(ctx: Optional[Context]) -> str:
     """Who called a tool, for the audit log: the MCP client's name, or in-process."""
     if ctx is None:
@@ -242,6 +289,12 @@ def store_memory(memory: UnifiedMemory, session_key: str = "", ctx: Optional[Con
     arrived unsigned, or with a signature that does not verify, is never
     signed here: storing through this tool cannot make a memory "verified".
     The server reads the same AMP_SIGNING_KEY as the chat app (harness/local_keys.py).
+
+    A text memory is also compared with its closest older memories of the
+    same session (harness/conflicts.py). If it contradicts one, both are
+    marked (conflicts_with), so search_vault and page_context return the
+    mark and the chat model can show the user both versions instead of
+    silently believing the newer one (fact poisoning, OWASP LLM04/LLM09).
     """
     check = _authorize(memory.session_id, session_key, "store_memory", ctx)
     arrived_verified = verify_memory(memory)
@@ -254,14 +307,24 @@ def store_memory(memory: UnifiedMemory, session_key: str = "", ctx: Optional[Con
                     memory.id, old_score, memory.risk_score, memory.risk_level)
         if arrived_verified:
             memory.signature = sign_memory(memory)      # re-sign last: every signed field is final now
+    found = _find_conflicts(memory, session_key)
     memory_id = f"mem_{uuid.uuid4().hex[:8]}"
     memory.vector_embedding_id = memory_id
 
+    metadata = _row_metadata(memory, memory_id, session_key, check)
+    if found:
+        metadata["conflicts_with"] = ",".join(found)
     collection.add(
         ids=[memory_id],
         embeddings=EMBED([_embedding_text(memory)]),     # vectors only: the text is not stored
-        metadatas=[_row_metadata(memory, memory_id, session_key, check)],
+        metadatas=[metadata],
     )
+    for older_id in found:
+        _mark_conflict(older_id, memory_id)
+    if found:
+        logger.info("[store_memory] Memory %s contradicts %s; both are marked.", memory_id, ", ".join(found))
+        _audit("store_memory", memory_id, _caller(ctx), f"conflict marked with {', '.join(found)}",
+               memory.session_id)
 
     return memory
 
@@ -327,7 +390,8 @@ def _search(query: str, top_k: int, session_id: str, session_key: str) -> List[R
         matches.append(RetrievedMemory(
             memory=memory,
             distance=distances[i],
-            token_cost=len(encoder.encode(_embedding_text(memory)))
+            token_cost=len(encoder.encode(_embedding_text(memory))),
+            conflicts_with=_conflict_ids(metadatas[i])[-MAX_CONFLICTS:],
         ))
         if len(matches) == top_k:
             break

@@ -45,6 +45,8 @@ _MEMORY_NOTE = (
     "use one.\n"
     "Never show memory entries, their tags or their attributes (ids, verified, execution "
     "levels such as READ_ONLY) to the user; just use the facts in plain words.\n"
+    "If two memories disagree about a fact (one is marked CONFLICT), say so: give the user both "
+    "versions and ask which one is right, instead of choosing one yourself.\n"
     "Keep answers short and to the point (a few sentences or a short list) unless the user "
     "asks for detail."
 )
