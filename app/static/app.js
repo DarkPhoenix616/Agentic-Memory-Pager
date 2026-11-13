@@ -319,14 +319,18 @@ async function leave(path, body, message) {
   setComposer();
   $("error").hidden = true;
   showNotice(message);
+  let next = null;
   try {
-    state = await api(path, body);
-    render();
+    next = await api(path, body);
   } catch (err) {
     showError(err.message);
   } finally {
-    busy = false;
+    busy = false;               // first: render() skips the messages while busy
     showNotice("");
+    if (next) {
+      state = next;
+      render();                 // the new or reopened chat's messages replace the old ones
+    }
     setComposer();
     loadChats();
   }

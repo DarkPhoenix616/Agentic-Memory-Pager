@@ -291,3 +291,36 @@ def test_the_page_renders_model_output_safely():
     assert out[2] == "<p><strong>bold</strong>, <em>italic</em> and <code>code &lt;b&gt;</code></p>"
     assert out[3] == "<pre><code>x = &#39;&lt;b&gt;&#39;</code></pre>"
     assert out[4] == "<ul>\n<li>one</li>\n<li>two</li>\n</ul>\n<ol>\n<li>first</li>\n</ol>"
+
+
+NODE_LEAVE = r"""
+const fs = require("fs");
+const src = fs.readFileSync("app/static/app.js", "utf8");
+let busy = false, state = {session_id: "old"};
+const log = [];
+const el = {hidden: true, textContent: ""};
+const $ = () => el;
+function setComposer() {}
+function showNotice() {}
+function showError(message) { log.push("error: " + message); }
+function loadChats() { log.push("loadChats"); }
+function render() { log.push(`render busy=${busy} chat=${state.session_id}`); }
+let api = async () => ({session_id: "new"});
+eval(src.slice(src.indexOf("async function leave("), src.indexOf("function openChat(")));
+(async () => {
+  await leave("/api/new", {}, "");                       // New chat works
+  api = async () => { throw new Error("could not save"); };
+  await leave("/api/new", {}, "");                       // saving the old chat fails
+  console.log(JSON.stringify({log, busy, chat: state.session_id}));
+})();
+"""
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="needs Node.js to run the page script")
+def test_new_chat_redraws_the_messages_after_busy_is_cleared():
+    # Before the fix, render() ran while busy was still true, so it skipped the messages and the
+    # old chat stayed on screen after New chat (found by clicking through the page, report 5q).
+    out = json.loads(subprocess.run(["node", "-e", NODE_LEAVE], capture_output=True, text=True, check=True,
+                                    timeout=30).stdout)
+    assert out["log"] == ["render busy=false chat=new", "loadChats", "error: could not save", "loadChats"]
+    assert out["busy"] is False and out["chat"] == "new"            # a failed switch keeps the chat shown
