@@ -96,7 +96,14 @@ collection = chroma_client.get_or_create_collection("amp_memory", embedding_func
 # until python -m server.backfill --apply encrypts them.
 # ---------------------------------------------------------------------------
 def _embedding_text(memory: UnifiedMemory) -> str:
-    """Text that is embedded for semantic search, and counted for token budgets."""
+    """Text that is embedded for semantic search, and counted for token budgets.
+
+    The code graph (which function calls which) is not part of it: its lines
+    made code memories 35% bigger and did not help search, because the
+    embedding model reads only the first 256 word pieces and most files are
+    longer (report section 5p). The graph stays in the memory, and
+    run_memory_code's records carry it: in `calls` and in their `text`
+    (_call_lines), where it costs no paging budget."""
     if memory.memory_type == "text":
         return memory.text_payload.factual_summary
     code = memory.code_payload
@@ -104,8 +111,15 @@ def _embedding_text(memory: UnifiedMemory) -> str:
     if code.summary:
         parts.append(code.summary)
     parts.extend(symbol.signature for symbol in code.symbols)
-    parts.extend(f"{s.name} calls {', '.join(s.calls)}" for s in code.symbols if s.calls)   # the code graph
     return "\n".join(parts)
+
+
+def _call_lines(memory: UnifiedMemory) -> List[str]:
+    """The code graph as text: "checkout calls load_cart, charge" (code memories only)."""
+    code = memory.code_payload
+    if memory.memory_type != "code" or code is None:
+        return []
+    return [f"{s.name} calls {', '.join(s.calls)}" for s in code.symbols if s.calls]
 
 
 def _to_memory(chroma_id: str, envelope_json: str) -> UnifiedMemory:
@@ -634,7 +648,7 @@ def _sandbox_record(memory: UnifiedMemory) -> dict:
         "id": memory.vector_embedding_id or str(memory.id),
         "time": memory.timestamp.isoformat(),
         "kind": memory.memory_type,
-        "text": _embedding_text(memory),
+        "text": "\n".join([_embedding_text(memory), *_call_lines(memory)]),   # the graph too: no budget here
         "decisions": list(text.architectural_decisions) if text else [],
         "bugs": list(text.bugs_resolved) if text else [],
         "constraints": list(text.user_constraints) if text else [],

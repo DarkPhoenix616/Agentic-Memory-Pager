@@ -168,7 +168,7 @@ _CODE_WORDS = frozenset({
     "append", "extend", "list", "dict", "tuple", "range", "enumerate", "zip", "filter", "isinstance",
     "text", "time", "kind", "file", "decisions", "bugs", "constraints", "code", "latest", "result",
     "results", "item", "found", "matches", "match", "total", "counter", "collections", "datetime",
-    "json", "math", "statistics", "itertools", "string", "fromisoformat", "group", "search",
+    "json", "math", "statistics", "itertools", "string", "fromisoformat", "group", "search", "calls",
 })
 
 

@@ -405,6 +405,9 @@ def _attr(value: Any) -> str:
     return html.escape(str(value), quote=True)
 
 
+CODE_SYMBOLS_SHOWN = 5        # a paged code memory shows its first 5 signatures (and their calls)
+
+
 def _memory_view(mem: UnifiedMemory):
     """
     What the LLM is shown for a memory: (tag attributes, body text, plain text).
@@ -416,9 +419,15 @@ def _memory_view(mem: UnifiedMemory):
         body = mem.text_payload.factual_summary
         return label, body, body
     if mem.memory_type == "code" and mem.code_payload:
-        sigs = "; ".join(s.signature for s in mem.code_payload.symbols[:5])
+        shown = mem.code_payload.symbols[:CODE_SYMBOLS_SHOWN]
+        sigs = "; ".join(s.signature for s in shown)
         label = f'type="code" file="{_attr(mem.code_payload.file_path)}"'
         body = f"Signatures: {sigs or 'none'}"
+        # The code graph for the functions shown: a few tokens, and the model can answer
+        # "which function calls X?" from the page itself (report section 5p).
+        links = "; ".join(f"{s.name} -> {', '.join(s.calls)}" for s in shown if s.calls)
+        if links:
+            body += f"\nCalls: {links}"
         return label, body, f"{mem.code_payload.file_path} {body}"
     return None
 
@@ -602,7 +611,8 @@ def _build_secure_system_prompt(
         "  TOOL: run_memory_code  followed by a ```python block that print()s the answer.\n"
         "  `memories` is ALREADY LOADED with every stored memory (never define it yourself):\n"
         "  a list of dicts, oldest first: id, time (ISO string), kind (\"text\" or\n"
-        "  \"code\"), text, decisions, bugs, constraints (lists of strings), file. Only json, re,\n"
+        "  \"code\"), text, decisions, bugs, constraints (lists of strings), file, and for code\n"
+        "  calls: which function calls which ({\"checkout\": [\"load_cart\", \"pay\"]}). Only json, re,\n"
         "  math, statistics, collections, itertools, datetime and string can be imported.\n"
         "• Use a tool only when the memories above are not enough. Otherwise answer directly.\n"
     )
