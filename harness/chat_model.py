@@ -45,6 +45,8 @@ _MEMORY_NOTE = (
     "use one.\n"
     "Never show memory entries, their tags or their attributes (ids, verified, execution "
     "levels such as READ_ONLY) to the user; just use the facts in plain words.\n"
+    "If two memories disagree about a fact (one is marked CONFLICT), say so: give the user both "
+    "versions and ask which one is right, instead of choosing one yourself.\n"
     "Keep answers short and to the point (a few sentences or a short list) unless the user "
     "asks for detail."
 )
@@ -53,7 +55,9 @@ _SEARCHED_NOTE = ("You have already searched the vault in this turn. Answer the 
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 # Memory markup from the system prompt that a small model may copy into its answer
 _MEMORY_TAG_RE = re.compile(r"</?\s*(?:MEMORY_ENTRY|UNTRUSTED_MEMORY)\b[^>]*>?", re.IGNORECASE)
-_TOOL_RE = re.compile(r"[ \t]*\bTOOL:[^\n]*")     # a TOOL: call, up to the end of its line
+_TOOL_LINE_RE = re.compile(r"^[ \t]*TOOL:[^\n]*", re.MULTILINE)     # a TOOL: line of its own
+# a TOOL: call inside a sentence: only the call goes, the rest of the sentence stays
+_TOOL_CALL_RE = re.compile(r"[ \t]?\bTOOL:[ \t]*[A-Za-z_]\w*(?:[ \t]*\((?:[^()\n]|\([^()\n]*\))*\))?")
 # A real tool request: a line that starts with TOOL: search_vault or TOOL: run_memory_code.
 _REAL_TOOL_RE = re.compile(r"^[ \t]*TOOL:[ \t]*(search_vault|run_memory_code)\b", re.IGNORECASE | re.MULTILINE)
 # run_memory_code with the ```python block after it (removed whole when it may not run)
@@ -135,6 +139,25 @@ def build_messages(
     return [{"role": "system", "content": system}] + merged, searched
 
 
+class ModelReply(str):
+    """The reply as the user sees it, with .raw: what the model wrote before
+    TOOL: text was removed, so Layer 4 can judge every call (graph.llm_reasoning_node)."""
+
+    raw: str = ""
+
+
+def _reply(text: str, raw: str) -> ModelReply:
+    reply = ModelReply(text)
+    reply.raw = raw
+    return reply
+
+
+def strip_tool_text(text: str) -> str:
+    """The text without any TOOL: request (a run_memory_code request with its code block,
+    TOOL: lines, and calls inside sentences). May be empty."""
+    return _TOOL_CALL_RE.sub("", _TOOL_LINE_RE.sub("", _CODE_TOOL_RE.sub("", text))).strip()
+
+
 def _clean_reply(text: str, searched: bool) -> str:
     """The reply as the user should see it.
 
@@ -147,7 +170,7 @@ def _clean_reply(text: str, searched: bool) -> str:
     text = _MEMORY_TAG_RE.sub("", text).strip()   # never show memory markup to the user
     if not searched and _REAL_TOOL_RE.search(text):
         return text
-    cleaned = _TOOL_RE.sub("", _CODE_TOOL_RE.sub("", text)).strip()
+    cleaned = strip_tool_text(text)
     if not cleaned and searched:
         cleaned = "I searched my memory but found nothing more about that."
     return cleaned or "(The model returned no answer.)"
@@ -174,7 +197,9 @@ def chat_reply(
             f"The local model '{model or chat_model_name()}' could not answer "
             f"({type(exc).__name__}: {exc}). Is Ollama running (ollama serve) and the model pulled?"
         ) from exc
-    return _clean_reply(response.message.content or "", searched)
+    content = response.message.content or ""
+    raw = _MEMORY_TAG_RE.sub("", _THINK_RE.sub("", content)).strip()
+    return _reply(_clean_reply(content, searched), raw)
 
 
 def model_status() -> Tuple[bool, str]:

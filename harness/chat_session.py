@@ -22,6 +22,18 @@ chat: its vault is there again, and the latest memories are shown as where
 the chat left off. Only chats whose key is in the local keyring can be
 reopened (their memories are encrypted with it); list_chats() lists them.
 
+Saved messages: after every turn the whole message list is also kept, secrets
+scrubbed and encrypted with the chat's key (chat_store.save_transcript), so a
+reopened chat shows its old messages like ChatGPT or Claude does. They are
+for display only: the model still sees its context window plus paged-in
+memories, so paging works exactly as before.
+
+Auto-save: after every turn and every compaction, save_pending() writes what
+is still only in the context window to an encrypted file (harness/chat_store.py).
+So if the app stops without the chat being left (Ctrl+C, a crash), nothing but
+the turn in progress is lost: resume() puts that part back into the context
+window. flush() is the last save when the app shuts down.
+
 Between turns it keeps:
     chunks      the active context (the "RAM"): recent messages, one chunk per
                 prose part or code block, oldest first
@@ -35,6 +47,7 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 import re
 import threading
 import time
@@ -44,8 +57,10 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from langchain_core.messages import AIMessage, HumanMessage
 
+from harness import chat_store
 from harness import graph as amp
 from harness.chat_model import chat_model_name
+from harness.guardrails import _scrub_secrets
 from harness.local_keys import known_sessions
 
 DEFAULT_TOKEN_LIMIT = 3072      # small on purpose, so compaction is visible after a few turns
@@ -56,6 +71,7 @@ TITLE_CHARS = 70
 PAGE_BUDGET = 1000              # same budget llm_reasoning_node uses
 RECURSION_LIMIT = 200           # each compaction is 4 graph steps
 RECLAIM_MARGIN = 0.10           # background compaction stops 10% of the window below the trigger
+SHUTDOWN_WAIT = 20.0            # seconds a shutdown waits for a running answer, then for a background compaction
 
 _FENCE_RE = re.compile(r"```[ \t]*([\w+#.-]*)[^\n]*\n(.*?)(?:```|\Z)", re.DOTALL)
 _LANGUAGES = {"py": "python", "python": "python", "python3": "python",
@@ -197,10 +213,15 @@ class ChatSession:
         self.tokens_stored = 0
         self.last_paged: List[Dict[str, Any]] = []
         self.resumed: List[Dict[str, Any]] = []      # the latest memories, when this is a reopened chat
+        self.restored = 0               # unsaved chunks brought back when this chat was reopened
+        self.restored_messages = 0      # saved messages shown again when this chat was reopened
+        self._transcript = "new"        # "new", "owned" (this session writes the file) or "locked"
         self.background = True          # compact after the reply instead of before the next one
         self._reclaimer: Optional[threading.Thread] = None
         self._latest_ids: set = set()   # the last turn's messages: never paged out in the background
         self._ids = 0
+        self._pending_lock = threading.Lock()
+        self._pending_on_disk = False   # only a file this session wrote or read is ever removed
 
     # -- numbers for the UI ------------------------------------------------
 
@@ -257,6 +278,7 @@ class ChatSession:
             "search_query": "",
             "code_request": "",
             "audit_requested": False,
+            "blocked_tools": [],
         }
 
     def ask(self, text: str, on_event: Optional[Callable[[Event], None]] = None) -> str:
@@ -297,22 +319,26 @@ class ChatSession:
         finally:
             if values is not None:
                 self.chunks = list(values["context_chunks"])    # keep compactions done so far
+                self.save_pending()
 
         reply = next((m.content for m in reversed(values["messages"]) if isinstance(m, AIMessage)), "")
         user_id, reply_id = self._new_id("user"), self._new_id("assistant")
-        new_chunks = turn_to_chunks(text, user_id, reply, reply_id)
+        new_chunks = turn_to_chunks(text, user_id, reply, reply_id)       # memory keeps the model's words only
         self.chunks += new_chunks
         self._latest_ids = {user_id, reply_id}
-        for msg_id, role, content in ((user_id, "user", text), (reply_id, "assistant", reply)):
+        shown = reply + _blocked_note([e for e in self.events if e.turn == self.turn and e.kind == "blocked"])
+        for msg_id, role, content in ((user_id, "user", text), (reply_id, "assistant", shown)):
             owned = sum(1 for c in new_chunks if msg_id in c["msg_ids"])
             self.transcript.append({"id": msg_id, "role": role, "content": content,
                                     "chunks": owned, "turn": self.turn})
         self._record_page_in(text, emit)
+        self._save_transcript()
+        self.save_pending()
         if self.background and self.context_tokens >= self.trigger_tokens:
             self._reclaimer = threading.Thread(target=self._reclaim, args=(self.turn,),
                                                name="amp-reclaim", daemon=True)
             self._reclaimer.start()
-        return reply
+        return shown
 
     # -- background reclaim ---------------------------------------------------
 
@@ -352,6 +378,7 @@ class ChatSession:
         if "context_chunks" not in update:
             return False
         self.chunks = list(update["context_chunks"])
+        self.save_pending()
         self._record_compaction(turn, evicted, time.monotonic() - started, emit, when=when)
         return True
 
@@ -366,12 +393,104 @@ class ChatSession:
         return True
 
     def resume(self, limit: int = RESUME_NOTES) -> List[Dict[str, Any]]:
-        """Reopen this chat: keep its latest memories as "where we left off"."""
+        """Reopen this chat: keep its latest memories as "where we left off",
+        and bring back what was still in its context window if the app stopped
+        before the chat was left."""
+        self.restored = self._restore_pending()
+        self.restored_messages = self._restore_transcript()
         memories = amp._mcp_list_session_memories(self.session_id)       # newest first
         self.resumed = [_memory_view(m) for m in memories[:limit]]
-        self.events.append(Event(0, "resume", f"Reopened this chat: {len(memories)} "
-                                 f"memor{'y' if len(memories) == 1 else 'ies'} in its vault", ""))
+        title = f"Reopened this chat: {len(memories)} memor{'y' if len(memories) == 1 else 'ies'} in its vault"
+        if self.restored_messages:
+            title += f", {self.restored_messages} earlier message{'' if self.restored_messages == 1 else 's'} shown"
+        if self.restored:
+            title += (f", and {self.restored} unsaved chunk{'' if self.restored == 1 else 's'} "
+                      f"back in the context window")
+        self.events.append(Event(0, "resume", title, ""))
         return self.resumed
+
+    # -- auto-save: the unsaved part on disk ---------------------------------
+
+    def save_pending(self) -> bool:
+        """Write what is still only in the context window to this chat's
+        encrypted file, or remove the file once nothing is left. Runs after
+        every turn and every compaction. True if the file is up to date."""
+        with self._pending_lock:
+            chunks = list(self.chunks)
+            try:
+                if chunks:
+                    chat_store.save_pending(self.session_id, {"turn": self.turn, "ids": self._ids,
+                                                              "chunks": chunks})
+                    self._pending_on_disk = True
+                elif self._pending_on_disk:
+                    chat_store.clear_pending(self.session_id)
+                    self._pending_on_disk = False
+                return True
+            except Exception as exc:
+                self.events.append(Event(self.turn, "error", "Could not keep the unsaved part of this chat "
+                                         "on disk", str(exc)))
+                return False
+
+    def _restore_pending(self) -> int:
+        """Put back the chunks the file holds; the number of chunks restored."""
+        try:
+            saved = chat_store.load_pending(self.session_id)
+        except Exception as exc:                          # wrong key or damaged file: keep the file
+            self.events.append(Event(0, "error", "Could not read the unsaved part of this chat", str(exc)))
+            return 0
+        if not saved:
+            return 0
+        self.chunks = list(saved["chunks"])
+        self.turn = max(self.turn, int(saved.get("turn", 0)))
+        self._ids = max(self._ids, int(saved.get("ids", 0)))    # new message IDs don't clash with old chunks
+        self._pending_on_disk = True
+        return len(self.chunks)
+
+    # -- saved messages, for display -------------------------------------------
+
+    def _save_transcript(self) -> None:
+        """Keep every message of this chat on disk (secrets scrubbed, encrypted).
+        A chat that already has saved messages but was not reopened with resume()
+        never overwrites them."""
+        try:
+            if self._transcript == "new":
+                if os.path.exists(chat_store._path(self.session_id, chat_store.TRANSCRIPT_SUFFIX)):
+                    self._transcript = "locked"
+                    self.events.append(Event(self.turn, "error", "This chat already has saved messages; reopen "
+                                             "it to add to them", "The new messages are not saved."))
+                    return
+                self._transcript = "owned"
+            if self._transcript != "owned":
+                return
+            messages = [{"id": m["id"], "role": m["role"], "content": _scrub_secrets(m["content"]),
+                         "turn": m.get("turn", 0), "chunks": m.get("chunks", 1)} for m in self.transcript]
+            chat_store.save_transcript(self.session_id, messages)
+        except Exception as exc:                          # e.g. a chat ID that cannot be a file name
+            self.events.append(Event(self.turn, "error", "Could not save this chat's messages", str(exc)))
+
+    def _restore_transcript(self) -> int:
+        """Show the chat's saved messages again; the number restored."""
+        try:
+            messages = chat_store.load_transcript(self.session_id)
+        except Exception as exc:                          # wrong key or damaged file: keep it, don't overwrite it
+            self._transcript = "locked"
+            self.events.append(Event(0, "error", "Could not read this chat's saved messages", str(exc)))
+            return 0
+        self._transcript = "owned"
+        if not messages:
+            return 0
+        self.transcript = [dict(m, restored=True) for m in messages] + self.transcript
+        numbers = [int(m["id"][1:]) for m in messages if m["id"][1:].isdigit()]
+        self._ids = max([self._ids, *numbers])          # new message IDs continue after the old ones
+        self.turn = max([self.turn, *(int(m.get("turn", 0)) for m in messages)])
+        return len(messages)
+
+    def flush(self, timeout: float = SHUTDOWN_WAIT) -> bool:
+        """The last save when the app shuts down: give a running background
+        compaction up to `timeout` seconds, then make sure the file is current."""
+        if self._reclaimer is not None:
+            self._reclaimer.join(timeout)
+        return self.save_pending()
 
     # -- behind the scenes ----------------------------------------------------
 
@@ -398,6 +517,11 @@ class ChatSession:
             self._record_compaction(self.turn, live[0] if live else {}, seconds, emit, when="before answering")
             return list(update["context_chunks"])
         elif node == "llm_reasoning_node":
+            for block in update.get("blocked_tools") or []:
+                where = " (written inside a sentence)" if block.get("inline") else ""
+                emit(Event(self.turn, "blocked", f"Layer 4 blocked a tool request: {block['tool']}{where}",
+                           "; ".join(block.get("reasons") or []) + (f"\n{block['args']}" if block.get("args") else ""),
+                           0.0, {"blocked": block}))
             if update.get("code_request"):
                 emit(Event(self.turn, "code", "Model wrote Python to run over the vault",
                            update["code_request"].strip()[:600], seconds))
@@ -446,6 +570,17 @@ class ChatSession:
                        {"memories": self.last_paged}))
 
 
+def _blocked_note(blocked: List[Event]) -> str:
+    """A line from AMP under an answer in which Layer 4 blocked a tool request. The
+    model may still describe results of the blocked step (seen live with llama3.1:8b,
+    report section 5l); this says plainly that none exist."""
+    if not blocked:
+        return ""
+    tools = ", ".join(sorted({e.data.get("blocked", {}).get("tool", "a tool") for e in blocked}))
+    return (f"\n\n🛡️ AMP: the safety monitor blocked a tool request in this answer ({tools}). "
+            "Nothing was run, so any results described above did not come from it.")
+
+
 # ---------------------------------------------------------------------------
 # Chats that can be reopened
 # ---------------------------------------------------------------------------
@@ -457,17 +592,47 @@ def _title(view: Dict[str, Any]) -> str:
     return text if len(text) <= TITLE_CHARS else text[:TITLE_CHARS - 1].rstrip() + "…"
 
 
+def _pending_title(session_id: str) -> str:
+    """A title from the oldest unsaved chunk, for a chat with nothing in the vault yet."""
+    try:
+        saved = chat_store.load_pending(session_id) or {}
+    except Exception:
+        return ""
+    text = next((c["content"] for c in saved.get("chunks", []) if c.get("type") == "text"), "")
+    return _title({"text": text})
+
+
+def _saved_messages(session_id: str) -> List[Dict[str, Any]]:
+    try:
+        return chat_store.load_transcript(session_id) or []
+    except Exception:
+        return []
+
+
 def list_chats(current_id: str = "") -> List[Dict[str, Any]]:
     """The chats this computer can reopen, most recently used first: every
-    session in the vault whose key is in the local keyring. Each has its ID, a
-    title, how many memories it has and when it was last used."""
+    session in the vault, with an unsaved part on disk, or with saved messages
+    (chat_store), whose key is in the local keyring. Each has its ID, a title
+    (its first message, else its oldest memory), how many messages and memories
+    it has, whether an unsaved part is waiting, and when it was last used."""
     keys = known_sessions()
+    pending = chat_store.pending_sessions()
+    saved = chat_store.pending_sessions(chat_store.TRANSCRIPT_SUFFIX)
+    vault = {info.session_id: info for info in amp._mcp_list_sessions() if info.session_id in keys}
     chats = []
-    for info in amp._mcp_list_sessions():
-        if info.session_id not in keys:
-            continue                                   # another client's chat: cannot be read here
-        memories = amp._mcp_list_session_memories(info.session_id)     # newest first
-        chats.append({"session_id": info.session_id, "memories": info.memories,
-                      "last_time": info.last_time, "current": info.session_id == current_id,
-                      "title": _title(_memory_view(memories[-1])) if memories else ""})
-    return chats
+    for session_id in (set(vault) | set(pending) | set(saved)) & set(keys):
+        info = vault.get(session_id)
+        messages = _saved_messages(session_id) if session_id in saved else []
+        first = next((m["content"] for m in messages if m["role"] == "user"), "")
+        title = _title({"text": first}) if first else ""
+        if not title and info is not None:             # chats from before messages were saved
+            memories = amp._mcp_list_session_memories(session_id)      # newest first
+            title = _title(_memory_view(memories[-1])) if memories else ""
+        if not title and session_id in pending:
+            title = _pending_title(session_id)
+        chats.append({"session_id": session_id, "title": title, "messages": len(messages),
+                      "memories": info.memories if info else 0,
+                      "last_time": max(info.last_time if info else "", pending.get(session_id, ""),
+                                       saved.get(session_id, "")),
+                      "unsaved": session_id in pending, "current": session_id == current_id})
+    return sorted(chats, key=lambda chat: chat["last_time"], reverse=True)

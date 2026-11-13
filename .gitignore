@@ -8,7 +8,6 @@ storage/chroma_db/
 .agents
 .pytest_cache
 .venv
-docs/
 __pycache__/
 *.pyc
 *.pyo
@@ -18,3 +17,4 @@ storage/amp_audit.log
 storage/.amp_session_keys
 .idea
 Claude context.MD
+storage/chats/

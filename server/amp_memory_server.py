@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import sys
 import threading
 import uuid
@@ -36,6 +37,7 @@ from harness.guardrails import (
     HIGH_RISK_THRESHOLD, MemoryInfo, PageContextResult, RetrievedMemory, SandboxResult, SessionInfo,
     UnifiedMemory, _scrub_secrets, risk_level_for_score, score_payload,
 )
+from harness import conflicts
 from harness.local_keys import ensure_admin_token, ensure_signing_key, is_admin
 from harness.signing import SIGNING_KEY_ENV, sign_memory, verify_memory
 from server import session_crypto
@@ -47,6 +49,18 @@ logger = logging.getLogger(__name__)
 SANDBOX_MAX_TIMEOUT = 10  # seconds; run_memory_code clamps the caller's timeout to 1..10
 MAX_TOP_K = 100           # search_vault / page_context never consider more matches than this
 HIGH_RISK_HEADROOM = 10   # extra matches fetched so that dropping high-risk ones does not shrink results
+CONFLICT_CANDIDATES = 3   # a new text memory is checked against its 3 closest older ones...
+CONFLICT_DISTANCE = 1.2   # ...that are this close (squared L2; same topic ~0.4, unrelated ~1.75)
+MAX_CONFLICTS = 20
+PAGE_MAX_DISTANCE_ENV = "AMP_PAGE_MAX_DISTANCE"
+# page_context's relevance cut-off (report section 5o, report_eval/relevance_cutoff): in the 16-fact
+# chat the memory a question needed was at most 1.31 away, while general questions ("Explain the
+# CAP theorem") paged in ~650 tokens of unrelated memories. Questions about the user or the chat
+# itself ("What do you remember about me?") get no cut-off: their memories are 1.2-1.9 away.
+DEFAULT_PAGE_MAX_DISTANCE = 1.4
+_ABOUT_THE_CHAT = re.compile(
+    r"\b(i|me|my|mine|we|us|our|ours|remember|remind|recall|earlier|before|previous(?:ly)?|told|said|say|"
+    r"mentioned|discussed|talked|chat|conversation|again)\b", re.IGNORECASE)
 
 # Every delete_memory call (and every refused admin call) is appended here as one JSON line.
 AUDIT_LOG_ENV = "AMP_AUDIT_LOG"
@@ -75,12 +89,21 @@ collection = chroma_client.get_or_create_collection("amp_memory", embedding_func
 #                 risk_score in the clear (for filtering and the admin list),
 #                 plus encrypted=True, key_check (fingerprint of the session
 #                 key) and envelope_enc: the full UnifiedMemory as JSON,
-#                 encrypted with the session's key (server/session_crypto.py)
+#                 encrypted with the session's key (server/session_crypto.py),
+#                 and conflicts_with: the IDs of memories it contradicts,
+#                 comma-separated (IDs only, never what they say)
 # Rows stored before encryption keep a plain "envelope" and are not served
 # until python -m server.backfill --apply encrypts them.
 # ---------------------------------------------------------------------------
 def _embedding_text(memory: UnifiedMemory) -> str:
-    """Text that is embedded for semantic search, and counted for token budgets."""
+    """Text that is embedded for semantic search, and counted for token budgets.
+
+    The code graph (which function calls which) is not part of it: its lines
+    made code memories 35% bigger and did not help search, because the
+    embedding model reads only the first 256 word pieces and most files are
+    longer (report section 5p). The graph stays in the memory, and
+    run_memory_code's records carry it: in `calls` and in their `text`
+    (_call_lines), where it costs no paging budget."""
     if memory.memory_type == "text":
         return memory.text_payload.factual_summary
     code = memory.code_payload
@@ -88,8 +111,15 @@ def _embedding_text(memory: UnifiedMemory) -> str:
     if code.summary:
         parts.append(code.summary)
     parts.extend(symbol.signature for symbol in code.symbols)
-    parts.extend(f"{s.name} calls {', '.join(s.calls)}" for s in code.symbols if s.calls)   # the code graph
     return "\n".join(parts)
+
+
+def _call_lines(memory: UnifiedMemory) -> List[str]:
+    """The code graph as text: "checkout calls load_cart, charge" (code memories only)."""
+    code = memory.code_payload
+    if memory.memory_type != "code" or code is None:
+        return []
+    return [f"{s.name} calls {', '.join(s.calls)}" for s in code.symbols if s.calls]
 
 
 def _to_memory(chroma_id: str, envelope_json: str) -> UnifiedMemory:
@@ -187,6 +217,47 @@ def _row_metadata(memory: UnifiedMemory, memory_id: str, session_key: str, check
     }
 
 
+def _conflict_ids(meta: Optional[dict]) -> List[str]:
+    return [i for i in str((meta or {}).get("conflicts_with", "")).split(",") if i]
+
+
+def _find_conflicts(memory: UnifiedMemory, session_key: str) -> List[str]:
+    """IDs of the older memories of the same session that this new text memory
+    contradicts: its closest few (CONFLICT_CANDIDATES within CONFLICT_DISTANCE)
+    are each checked by the conflict model (harness/conflicts.py). Code
+    memories and high-risk ones are not checked; with the model off, none."""
+    if memory.memory_type != "text" or conflicts.model_name() is None:
+        return []
+    existing = collection.get(where=_session_where(memory.session_id), limit=CONFLICT_CANDIDATES, include=[])
+    count = len(existing.get("ids") or [])         # 0..CONFLICT_CANDIDATES: never ask for more than exist
+    if count == 0:
+        return []
+    near = collection.query(query_embeddings=EMBED([_embedding_text(memory)]), n_results=min(CONFLICT_CANDIDATES, count),
+                            where=_session_where(memory.session_id), include=["metadatas", "distances"])
+    found = []
+    for chroma_id, meta, distance in zip(near["ids"][0], near["metadatas"][0], near["distances"][0]):
+        if distance > CONFLICT_DISTANCE:
+            continue
+        older = _open_row(chroma_id, meta, session_key)
+        if older is None or older.memory_type != "text" or _is_high_risk(older):
+            continue
+        probability = conflicts.contradicts(older.text_payload.factual_summary, memory.text_payload.factual_summary)
+        if probability is not None and probability >= conflicts.THRESHOLD:
+            found.append(chroma_id)
+    return found
+
+
+def _mark_conflict(chroma_id: str, other_id: str) -> None:
+    """Add other_id to one row's conflicts_with (ChromaDB merges metadata on update)."""
+    rows = collection.get(ids=[chroma_id], include=["metadatas"])
+    if not rows.get("ids"):
+        return
+    ids = _conflict_ids(rows["metadatas"][0])
+    if other_id not in ids:
+        ids = (ids + [other_id])[-MAX_CONFLICTS:]
+        collection.update(ids=[chroma_id], metadatas=[{"conflicts_with": ",".join(ids)}])
+
+
 def _caller(ctx: Optional[Context]) -> str:
     """Who called a tool, for the audit log: the MCP client's name, or in-process."""
     if ctx is None:
@@ -242,6 +313,12 @@ def store_memory(memory: UnifiedMemory, session_key: str = "", ctx: Optional[Con
     arrived unsigned, or with a signature that does not verify, is never
     signed here: storing through this tool cannot make a memory "verified".
     The server reads the same AMP_SIGNING_KEY as the chat app (harness/local_keys.py).
+
+    A text memory is also compared with its closest older memories of the
+    same session (harness/conflicts.py). If it contradicts one, both are
+    marked (conflicts_with), so search_vault and page_context return the
+    mark and the chat model can show the user both versions instead of
+    silently believing the newer one (fact poisoning, OWASP LLM04/LLM09).
     """
     check = _authorize(memory.session_id, session_key, "store_memory", ctx)
     arrived_verified = verify_memory(memory)
@@ -254,14 +331,24 @@ def store_memory(memory: UnifiedMemory, session_key: str = "", ctx: Optional[Con
                     memory.id, old_score, memory.risk_score, memory.risk_level)
         if arrived_verified:
             memory.signature = sign_memory(memory)      # re-sign last: every signed field is final now
+    found = _find_conflicts(memory, session_key)
     memory_id = f"mem_{uuid.uuid4().hex[:8]}"
     memory.vector_embedding_id = memory_id
 
+    metadata = _row_metadata(memory, memory_id, session_key, check)
+    if found:
+        metadata["conflicts_with"] = ",".join(found)
     collection.add(
         ids=[memory_id],
         embeddings=EMBED([_embedding_text(memory)]),     # vectors only: the text is not stored
-        metadatas=[_row_metadata(memory, memory_id, session_key, check)],
+        metadatas=[metadata],
     )
+    for older_id in found:
+        _mark_conflict(older_id, memory_id)
+    if found:
+        logger.info("[store_memory] Memory %s contradicts %s; both are marked.", memory_id, ", ".join(found))
+        _audit("store_memory", memory_id, _caller(ctx), f"conflict marked with {', '.join(found)}",
+               memory.session_id)
 
     return memory
 
@@ -327,7 +414,8 @@ def _search(query: str, top_k: int, session_id: str, session_key: str) -> List[R
         matches.append(RetrievedMemory(
             memory=memory,
             distance=distances[i],
-            token_cost=len(encoder.encode(_embedding_text(memory)))
+            token_cost=len(encoder.encode(_embedding_text(memory))),
+            conflicts_with=_conflict_ids(metadatas[i])[-MAX_CONFLICTS:],
         ))
         if len(matches) == top_k:
             break
@@ -460,9 +548,33 @@ def list_session_memories(session_id: str, session_key: str = "", limit: int = 0
     memories.sort(key=lambda m: m.timestamp, reverse=True)
     return memories[:limit] if limit > 0 else memories
 
+def _page_max_distance(requested: Optional[float] = None, query: str = "") -> Optional[float]:
+    """The relevance cut-off for page_context, or None for no cut-off:
+      - the caller's max_distance if given (0 = none);
+      - none when AMP_PAGE_MAX_DISTANCE is "off";
+      - none when the question is about the user or the chat ("my", "we",
+        "remember", "earlier", ...): their memories are not close in vector
+        space ("What do you remember about me?"), so they are paged as before;
+      - else AMP_PAGE_MAX_DISTANCE if it is a number, else DEFAULT_PAGE_MAX_DISTANCE."""
+    if requested is not None:
+        return requested if requested > 0 else None
+    raw = os.environ.get(PAGE_MAX_DISTANCE_ENV, "").strip().lower()
+    if raw in ("off", "none", "0"):
+        return None
+    if _ABOUT_THE_CHAT.search(query or ""):
+        return None
+    if raw:
+        try:
+            return float(raw)
+        except ValueError:
+            logger.warning("[page_context] %s=%r is not a number; using the default.", PAGE_MAX_DISTANCE_ENV, raw)
+    return DEFAULT_PAGE_MAX_DISTANCE
+
+
 @mcp.tool()
 def page_context(query: str, total_budget: int = 1000, session_id: str = "", candidate_pool: int = 20,
-                 session_key: str = "", ctx: Optional[Context] = None) -> PageContextResult:
+                 session_key: str = "", max_distance: Optional[float] = None,
+                 ctx: Optional[Context] = None) -> PageContextResult:
     """
     Retrieve context from one session's long-term memory for a query, limited by a token budget.
 
@@ -472,6 +584,12 @@ def page_context(query: str, total_budget: int = 1000, session_id: str = "", can
         session_id: The session to recall from (required)
         candidate_pool: How many top matches to consider before applying the budget (default: 20)
         session_key: That session's key (required)
+        max_distance: The relevance cut-off: matches farther from the query
+            than this are not paged in (squared L2 distance; smaller is
+            closer); 0 turns it off. By default 1.4 (AMP_PAGE_MAX_DISTANCE
+            changes it, "off" turns it off), and none for questions about the
+            user or the chat ("my", "we", "remember", "earlier", ...), whose
+            memories are not close to the question in vector space.
 
     Returns:
         A PageContextResult with:
@@ -479,6 +597,7 @@ def page_context(query: str, total_budget: int = 1000, session_id: str = "", can
           tokens_used: total token cost of the selected memories
           total_budget: the budget that was requested
           skipped: how many matches were left out because they did not fit
+          too_far: how many matches were left out by the relevance cut-off
         A memory's token cost is the token count of its searchable text (the
         text summary, or for code the file path, summary and signatures).
         High-risk memories are left out before the budget is applied, so they
@@ -494,10 +613,15 @@ def page_context(query: str, total_budget: int = 1000, session_id: str = "", can
     if not candidates:
         return PageContextResult(total_budget=total_budget)
 
+    cutoff = _page_max_distance(max_distance, query)
     selected = []
     used_budget = 0
     skipped = 0
+    too_far = 0
     for candidate in candidates:
+        if cutoff is not None and candidate.distance > cutoff:
+            too_far += 1           # not about this query: it would only cost tokens and distract the model
+            continue
         tokens = candidate.token_cost
 
         if used_budget + tokens > total_budget:
@@ -511,7 +635,8 @@ def page_context(query: str, total_budget: int = 1000, session_id: str = "", can
         memories=selected,
         tokens_used=used_budget,
         total_budget=total_budget,
-        skipped=skipped
+        skipped=skipped,
+        too_far=too_far,
     )
     
 
@@ -523,7 +648,7 @@ def _sandbox_record(memory: UnifiedMemory) -> dict:
         "id": memory.vector_embedding_id or str(memory.id),
         "time": memory.timestamp.isoformat(),
         "kind": memory.memory_type,
-        "text": _embedding_text(memory),
+        "text": "\n".join([_embedding_text(memory), *_call_lines(memory)]),   # the graph too: no budget here
         "decisions": list(text.architectural_decisions) if text else [],
         "bugs": list(text.bugs_resolved) if text else [],
         "constraints": list(text.user_constraints) if text else [],

@@ -20,6 +20,11 @@ Serves the web UI (app/static/) and a small JSON API around one ChatSession:
 Leaving a chat (new or open) first saves what is still in its context window
 to the vault; if that fails, the app stays on the current chat.
 
+Auto-save: after every turn the unsaved part of the chat is also kept in an
+encrypted file (harness/chat_store.py). When the app stops (Ctrl+C, SIGTERM),
+it waits for a running answer or background compaction (up to 20 s each) and
+writes that file one last time. Reopening the chat brings the part back.
+
 Local only: binds to 127.0.0.1, accepts only localhost Host headers (no DNS
 rebinding), and POST requests must be JSON from the same origin, so other
 websites open in the browser cannot drive it.
@@ -28,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -53,7 +59,8 @@ from harness.chat_model import ChatModelError, chat_model_name, model_status  # 
 from harness.local_keys import ensure_signing_key  # noqa: E402
 from harness.mcp_client import MCP_URL_ENV, MCPError, memory_server, vault_mode  # noqa: E402
 from harness.chat_session import (  # noqa: E402
-    DEFAULT_THRESHOLD, DEFAULT_TOKEN_LIMIT, MAX_TOKEN_LIMIT, ChatSession, Event, MessageTooLong, list_chats,
+    DEFAULT_THRESHOLD, DEFAULT_TOKEN_LIMIT, MAX_TOKEN_LIMIT, SHUTDOWN_WAIT, ChatSession, Event, MessageTooLong,
+    list_chats,
 )
 from harness.local_keys import known_sessions  # noqa: E402
 
@@ -94,6 +101,8 @@ def state_view(session: ChatSession) -> Dict[str, Any]:
         "transcript": [dict(entry, status=session.message_status(entry["id"])) for entry in session.transcript],
         "last_paged": session.last_paged,
         "resumed": session.resumed,
+        "restored": session.restored,
+        "restored_messages": session.restored_messages,
         "events": [event_view(e) for e in session.events[-MAX_EVENTS:]],
         "vault": session.vault(),
     }
@@ -106,8 +115,9 @@ def state_view(session: ChatSession) -> Dict[str, Any]:
 class ChatApp:
     """Holds the one chat session of this local app and serialises its turns."""
 
-    def __init__(self, graph: Any = None):
+    def __init__(self, graph: Any = None, shutdown_wait: float = SHUTDOWN_WAIT):
         self._graph = graph
+        self.shutdown_wait = shutdown_wait
         self.turn_lock = threading.Lock()
         self.session = self._new_session(DEFAULT_TOKEN_LIMIT, DEFAULT_THRESHOLD, True)
 
@@ -143,6 +153,16 @@ class ChatApp:
         session = self._new_session(old.token_limit, old.threshold, old.background, session_id=session_id)
         session.resume()
         self.session = session
+
+    def shutdown(self) -> bool:
+        """When the app stops: let a running answer finish, then keep the chat's
+        unsaved part on disk (ChatSession.flush). True if the file is current."""
+        got = self.turn_lock.acquire(timeout=self.shutdown_wait)
+        try:
+            return self.session.flush(self.shutdown_wait)
+        finally:
+            if got:
+                self.turn_lock.release()
 
 
 class SaveFailed(RuntimeError):
@@ -186,8 +206,17 @@ async def _json_body(request: Request) -> Dict[str, Any]:
     return body if isinstance(body, dict) else {}
 
 
-def create_app(graph: Any = None) -> Starlette:
-    chat = ChatApp(graph)
+def create_app(graph: Any = None, shutdown_wait: float = SHUTDOWN_WAIT) -> Starlette:
+    chat = ChatApp(graph, shutdown_wait)
+
+    @contextlib.asynccontextmanager
+    async def lifespan(app):
+        yield
+        saved = await asyncio.to_thread(chat.shutdown)
+        if chat.session.chunks:
+            print(f"AMP Chat stopped. {chat.session.session_id}: "
+                  + ("its unsaved part is kept on disk; reopen the chat to continue." if saved
+                     else "could not save its unsaved part (see the activity log)."))
 
     async def index(request: Request):
         return FileResponse(os.path.join(STATIC_DIR, "index.html"))
@@ -309,7 +338,7 @@ def create_app(graph: Any = None) -> Starlette:
         Mount("/static", StaticFiles(directory=STATIC_DIR), name="static"),
     ]
     middleware = [Middleware(TrustedHostMiddleware, allowed_hosts=[*LOCAL_HOSTS, "testserver"])]
-    app = Starlette(routes=routes, middleware=middleware)
+    app = Starlette(routes=routes, middleware=middleware, lifespan=lifespan)
     app.state.chat = chat
     return app
 
