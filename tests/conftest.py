@@ -3,8 +3,8 @@ Shared test setup.
 
 No test touches the user's real vault (see the AMP_CHROMA_PATH line below) or
 the real key files or saved chats under storage/ (AMP_ADMIN_TOKEN is set; tests that sign set
-AMP_SIGNING_KEY themselves), no test calls the risk model (AMP_RISK_MODEL=off;
-tests/test_risk_model.py uses a fake Ollama client), and no test talks to a real
+AMP_SIGNING_KEY themselves), no test calls the risk model or the conflict model (AMP_RISK_MODEL=off,
+AMP_CONFLICT_MODEL=off; their own tests use a fake Ollama client), and no test talks to a real
 Ollama chat model unless it sets one up itself:
 harness.chat_model's client is replaced by a stub that answers like the old
 "[LLM Stub]" in llm_reasoning_node. Tests that need other replies patch
@@ -22,6 +22,7 @@ import pytest
 os.environ["AMP_CHROMA_PATH"] = tempfile.mkdtemp(prefix="amp-test-vault-")
 os.environ.pop("AMP_MCP_URL", None)     # tests choose the transport themselves
 os.environ["AMP_RISK_MODEL"] = "off"    # heuristic-only scores, as the existing tests expect
+os.environ["AMP_CONFLICT_MODEL"] = "off"   # no contradiction checks (tests/test_conflicts.py fakes the model)
 os.environ["AMP_ADMIN_TOKEN"] = "test-admin-token"
 os.environ["AMP_AUDIT_LOG"] = os.path.join(tempfile.mkdtemp(prefix="amp-test-audit-"), "amp_audit.log")
 os.environ["AMP_SESSION_KEYS_FILE"] = os.path.join(tempfile.mkdtemp(prefix="amp-test-keys-"), ".amp_session_keys")
