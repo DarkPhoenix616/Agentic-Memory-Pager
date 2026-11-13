@@ -21,6 +21,7 @@ in `BTP/report_eval/`, test venv `AgenticMemoryPager/.venv` (git-ignored).
 
 | Part | Branch | State |
 |---|---|---|
+| The browser kept running the old page script (2026-11-13) | `fix/versioned-assets` (merged, then deleted) | **Done.** The page now loads `app.js` and `style.css` by version (`?v=<mtime>`), so a changed file always gets a new address. 462 tests pass. Section 5s. |
 | Chat switching, made right (user request, 2026-11-13) | `fix/chat-switch-ui` (merged, then deleted) | **Done.** A new chat shows only "Hello! 👋 How can I help you today?"; older chats without saved messages show their saved summaries; the page is never served stale. Checked in headless Chrome. 461 tests pass. Section 5r. |
 | Fix: *New chat* did not clear the page (found by the user, 2026-11-13) | `fix/new-chat-redraw` (merged, then deleted) | **Done.** The page redrew while still marked busy, so the old messages stayed after *New chat* or opening a chat. Reproduced and confirmed fixed in headless Chrome; a regression test fails on the old code. 460 tests pass. Section 5q. |
 | Final round, task 8: a lighter code graph | `feature/lighter-code-graph` (merged, then deleted) | **Done.** Call lines are out of the search text (−26% tokens, search unchanged: they were mostly past the embedding model's 256-word-piece window); the model now *sees* the calls of a paged code memory (+3 tokens). Call questions: 3/9 → **8/9** right. 459 tests pass. Section 5p. |
@@ -1271,6 +1272,18 @@ The user asked:
 
 - **Test:** `test_the_page_is_never_served_stale` checks the header on `/`, `app.js` and `style.css`, and that the API has none. Tests: 461 passed, 1 skipped.
 - **Cleanup:** the red-team script (5k) didn't set `AMP_CHATS_DIR`, so its run left 17 `rt-*.pending` files in the real `storage/chats/`. They belonged to test chats whose keys were in a throwaway keyring, so nothing listed or read them. They are removed, and `red_team.py` and `live_chat_history.py` now use a temporary chats folder.
+
+## 5s. The browser kept running the old page script (2026-11-13)
+
+- **What the user saw:** after 5q and 5r, clicking an old chat still didn't show its messages.
+- **Diagnosis:**
+  - The server had switched: the live app's state showed chat `chat-a8b3cd30` with its 20 messages restored.
+  - The browser had kept the old `app.js`, from before `Cache-Control` was set. On a normal reload, Chrome refetches the page but keeps subresources it thinks are still fresh. So the `no-cache` header from 5r only takes effect once the browser fetches the script again.
+- **Fix:** `GET /` now serves `index.html` with `?v=<file mtime>` on `/static/app.js` and `/static/style.css` (`app.server.index_html`). A changed file gets a new address, so no cache can run the old one. With the page itself sent `no-cache`, one reload is always enough.
+- **Checked:**
+  - test `test_the_page_loads_its_script_by_version`;
+  - the real-browser check (`new_chat_ui.py after_fix_3`) passes again: greeting, *New chat* clears, reopen shows the messages, older chat shows its summary.
+  - Tests: 462 passed, 1 skipped.
 
 ## 6. Decision log
 
