@@ -115,44 +115,6 @@ function messageNode(role, content, status) {
   return node;
 }
 
-function renderResume() {
-  const box = $("resume");
-  const notes = state.resumed || [];
-  const restored = state.restored || 0;
-  const earlier = state.restored_messages || 0;
-  box.hidden = notes.length === 0 && restored === 0 && earlier === 0;
-  if (box.hidden) return;
-  if (earlier) {
-    // the old messages are shown below; the memories are what the model can recall from them
-    box.innerHTML = `<div class="resume-head">📂 Reopened this chat: its ${earlier} earlier ` +
-      `${earlier === 1 ? "message is" : "messages are"} below. Greyed ones were paged out to the vault.</div>`;
-    if (notes.length) {
-      const fold = document.createElement("details");
-      fold.innerHTML = `<summary>What the model remembers (latest ${notes.length} ` +
-        `${notes.length === 1 ? "memory" : "memories"}, newest first)</summary>`;
-      notes.forEach((m) => fold.appendChild(memoryCard(m)));
-      box.appendChild(fold);
-    }
-  } else if (notes.length) {
-    // saved before chats kept their messages: its summaries are shown below as the conversation
-    box.innerHTML = `<div class="resume-head">📂 Reopened this chat. It is older than saved messages, ` +
-      `so its saved summaries are shown below.</div>`;
-  } else {
-    box.innerHTML = `<div class="resume-head">📂 Reopened this chat.</div>`;
-  }
-  if (restored) {
-    const back = document.createElement("div");
-    back.className = "note";
-    back.textContent = `The app stopped before this chat was left: its last ${restored} unsaved ` +
-      `${restored === 1 ? "chunk is" : "chunks are"} back in the context window.`;
-    box.appendChild(back);
-  }
-  const tail = document.createElement("div");
-  tail.className = "note";
-  tail.textContent = "Ask about anything from before: the relevant memories are paged back in.";
-  box.appendChild(tail);
-}
-
 // A chat reopened from before chats saved their messages: show its saved summaries
 // instead, oldest first, so the old conversation is still on screen.
 function legacySummaries() {
@@ -171,7 +133,6 @@ function summaryNode(m) {
 function renderMessages() {
   const box = $("messages");
   box.querySelectorAll(".msg").forEach((n) => n.remove());
-  renderResume();
   const legacy = legacySummaries();
   // a new, empty chat shows only the greeting
   $("empty").hidden = state.transcript.length > 0 || legacy.length > 0 || (state.resumed || []).length > 0 ||
