@@ -16,29 +16,47 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; height: 100vh; display: flex; flex-direction: column; }
+body { margin: 0; height: 100vh; }
 button { font: inherit; cursor: pointer; }
 code, pre { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 0.88em; }
 
-/* Top bar */
-.topbar {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 20px; background: var(--surface); border-bottom: 1px solid var(--border);
-}
-.brand { display: flex; align-items: baseline; gap: 10px; }
-.logo { font-size: 1.4em; }
-.name { font-weight: 700; font-size: 1.15em; }
-.sub { color: var(--muted); font-size: 0.9em; }
-.topbar-right { display: flex; align-items: center; gap: 12px; }
+/* Layout: chats | chat | behind the scenes (closable) */
+.app { height: 100vh; display: grid; grid-template-columns: 260px minmax(0, 1fr) 400px; }
+.app.panel-closed { grid-template-columns: 260px minmax(0, 1fr); }
+.app.panel-closed .panel { display: none; }
+
+/* Left sidebar: new chat + chat names */
+.sidebar { display: flex; flex-direction: column; gap: 10px; padding: 16px 12px; background: #eef1f5;
+  border-right: 1px solid var(--border); min-height: 0; }
+.brand { display: flex; align-items: center; gap: 8px; padding: 2px 6px 6px; }
+.logo { font-size: 1.3em; }
+.name { font-weight: 700; font-size: 1.1em; }
+.new-chat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px;
+  text-align: left; font-weight: 600; color: var(--text); }
+.new-chat:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
+.new-chat:disabled { opacity: 0.6; cursor: default; }
+.side-label { margin: 8px 6px 0; font-size: 0.75em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--muted); }
+.chat-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; min-height: 0; }
+.chat-list .none { color: var(--muted); font-size: 0.86em; padding: 6px; }
+.chat-item { display: block; width: 100%; text-align: left; padding: 8px 10px; border: 0; border-radius: 8px;
+  background: none; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-item:hover:not(:disabled) { background: #e2e7ee; }
+.chat-item:disabled { cursor: default; }
+.chat-item.current { background: var(--surface); font-weight: 600; box-shadow: 0 0 0 1px var(--border); }
+
+/* Chat header: status + the button that opens Behind the scenes */
+.chatbar { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 20px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.status { display: flex; align-items: center; gap: 8px; }
 .pill { padding: 4px 10px; border-radius: 999px; background: #eef0f3; color: var(--muted); font-size: 0.85em; }
 .pill.ok { background: #e3f4ea; color: #1d7a45; }
 .pill.bad { background: #fbe6e6; color: var(--danger); }
 .ghost { background: none; border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; color: var(--text); }
 .ghost:hover { background: #f0f2f5; }
-
-/* Layout */
-.layout { flex: 1; display: grid; grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr); min-height: 0; }
-@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .panel { border-left: 0; border-top: 1px solid var(--border); } }
+.ghost.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.icon-btn { background: none; border: 0; border-radius: 6px; padding: 4px 8px; color: var(--muted); font-size: 1em; }
+.icon-btn:hover { background: #eceff3; color: var(--text); }
 
 /* Chat */
 .chat { display: flex; flex-direction: column; min-height: 0; }
@@ -83,9 +101,10 @@ code, pre { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monosp
 .composer button { background: var(--accent); color: #fff; border: 0; border-radius: var(--radius); padding: 0 20px; font-weight: 600; }
 .composer button:disabled { opacity: 0.5; cursor: default; }
 
-/* Panel */
-.panel { border-left: 1px solid var(--border); background: #fbfbfc; padding: 18px 20px; overflow-y: auto; min-height: 0; }
-.panel h2 { margin: 0 0 12px; font-size: 1.05em; }
+/* Right panel: Behind the scenes */
+.panel { border-left: 1px solid var(--border); background: #fbfbfc; padding: 14px 18px; overflow-y: auto; min-height: 0; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.panel h2 { margin: 0; font-size: 1.05em; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px; }
 details.card > summary { cursor: pointer; font-weight: 600; font-size: 0.95em; }
 details.card[open] > summary { margin-bottom: 8px; }
@@ -127,10 +146,7 @@ details.memory > summary { cursor: pointer; }
 
 .notice { margin: 0 28px 8px; padding: 10px 14px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font-size: 0.92em; }
 
-.chat-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; text-align: left;
-  padding: 7px 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); cursor: pointer; }
-.chat-item:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); }
-.chat-item:disabled { cursor: default; }
-.chat-item.current { border-color: var(--accent); background: var(--accent-soft); }
-.chat-title { font-weight: 600; overflow-wrap: anywhere; }
-.chat-meta { color: var(--muted); font-size: 0.85em; }
+@media (max-width: 900px) {
+  .app, .app.panel-closed { grid-template-columns: 200px minmax(0, 1fr); }
+  .panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(400px, 92vw); box-shadow: -8px 0 24px rgba(0, 0, 0, 0.12); }
+}

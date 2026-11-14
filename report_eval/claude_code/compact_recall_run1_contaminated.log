@@ -1,0 +1,19 @@
+turn 1: '- 37 steps FAILED across 8 services, with orders (9), auth (6), and catalog (6) worst.\n- F'
+turn 2: '- Review is the bottleneck: a large share of items are blocked on review, and many more ne'
+turn 3: '- Root cause: `refund_amount()` uses float rounding, which makes the flaky `test_refund_ro'
+turn 4: '- Many keys repeat with different values (e.g. `shipping_timeout_ms` appears 9 times), so '
+turn 5: "- Neha says to page Meera for anything about the production database; she's on call until "
+turn 6: '- Many endpoints are listed more than once with different rate limits and cache TTLs (e.g.'
+turn 7: '- `payments/client.py:88` requires every idempotency key to start with `PAY-77`, the only '
+turn 8: '- The plan says to run against `orchid_stage` and never `prod_main`, but no step sets or c'
+compacted: 82930 -> 8562 tokens
+AMP page-out finished 415.0s after the compaction: {'code': 0, 'raw_tokens': 33811, 'text': 23}
+OK  with AMP | OK  without | Which port does our API gateway listen on?
+OK  with AMP | OK  without | On which day, and from what time, are deploys not allowed?
+OK  with AMP | OK  without | Which test was flaky in the refund incident, and what was the fix?
+OK  with AMP | OK  without | What is the name of the feature flag for the new checkout?
+OK  with AMP | NO  without | Who should I page for a production database problem?
+OK  with AMP | OK  without | What is the maximum upload size in our API?
+OK  with AMP | OK  without | What prefix must payment idempotency keys start with?
+OK  with AMP | OK  without | What is the staging database called?
+{"with_amp": 8, "without_amp": 7, "in_claude_summary": 6, "in_amp_page_in": 6, "of": 8} cost $0.541

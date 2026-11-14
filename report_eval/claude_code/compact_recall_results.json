@@ -1,0 +1,179 @@
+{
+ "model": "haiku",
+ "folder": "/tmp/amp-cc-eval-1fs_8tnf",
+ "facts": [
+  {
+   "document": "last night's deploy log",
+   "fact": "2026-11-11 03:12:44 [gateway] api-gateway is listening on port 7421 (set in deploy/api.env)",
+   "question": "Which port does our API gateway listen on?",
+   "in_claude_summary": true,
+   "in_amp_page_in": false,
+   "page_in_notes": 6,
+   "page_in_tokens": 995,
+   "answer_with_amp": "The API gateway listens on port 7421, according to the deploy log line that says it's set in `deploy/api.env` (I haven't opened that file to confirm).",
+   "correct_with_amp": true,
+   "mentions_with_amp": true,
+   "recall_tool_used": true,
+   "answer_without_amp": "The API gateway listens on port 7421, according to the deploy log you pasted earlier, which says it is set in `deploy/api.env`. I haven't checked that file in the repo.",
+   "correct_without_amp": true,
+   "mentions_without_amp": true
+  },
+  {
+   "document": "the notes from Monday's planning meeting",
+   "fact": "- Agreed: no deploys on Thursdays after 4 pm, because the weekly billing run starts then.",
+   "question": "On which day, and from what time, are deploys not allowed?",
+   "in_claude_summary": true,
+   "in_amp_page_in": true,
+   "page_in_notes": 5,
+   "page_in_tokens": 972,
+   "answer_with_amp": "Deploys are not allowed on Thursdays after 4 pm, because the weekly billing run starts then.",
+   "correct_with_amp": true,
+   "mentions_with_amp": true,
+   "recall_tool_used": true,
+   "answer_without_amp": "I don't know the time. The only deploy restriction I have on record is a no-deploy rule for Thursday, and my notes don't include the hours it covers.",
+   "correct_without_amp": false,
+   "mentions_without_amp": false
+  },
+  {
+   "document": "the incident report for the refund failures",
+   "fact": "Root cause: the flaky test `test_refund_rounding` failed because refund_amount() used float rounding; the fix is to use Decimal.",
+   "question": "Which test was flaky in the refund incident, and what was the fix?",
+   "in_claude_summary": true,
+   "in_amp_page_in": true,
+   "page_in_notes": 4,
+   "page_in_tokens": 993,
+   "answer_with_amp": "The flaky test was `test_refund_rounding`; it exposed float rounding in `refund_amount()`, and the fix was to use `Decimal`.",
+   "correct_with_amp": true,
+   "mentions_with_amp": true,
+   "recall_tool_used": true,
+   "answer_without_amp": "I don't know which test was flaky. The refund incident traced to float rounding in `refund_amount()`, and the fix is to use `Decimal`. The related test I saw was `test_refund_rounding`, but nothing I read called any test flaky.",
+   "correct_without_amp": false,
+   "mentions_without_amp": true
+  },
+  {
+   "document": "the current service config",
+   "fact": "  checkout_v2_canary: true   # the new checkout, shown to 5% of users",
+   "question": "What is the name of the feature flag for the new checkout?",
+   "in_claude_summary": true,
+   "in_amp_page_in": true,
+   "page_in_notes": 5,
+   "page_in_tokens": 922,
+   "answer_with_amp": "The feature flag for the new checkout is `checkout_v2_canary`, which is set to `true` in the service config for a 5% rollout.",
+   "correct_with_amp": true,
+   "mentions_with_amp": true,
+   "recall_tool_used": true,
+   "answer_without_amp": "The feature flag for the new checkout is `checkout_v2_canary`, which is set to `true` in the service config and rolled out to 5% of users.",
+   "correct_without_amp": true,
+   "mentions_without_amp": true
+  },
+  {
+   "document": "the email thread with the platform team",
+   "fact": "Neha: For anything about the production database, page Meera - she is on call until the end of the month.",
+   "question": "Who should I page for a production database problem?",
+   "in_claude_summary": false,
+   "in_amp_page_in": true,
+   "page_in_notes": 5,
+   "page_in_tokens": 941,
+   "answer_with_amp": "Page Meera, who is on call for production database issues until the end of the month (per your earlier planning notes).",
+   "correct_with_amp": true,
+   "mentions_with_amp": true,
+   "recall_tool_used": true,
+   "answer_without_amp": "I don't know.",
+   "correct_without_amp": false,
+   "mentions_without_amp": false
+  },
+  {
+   "document": "the draft API spec",
+   "fact": "POST /v1/uploads - uploads larger than 25 MB are rejected with HTTP 413.",
+   "question": "What is the maximum upload size in our API?",
+   "in_claude_summary": true,
+   "in_amp_page_in": true,
+   "page_in_notes": 6,
+   "page_in_tokens": 990,
+   "answer_with_amp": "Uploads are capped at 25 MB, and larger ones are rejected with HTTP 413, according to the draft API spec, so confirm that against the final spec.",
+   "correct_with_amp": true,
+   "mentions_with_amp": true,
+   "recall_tool_used": true,
+   "answer_without_amp": "The draft API spec sets the upload limit at 25 MB (HTTP 413 above that), but the spec has duplicate endpoints with conflicting limits, so confirm it against the final spec.",
+   "correct_without_amp": true,
+   "mentions_without_amp": true
+  },
+  {
+   "document": "the code review comments on the payments PR",
+   "fact": "- payments/client.py:88 every idempotency key must start with the prefix PAY-77 so the ledger can tell retries apart",
+   "question": "What prefix must payment idempotency keys start with?",
+   "in_claude_summary": true,
+   "in_amp_page_in": true,
+   "page_in_notes": 5,
+   "page_in_tokens": 924,
+   "answer_with_amp": "Payment idempotency keys must start with the prefix `PAY-77`, per the payments client rule at `payments/client.py:88`.",
+   "correct_with_amp": true,
+   "mentions_with_amp": true,
+   "recall_tool_used": true,
+   "answer_without_amp": "Payment idempotency keys must start with `PAY-77`, per the payments PR review comments (`payments/client.py:88`), which I haven't checked against the code.",
+   "correct_without_amp": true,
+   "mentions_without_amp": true
+  },
+  {
+   "document": "the migration plan for the orders tables",
+   "fact": "Note: the staging database is called orchid_stage; never point the migration at prod_main.",
+   "question": "What is the staging database called?",
+   "in_claude_summary": true,
+   "in_amp_page_in": true,
+   "page_in_notes": 5,
+   "page_in_tokens": 942,
+   "answer_with_amp": "The staging database is called `orchid_stage`, according to the orders migration plan you shared earlier.",
+   "correct_with_amp": true,
+   "mentions_with_amp": true,
+   "recall_tool_used": true,
+   "answer_without_amp": "The staging database is `orchid_stage`, according to the orders migration plan you shared.",
+   "correct_without_amp": true,
+   "mentions_without_amp": true
+  }
+ ],
+ "session_id": "cf3488fe-bbbb-4254-8fa5-1202df1a41a0",
+ "build_seconds": 45.2,
+ "amp_text_in_session": false,
+ "page_out_seconds": 325.1,
+ "compaction": {
+  "trigger": "manual",
+  "preTokens": 78239,
+  "durationMs": 11283,
+  "preservedSegment": {
+   "headUuid": "70a19011-927c-4744-9d36-cc328292af0a",
+   "anchorUuid": "cc79f04b-753a-4ee9-824d-2027c37cc607",
+   "tailUuid": "ad40c4fd-6fbc-4d3c-af85-32cc2d02eefb"
+  },
+  "preservedMessages": {
+   "anchorUuid": "cc79f04b-753a-4ee9-824d-2027c37cc607",
+   "uuids": [
+    "70a19011-927c-4744-9d36-cc328292af0a",
+    "206b3d9f-6fe3-40e1-8b05-86988301c136",
+    "ad40c4fd-6fbc-4d3c-af85-32cc2d02eefb"
+   ],
+   "allUuids": [
+    "70a19011-927c-4744-9d36-cc328292af0a",
+    "206b3d9f-6fe3-40e1-8b05-86988301c136",
+    "ad40c4fd-6fbc-4d3c-af85-32cc2d02eefb",
+    "b601b95a-fac9-43b0-a1f0-754070c8fa86"
+   ]
+  },
+  "postTokens": 6883,
+  "cumulativeDroppedTokens": 71356
+ },
+ "amp_stored": {
+  "code": 0,
+  "raw_tokens": 33856,
+  "text": 23
+ },
+ "score": {
+  "with_amp": 8,
+  "without_amp": 5,
+  "mentions_with_amp": 8,
+  "mentions_without_amp": 6,
+  "in_claude_summary": 7,
+  "in_amp_page_in": 7,
+  "of": 8
+ },
+ "claude_cost_usd": 0.5164
+}
